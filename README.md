@@ -33,21 +33,20 @@ The chip that ships with the upstream plugin is unchanged: on a blank conversati
 
 ## Install
 
-From GitHub:
+Grab the prebuilt bundle from the [latest release](https://github.com/Athosoo/dsh-git-graph-sidebar/releases/latest) — `dsh-git-graph-sidebar.tgz`, no build step needed — then install it as a plugin bundle:
 
-```sh
-dsh plugin --profile desktop add github:Athosoo/dsh-git-graph-sidebar
-```
+- **Desktop app (the `desktop` profile is owned by the Electron app, so the CLI refuses it):** install the `.tgz` from the app's plugin page.
+- **CLI-managed profile:**
 
-From a release tarball (prebuilt, no build step):
+  ```sh
+  dsh plugin --profile <profile> add github:Athosoo/dsh-git-graph-sidebar
+  # or from the downloaded tarball
+  dsh plugin --profile <profile> add ./dsh-git-graph-sidebar.tgz
+  ```
 
-```sh
-curl -L -o dsh-git-graph-sidebar.tgz \
-  https://github.com/Athosoo/dsh-git-graph-sidebar/releases/latest/download/dsh-git-graph-sidebar.tgz
-dsh plugin --profile desktop add ./dsh-git-graph-sidebar.tgz
-```
+**Restart DSH after installing.** The host half registers its `/git/*` HTTP routes at startup, so a page refresh alone is not enough for a first install, and an upgraded build is not picked up until the process restarts.
 
-Restart DSH after installing. The host half registers its HTTP routes at startup, so a page refresh alone is not enough for a first install.
+The tab needs [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) installed; without it everything else — the branch chip, the graph dialog, worktrees — keeps working and only the sidebar tab is absent.
 
 ## Repository discovery rules
 

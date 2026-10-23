@@ -33,21 +33,20 @@
 
 ## 安装
 
-从 GitHub 装：
+从 [最新 Release](https://github.com/Athosoo/dsh-git-graph-sidebar/releases/latest) 下载预构建包 `dsh-git-graph-sidebar.tgz`（无需构建），当成插件 bundle 安装：
 
-```sh
-dsh plugin --profile desktop add github:Athosoo/dsh-git-graph-sidebar
-```
+- **桌面版**（`desktop` profile 由 Electron 应用独占，CLI 会拒绝）：在应用的插件页里安装这个 `.tgz`。
+- **CLI 管理的 profile**：
 
-或从 Release 的预构建 tarball 装（无需构建步骤）：
+  ```sh
+  dsh plugin --profile <profile> add github:Athosoo/dsh-git-graph-sidebar
+  # 或用已下载的 tarball
+  dsh plugin --profile <profile> add ./dsh-git-graph-sidebar.tgz
+  ```
 
-```sh
-curl -L -o dsh-git-graph-sidebar.tgz \
-  https://github.com/Athosoo/dsh-git-graph-sidebar/releases/latest/download/dsh-git-graph-sidebar.tgz
-dsh plugin --profile desktop add ./dsh-git-graph-sidebar.tgz
-```
+**装完需要重启 DSH。** 宿主那一半在启动时注册 `/git/*` HTTP 路由，首次安装仅刷新页面不够；升级到新构建同样要重启进程才会被加载。
 
-装完需要重启 DSH：宿主那一半在启动时注册 HTTP 路由，首次安装仅刷新页面不够。
+图谱页需要 [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar)；没装它时，分支徽章、图谱对话框、worktree 全部照常工作，只是没有那个侧栏页。
 
 ## 仓库发现规则
 
