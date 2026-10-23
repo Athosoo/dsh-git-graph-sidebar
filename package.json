@@ -1,0 +1,100 @@
+{
+  "name": "dsh-git-graph-sidebar",
+  "version": "1.0.0",
+  "description": "Git commit graph and multi-repository browsing for DeepSeek Harness: a branch chip in the composer plus a better-sidebar tab that lists every repository below the workspace directory and draws its commit graph as an SVG lane canvas.",
+  "icon": "icon.svg",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Athosoo",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "git",
+    "git-graph",
+    "commit-graph",
+    "sidebar",
+    "better-sidebar",
+    "worktree",
+    "multirepo"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Athosoo/dsh-git-graph-sidebar.git"
+  },
+  "homepage": "https://github.com/Athosoo/dsh-git-graph-sidebar#readme",
+  "bugs": {
+    "url": "https://github.com/Athosoo/dsh-git-graph-sidebar/issues"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "scripts",
+    "cordis.patch.yml",
+    "icon.svg",
+    "screenshots.json",
+    "assets",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node scripts/build-lib.mjs",
+    "check": "node --check lib/index.js && node --check lib/client.js",
+    "validate": "node scripts/validate-lib.mjs",
+    "preview": "node scripts/preview-tab.mjs",
+    "test": "npm run check && npm run validate"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.1-rc.1 || ^0.3.0-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-primitives": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}

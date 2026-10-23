@@ -1,0 +1,24 @@
+dsh-git-graph-sidebar
+Copyright 2026 Athosoo
+
+This product includes software developed as
+"@linxin666/dsh-client-ui-git-graph" (version 0.4.8) by linxin666
+(https://github.com/zhu1090093659/dsh-web), licensed under the
+Apache License, Version 2.0.
+
+The following modifications were made for this distribution:
+
+  - the package was renamed from "@linxin666/dsh-client-ui-git-graph"
+    to "dsh-git-graph-sidebar";
+  - the workspace access gate was widened from an exact match against a
+    registered workspace path to "the path resolves inside a registered
+    workspace", so nested repositories can be addressed (this keeps the
+    pre-existing guard that rejects every path outside the workspace);
+  - a "/git/repos" HTTP route with multi-repository discovery
+    (src/host/repos.ts region in lib/index.js) was added;
+  - a better-sidebar tab ("src/client/graph/SidebarTab.js", spliced into
+    lib/client.js, and likewise copied verbatim into the npm tarball) was
+    added: repository tree, SVG lane canvas, zoom and a pinned commit card;
+  - locale keys prefixed "sidebar." were added to both dictionaries.
+
+The original license text is reproduced in the LICENSE file.

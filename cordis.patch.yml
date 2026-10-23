@@ -1,0 +1,10 @@
+# dsh-git-graph-sidebar bundle patch: inserts the dual-face plugin row into a
+# profile's layer stack (the `dsh.bundle.patch` manifest field).
+#
+# The row is a bare plugin by package name: the host half (exports ".") runs in
+# the DSH host process (git service + /git/* HTTP routes), and the `dsh.client`
+# declaration in package.json makes the browser half (exports "./client",
+# served as /plugins/<id>/client.js) load in the web GUI.
+- insert:
+    - id: ui-git-graph-sidebar
+      name: dsh-git-graph-sidebar
