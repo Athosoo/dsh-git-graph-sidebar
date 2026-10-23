@@ -10,6 +10,12 @@
 // a smoke test: any ReferenceError/TypeError in the tab code fails the run.
 //
 //   node scripts/preview-tab.mjs [outFile]
+//
+// With real data instead of the canned samples (one JSON per file, either the
+// raw view or the `{ok:true,value}` envelope returned by the host routes):
+//
+//   node scripts/preview-tab.mjs --out preview/real.html \
+//     --repos /tmp/repos.json --graph /tmp/graph-a.json --graph /tmp/graph-b.json
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +23,23 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const libFile = join(root, "lib/client.js");
-const outFile = process.argv[2] !== undefined ? process.argv[2] : join(root, "preview/graph-tab-preview.html");
+
+const argv = process.argv.slice(2);
+const argValue = (name) => {
+	const at = argv.indexOf(name);
+	return at < 0 ? undefined : argv[at + 1];
+};
+const reposFile = argValue("--repos");
+const focusArg = argValue("--focus");
+const graphFiles = [];
+for (let at = 0; at < argv.length; at += 1)
+	if (argv[at] === "--graph" && argv[at + 1] !== undefined) graphFiles.push(argv[at + 1]);
+const outFile = argValue("--out") !== undefined
+	? argValue("--out")
+	: argv[0] !== undefined && argv[0].charAt(0) !== "-"
+		? argv[0]
+		: join(root, "preview/graph-tab-preview.html");
+const usingRealData = reposFile !== undefined || graphFiles.length > 0;
 
 const WORKSPACE = "C:/Users/18316/Documents/deepseek-harness/default-workspace";
 const NESTED = WORKSPACE + "/dsh-git-graph-src";
@@ -213,7 +235,7 @@ function commit(oid, parents, subject, author, ageHours, refs) {
 	return { oid, parents, subject, author, authorTime: NOW - Math.round(ageHours * 3600), refs };
 }
 
-const ROOT_GRAPH = {
+let ROOT_GRAPH = {
 	root: WORKSPACE,
 	branch: "main",
 	hasMore: true,
@@ -233,7 +255,7 @@ const ROOT_GRAPH = {
 	]
 };
 
-const NESTED_GRAPH = {
+let NESTED_GRAPH = {
 	root: NESTED,
 	branch: "feature/multi-repo",
 	hasMore: false,
@@ -246,7 +268,7 @@ const NESTED_GRAPH = {
 	]
 };
 
-const REPOS = {
+let REPOS = {
 	base: WORKSPACE,
 	maxDepth: 3,
 	scannedAt: Date.now(),
@@ -317,6 +339,32 @@ const REPOS = {
 	]
 };
 
+// --------------------------------------------------- optional real workspace
+// `--repos` / `--graph` replace the canned samples with live host responses, so
+// the same harness can render a real repository (used for the branch/merge
+// demo under <workspace>/graph-demo). A file may hold the bare view or the
+// `{ok:true,value}` envelope that the host routes return.
+const viewKey = (path) => String(path).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+let GRAPH_BY_ROOT = null;
+
+async function readView(file) {
+	const raw = JSON.parse(await readFile(file, "utf8"));
+	return raw !== null && typeof raw === "object" && raw.ok === true && raw.value !== undefined ? raw.value : raw;
+}
+
+if (usingRealData) {
+	if (reposFile !== undefined) REPOS = await readView(reposFile);
+	if (graphFiles.length > 0) {
+		GRAPH_BY_ROOT = new Map();
+		for (const file of graphFiles) {
+			const view = await readView(file);
+			GRAPH_BY_ROOT.set(viewKey(view.root), view);
+		}
+		const first = GRAPH_BY_ROOT.values().next().value;
+		if (first !== undefined) ROOT_GRAPH = first;
+	}
+}
+
 // ------------------------------------------------------------------- stubs
 const styles = [];
 function fakeElement(tag) {
@@ -351,7 +399,10 @@ const fakeFetch = async (path, init) => {
 	let value;
 	if (path === "git/repos") value = REPOS;
 	else if (path === "git/graph") {
-		value = String(payload.path).indexOf("dsh-git-graph-src") >= 0 ? NESTED_GRAPH : ROOT_GRAPH;
+		const key = viewKey(payload.path);
+		value = GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.has(key)
+			? GRAPH_BY_ROOT.get(key)
+			: String(payload.path).indexOf("dsh-git-graph-src") >= 0 ? NESTED_GRAPH : ROOT_GRAPH;
 	} else value = { ok: false, error: { code: "not-found", message: "stub" } };
 	return { ok: true, json: async () => ({ ok: true, value }) };
 };
@@ -451,9 +502,23 @@ const tabProps = (repoPath) => ({
 	visible: true
 });
 
-const rootMount = await mountComponent(descriptor.component, tabProps(undefined));
-const nestedMount = await mountComponent(descriptor.component, tabProps(NESTED));
-const detailMount = await mountComponent(descriptor.component, tabProps(undefined));
+// `--focus <relPath|path>` renders that repository in the first panel instead of
+// whatever the discovery order puts first — handy when demoing one repository.
+const focusEntry = focusArg !== undefined
+	? (REPOS.repos || []).find((entry) => viewKey(entry.relPath || "") === viewKey(focusArg) || viewKey(entry.path).endsWith("/" + viewKey(focusArg)))
+	: undefined;
+const focusPath = focusEntry !== undefined ? focusEntry.path : undefined;
+
+const rootMount = await mountComponent(descriptor.component, tabProps(focusPath));
+// Second panel: a nested repository, so the tree highlight and the status row
+// are exercised with something other than the default selection.
+const secondaryRepo = usingRealData
+	? (REPOS.repos || []).find((entry) => viewKey(entry.path) !== viewKey(focusPath === undefined ? REPOS.base : focusPath) && entry.status !== null)
+	: undefined;
+const secondaryPath = secondaryRepo !== undefined ? secondaryRepo.path : NESTED;
+const secondaryLabel = secondaryRepo !== undefined ? secondaryRepo.relPath || secondaryRepo.name : "feature/multi-repo";
+const nestedMount = await mountComponent(descriptor.component, tabProps(secondaryPath));
+const detailMount = await mountComponent(descriptor.component, tabProps(focusPath));
 
 // Drive the real handlers: pin a row, then zoom in until rows switch to two
 // lines. This is a behaviour smoke test, not a screenshot trick.
@@ -473,19 +538,22 @@ if (detailHtml.indexOf("data-gitgraph-detail") < 0) throw new Error("zooming los
 
 // Repository switching: clicking another row in the tree must reload that
 // repository's graph and move the active highlight (choose() + fetch + state).
-const switchMount = await mountComponent(descriptor.component, tabProps(undefined));
+const switchMount = await mountComponent(descriptor.component, tabProps(focusPath));
+const switchBaseKey = viewKey(focusPath === undefined ? REPOS.base : focusPath);
+const beforeSwitchHtml = (await switchMount.render()).html;
 const repoRows = findAll(switchMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-repo"] === "string");
 if (repoRows.length < 3) throw new Error("expected at least 3 repository tree rows, got " + repoRows.length);
-const targetRow = repoRows.find((node) => {
-	const path = String(node.props["data-gitgraph-repo"]).replace(/\\/g, "/");
-	return path.endsWith("/dsh-git-graph-src");
-});
-if (targetRow === undefined) throw new Error("nested repository row missing from the repository tree");
+const targetRow = usingRealData
+	? repoRows.find((node) => viewKey(node.props["data-gitgraph-repo"]) !== switchBaseKey)
+	: repoRows.find((node) => viewKey(node.props["data-gitgraph-repo"]).endsWith("/dsh-git-graph-src"));
+if (targetRow === undefined) throw new Error("no second repository row to switch to in the repository tree");
 click(targetRow, "repository tree row");
 const switchedHtml = (await switchMount.render()).html;
-if (switchedHtml.indexOf("colour palette per lane") < 0) throw new Error("selecting a repository did not load its graph");
+if (!usingRealData && switchedHtml.indexOf("colour palette per lane") < 0) throw new Error("selecting a repository did not load its graph");
+if (usingRealData && switchedHtml === beforeSwitchHtml) throw new Error("selecting a repository did not change the rendered graph");
 if (switchedHtml.indexOf("data-gitgraph-repo-active") < 0) throw new Error("the selected repository is not highlighted in the tree");
-console.log("preview-tab: repository switch ok (" + repoRows.length + " tree rows, nested graph loaded)");
+console.log("preview-tab: repository switch ok (" + repoRows.length + " tree rows, " +
+	(usingRealData ? "real repository graph loaded" : "nested graph loaded") + ")");
 
 const rootPanel = rootMount.html;
 const nestedPanel = nestedMount.html;
@@ -568,14 +636,14 @@ const html = `<!doctype html>
 </head>
 <body>
 	<h1>GIT-graph · better-sidebar 仓库图谱 tab — 离线预览</h1>
-	<p class="note">此文件由 <code>scripts/preview-tab.mjs</code> 直接执行已构建的 <code>lib/client.js</code> 生成：假 React 运行时跑真实 <code>apply()</code> → 取出注册给 better-sidebar 的组件 → 注入样例 <code>/git/repos</code> 与 <code>/git/graph</code> 数据渲染。② 为嵌套仓库（选中状态由 <code>tab.meta.repoPath</code> 恢复），③ 是脚本真的触发了一次行点击与一次「缩小」后的结果（单行紧凑模式）。</p>
+	<p class="note">此文件由 <code>scripts/preview-tab.mjs</code> 直接执行已构建的 <code>lib/client.js</code> 生成：假 React 运行时跑真实 <code>apply()</code> → 取出注册给 better-sidebar 的组件 → 注入${usingRealData ? "真实 <code>/git/repos</code> 与 <code>/git/graph</code> 响应" : "样例 <code>/git/repos</code> 与 <code>/git/graph</code> 数据"}渲染。② 为嵌套仓库（选中状态由 <code>tab.meta.repoPath</code> 恢复），③ 是脚本真的触发了一次行点击与一次「缩小」后的结果（单行紧凑模式）。</p>
 	<div class="stage">
 		<div class="panel">
-			<header>① 工作区根仓库 · main · 默认双行</header>
+			<header>① 工作区根仓库 · 默认双行</header>
 			<div>${rootPanel}</div>
 		</div>
 		<div class="panel">
-			<header>② 嵌套仓库 · feature/multi-repo</header>
+			<header>② 嵌套仓库 · ${secondaryLabel}</header>
 			<div>${nestedPanel}</div>
 		</div>
 		<div class="panel">
