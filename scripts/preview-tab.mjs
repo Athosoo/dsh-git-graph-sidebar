@@ -463,12 +463,19 @@ function fakeElement(tag) {
 		remove() {},
 		select() {},
 		addEventListener() {},
-		removeEventListener() {}
+		removeEventListener() {},
+		hasAttribute() { return false; }
 	};
 }
 const fakeDocument = {
 	head: { appendChild(element) { styles.push(element.textContent); } },
-	body: fakeElement("body"),
+	body: (() => {
+		// EXPORT_DARK=1 flips the theme the same way the app does, so the exported
+		// palette can be checked without a browser.
+		const body = fakeElement("body");
+		if (process.env.EXPORT_DARK === "1") body.hasAttribute = (name) => name === "data-ds-dark-theme";
+		return body;
+	})(),
 	documentElement: fakeElement("html"),
 	baseURI: "http://127.0.0.1:56515/",
 	createElement: fakeElement,
@@ -681,6 +688,42 @@ console.log("preview-tab: rollback prompt names all three commands (" + rollback
 
 // --- Tier 1: search and ref toggles -----------------------------------------
 const rowNodes = (mount) => findAll(mount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true);
+
+// --- Tier 1 item 3: export ---------------------------------------------------
+// The harness has no object URLs, so the action must fall back to copying the
+// markup; the SVG itself is the deliverable and is what gets checked here.
+const exportButton = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "export")[0];
+if (exportButton === undefined) throw new Error("toolbar has no export action");
+const copiedBeforeExport = COPIED.length;
+click(exportButton, "export image");
+detailHtml = (await detailMount.render()).html;
+if (!/已导出|已复制|Exported|SVG copied/.test(detailHtml)) throw new Error("export action did not confirm");
+if (COPIED.length !== copiedBeforeExport + 1) throw new Error("export produced neither a download nor copied markup");
+const exportedSvg = COPIED[COPIED.length - 1] ?? "";
+if (exportedSvg.slice(0, 4) !== "<svg") throw new Error("exported markup does not start with <svg: " + exportedSvg.slice(0, 60));
+for (const expected of ["xmlns=\"http://www.w3.org/2000/svg\"", "viewBox=\"0 0 ", "<title>", "graph-demo", "data-gitgraph-export-row="]) {
+	if (exportedSvg.indexOf(expected) < 0) throw new Error("exported SVG is missing " + JSON.stringify(expected));
+}
+if (exportedSvg.indexOf("var(--") >= 0) throw new Error("exported SVG still relies on CSS variables");
+if (exportedSvg.indexOf('data-gitgraph-export-pinned="true"') < 0) throw new Error("the pinned commit is not marked in the exported image");
+if (process.env.EXPORT_DARK === "1") {
+	if (exportedSvg.indexOf('fill="#0f1115"') < 0) throw new Error("dark export is missing the dark background");
+} else if (exportedSvg.indexOf('fill="#ffffff"') < 0) throw new Error("light export is missing its background");
+// The lane geometry keeps its own row pitch: a zoomed panel must not produce
+// an image whose nodes drift away from the rows they belong to.
+const panelRowHeight = Number(rowNodes(detailMount)[0].props.style.height);
+const laneYs = Array.from(new Set((exportedSvg.match(/<circle cx="[0-9.]+" cy="([0-9.]+)"/g) ?? []).map((tag) => Number(tag.slice(tag.indexOf("cy=\"") + 4, -1))))).sort((a, b) => a - b);
+if (laneYs.length > 1 && laneYs[1] - laneYs[0] !== panelRowHeight) {
+	throw new Error("exported lanes use a " + (laneYs[1] - laneYs[0]) + "px pitch, the panel rows are " + panelRowHeight + "px");
+}
+const exportedRows = (exportedSvg.match(/data-gitgraph-export-row=/g) ?? []).length;
+if (exportedRows !== rowNodes(detailMount).length) throw new Error("exported SVG has " + exportedRows + " rows, the panel has " + rowNodes(detailMount).length);
+console.log("preview-tab: exported a standalone SVG (" + exportedSvg.length + " chars, " + exportedRows + " rows)");
+if (process.env.EXPORT_SVG_PATH !== undefined) {
+	const { writeFileSync } = await import("node:fs");
+	writeFileSync(process.env.EXPORT_SVG_PATH, exportedSvg, "utf8");
+	console.log("preview-tab: wrote " + process.env.EXPORT_SVG_PATH);
+}
 const searchField = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true)[0];
 if (searchField === undefined) throw new Error("filter bar has no search field");
 const rowsBeforeSearch = rowNodes(detailMount).length;

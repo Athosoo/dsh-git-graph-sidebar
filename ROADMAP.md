@@ -9,7 +9,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | Area / 方面 | Delivered / 已交付 |
 | --- | --- |
 | Discovery / 仓库发现 | Every repository below the workspace directory, three levels deep, 200-repo cap, 60 s cache. 工作区下三层内全部仓库，上限 200，缓存 60 秒。 |
-| Graph / 图谱 | Real SVG lane canvas, curved cross-lane edges, zoom that scales text, pinned commit card, full-window view. 真 SVG 泳道画布、跨道圆角连线、缩放带字号、提交详情卡、全屏视图。 |
+| Graph / 图谱 | Real SVG lane canvas, curved cross-lane edges, zoom that scales text, pinned commit card, full-window view, standalone SVG export. 真 SVG 泳道画布、跨道圆角连线、缩放带字号、提交详情卡、全屏视图、导出独立 SVG。 |
 | Live / 实时 | SSE plus 20 s polling, silent refresh, no blanking, tab reopens from cache. SSE + 20 秒轮询，静默刷新不清空，重开走缓存。 |
 | Conventions / 规范 | Scaffold, six frameworks, status strip, `systemPrompt` injection with inheritance from enclosing repositories. 空壳、六套框架、状态带、按继承链注入系统提示。 |
 | Init / 初始化 | One-click `git init` for a workspace that is not a repository yet. 非仓库目录一键 `git init`。 |
@@ -20,10 +20,10 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | Version | State | What |
 | --- | --- | --- |
 | 1.3.0 | **released and installed** / 已发布并已装 | Conventions inheritance + repository index injection. |
-| 1.4.0 | **in the working tree, unreleased** / 工作区已完成、未发布 | Tier 1 items 1 and 2 are implemented and covered by the offline tests. Item 3 (export) is not started. |
+| 1.4.0 | **released and installed** / 已发布并已装 | Tier 1 complete: rollback prompt, commit search + ref filters, standalone SVG export. |
 | 1.5.0 / 1.6.0 | planned / 计划中 | Tier 2 and Tier 3 below. |
 
-Uncommitted work for 1.4.0 lives in `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs`, `scripts/preview-tab.mjs` and the regenerated `lib/client.js` + `preview/*.html`. See `HANDOVER.md` for the exact finish-and-release checklist.
+1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
 
 ## Tier 1 — 1.4.0 "make it usable" / 让图谱变得好用
 
@@ -71,13 +71,15 @@ Filtering is purely local — no network call. / 过滤全在本地，不发请�
 
 **Acceptance (met).** Against `graph-demo` (13 commits) the preview test asserts: typing `changelog` narrows 13 → 9 rows and shows the counter; clearing restores 13; walking the ref toggles until one actually hides rows finds `feature/c` (2 rows hidden — merged branches correctly hide nothing); unmuting restores 13. Note for future work: a *merged* branch's commits stay reachable from `main`, so its toggle legitimately changes nothing.
 
-### 3. Export the graph as an image / 导出图谱图片 — **not started**
+### 3. Export the graph as an image / 导出图谱图片 — **shipped in 1.4.0** / 已随 1.4.0 发布
 
 **Why.** A picture of the graph is what gets pasted into a pull request, an issue or a design doc. / 贴 PR、Issue、文档靠的是图片。
 
 **Design.** An `export` button serialises the current `<svg>` plus its row labels into a standalone SVG document (inline styles, explicit width/height, background from the active theme), then offers it as a download through a Blob URL. Falls back to copying the SVG markup as text when `URL.createObjectURL` is unavailable — which is also what keeps the headless preview test runnable. / 把 SVG 与行标签序列化为独立 SVG 文档（内联样式、显式尺寸、主题背景），经 Blob 下载；无 `createObjectURL` 时退化为复制 SVG 文本。
 
 **Acceptance.** The exported document opens standalone with no missing classes; the button reports success; the preview test asserts the serialiser returns a `<svg` root with a `viewBox` and the expected row count.
+
+**Implemented / 实现。** The toolbar's *Export image* serialises the current view — filtered rows, lanes, ref chips and the highlight on the pinned row — into one standalone SVG: the theme palette is written out as literal fills (no CSS variables, no classes), the size is explicit, the row pitch is taken from the live lane geometry so zoomed panels stay aligned, and a long subject is truncated instead of overflowing. Browsers get a real download named `git-graph-<repo>.svg`; where object URLs are unavailable (webviews, the preview harness) the markup is copied to the clipboard instead, and the button says which happened. / 工具栏「导出图片」把当前视图（筛选后的行、泳道、ref 徽章、固定行高亮）序列化为独立 SVG：主题色写字面量、显式尺寸、行距取自实时泳道几何（缩放后仍对齐）、过长主题截断而非溢出；浏览器直接下载 `git-graph-<仓库名>.svg`，无 object URL 环境退化为复制文本，按钮会说明发生了哪一种。
 
 ## Tier 2 — 1.5.0 "many repositories at a glance" / 多仓库一眼看清
 

@@ -42,6 +42,15 @@ Writes `preview/graph-tab-preview.html` (three panels: default two-line rows, a 
 
 The script also exercises interaction against its own fake DOM: it asserts that no hover tooltip is rendered, clicks a row and asserts the detail card, clicks *Copy commit info* and asserts the button flips to "copied", opens the full-window view and asserts an overlay with an SVG, then closes it, and finally runs the conventions flow — a repository without a document must auto-write the scaffold, open the picker and list six framework cards. Any broken prop, missing locale key or missing DOM guard fails the run instead of silently rendering nothing.
 
+The same run covers the 1.4.0 tier-1 features: the rollback prompt (asserted token by token), the search field and the ref toggles, and the SVG export. The export is checked as a document, not as a download: it must start with `<svg`, carry `xmlns` + `viewBox` + a `<title>`, avoid CSS variables, hold one `data-gitgraph-export-row` per panel row, mark the pinned commit, and keep the lane pitch identical to the panel's row height (a zoomed panel used to drift). Two environment switches help when working on it:
+
+```sh
+EXPORT_SVG_PATH=../.demo/data/export-graph-demo.svg node scripts/preview-tab.mjs …   # dump the SVG
+EXPORT_DARK=1 EXPORT_SVG_PATH=../.demo/data/export-dark.svg node scripts/preview-tab.mjs …   # dark palette
+```
+
+The exported file opens on its own — `google-chrome --headless=new --screenshot=… file.svg` is enough to eyeball it.
+
 The tab keeps a slow poll running so repositories created while it is open appear by themselves. Because the preview mounts components and never unmounts them, the script unrefs `setInterval` timers; without that Node waits for them forever and the run hangs.
 
 ## Live updates
@@ -136,3 +145,4 @@ The document body is capped at `CONVENTION_PROMPT_MAX_CHARS` = 3000 characters a
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.
 - The upstream TypeScript sources in `src/` no longer match the built output exactly (they predate this fork's changes). They are reference material, not an input to the build.
+- The export is SVG only. A PNG would need a canvas rasteriser or a headless renderer; the SVG is what a browser, GitHub and most editors accept anyway.

@@ -27,6 +27,10 @@ const EXTRA_KEYS = [
 		anchor: '"sidebar.commitsLanes"',
 		// The first occurrence is the zh dictionary, the second the en one.
 		entries: [
+			['"sidebar.exportGraph"', '"导出图片"'],
+			['"sidebar.exported"', '"已导出"'],
+			['"sidebar.exportCopied"', '"已复制 SVG"'],
+			['"sidebar.exportNote"', '"由 dsh-git-graph-sidebar 导出"'],
 			['"sidebar.zoomIn"', '"放大图谱"'],
 			['"sidebar.zoomOut"', '"缩小图谱"'],
 			['"sidebar.detail"', '"提交详情"'],
@@ -88,6 +92,10 @@ const EXTRA_KEYS = [
 	{
 		anchor: '"sidebar.commitsLanes"',
 		entries: [
+			['"sidebar.exportGraph"', '"Export image"'],
+			['"sidebar.exported"', '"Exported"'],
+			['"sidebar.exportCopied"', '"SVG copied"'],
+			['"sidebar.exportNote"', '"Exported by dsh-git-graph-sidebar"'],
 			['"sidebar.zoomIn"', '"Zoom in graph"'],
 			['"sidebar.zoomOut"', '"Zoom out graph"'],
 			['"sidebar.detail"', '"Commit details"'],

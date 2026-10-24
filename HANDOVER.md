@@ -2,11 +2,11 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-24 18:2x (+08)。
+> 最后更新：2026-10-24 18:35 (+08)。
 
 ## 0. 一句话状态
 
-插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**已发布到 v1.3.0** 并在本机 `desktop` profile 装好并生效；**工作区里还有一份 1.4.0 的未提交改动**（Tier 1 第 1、2 项：复制回滚提示、提交搜索 + 引用筛选），构建/测试全绿，但**没打包、没发版、没换装**。市场收录 PR 已备好，**今晚 22:07 (+08) 之后**跑一条脚本即可提交。
+插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.3.0 已发布并装好**；**1.4.0 的代码已全部完成、构建与离线测试全绿**（Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG），**待发版换装**。市场收录 PR 已备好，**今晚 22:07 (+08) 之后**跑一条脚本即可提交。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -31,7 +31,7 @@
 | 演示/测试用仓库 | `...\default-workspace\graph-demo`（13 提交、4 泳道、3 次合并、`feature/c` 故意不合并）、`...\default-workspace\dsh-git-graph-smoke\{alpha,nest/beta}` |
 | 真实图谱数据（预览/断言用） | `...\default-workspace\.demo\data\repos.json`、`graph-*.json` |
 | 开发期脚本/截图 | `...\default-workspace\.demo\`（`patch-*.py`、`probe-*.mjs`、`fetch-graphs.mjs`、`data\*.png`） |
-| DSH profile | `C:\Users\18316\.dsh\profiles\desktop`（`package.json:31` bundles 含包名；`:45` 依赖为 `file:...dsh-git-graph-dist/1.3.0/dsh-git-graph-sidebar.tgz`） |
+| DSH profile | `C:\Users\18316\.dsh\profiles\desktop`（`package.json:31` bundles 含包名；`:45` 依赖为 `file:...dsh-git-graph-dist/1.4.0/dsh-git-graph-sidebar.tgz`） |
 | 市场收录克隆 | `...\default-workspace\awesome-dsh-plugin`（fork，分支 `add/athosoo-dsh-git-graph-sidebar`） |
 | 市场投稿材料 | `...\default-workspace\.market-pr\{pr-body.md,open-pr.sh}` |
 
@@ -125,9 +125,9 @@ node scripts/preview-tab.mjs \
 | 1.1.3 | 关闭重开走缓存不空白；仓库选中改淡青蓝；**规范经 `systemPrompt` 每步注入** |
 | 1.2.0 | 一键 `git init`（`/git/init`，可选初始分支） |
 | 1.3.0 | 规范**就近继承** + 容器仓库缺文档时回退为指针清单（有界 BFS，三层） |
-| 1.4.0 | **[工作区未发布]** Tier 1 第 1、2 项：复制回滚提示、提交搜索 + 引用筛选 |
+| 1.4.0 | **[代码已完成，待发布]** Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`） |
 
-## 7. 现在工作区里没提交的东西（1.4.0 前两项）
+## 7. 1.4.0 的三项改动（代码已完成，见 §8 发布）
 
 `git status` 应为：`M lib/client.js`、`M scripts/build-lib.mjs`、`M scripts/preview-tab.mjs`、`M src/client/graph/SidebarTab.js`、`M preview/*.html`、`?? ROADMAP.md`（+ 本次新增的 `HANDOVER.md`）。
 
@@ -143,18 +143,24 @@ node scripts/preview-tab.mjs \
 - 预览断言：`changelog` 命中 13→9 行并显示计数；清空恢复 13；逐个点引用直到有一个真隐藏行（`feature/c` 藏 2 行），取消后恢复 13。
 - **语义注意**：已合并分支（如 `feature/a`）的提交仍可从 main 到达，所以它的 toggle 合法地不减行——测试是「遍历直到找到真减行的 ref」，别改回「取第一个」。
 
+**第 3 项 导出图片**
+- `sidebarTabExportSvg({view, repo, commits, lanes, geometry, rowHeight, pinned, dark, t, generatedAt})` 生成一份独立 SVG（`xmlns`/显式 `width`+`height`/`viewBox`/`role="img"`/`<title>`），配色来自 `sidebarTabExportPalette(dark)`，`sidebarTabIsDark()` 读 `document.body[data-ds-dark-theme]`（`matchMedia` 兜底）。**不引用任何 CSS 变量或类名**，导出文可脱离应用直接打开。
+- **行距必须等于泳道几何的 pitch**：`Math.min(72, Math.max(24, Math.round(rowHeight)))`。曾用 `Math.max(34, rowHeight)`，面板缩小到 27px 后节点与行逐行漂移（实测导出 `cy` 40.5/67.5 而导出按 34 排）。
+- 每行 `<g data-gitgraph-export-row="N">`；固定提交多一个 `data-gitgraph-export-pinned="true"` 底色；ref 用 `<tspan>`，当前分支用 accent 加粗；无 ref 时只留作者；主题过长按宽度截断加 `…`；页脚左 `sidebar.exportNote`、右仓库地址。
+- `sidebarTabSaveSvg(name, svg)`：`Blob` + `URL.createObjectURL` + 隐藏 `<a download>`；任何一步抛错即退化为 `sidebarTabCopy(svg)`，返回 `"download" | "copy" | "failed"`。按钮 `data-gitgraph-action="export"`，成功显示「已导出 / 已复制 SVG」2.2 秒。
+- 预览断言：以 `<svg` 开头、含 `xmlns`/`viewBox`/`<title>`/仓库名、无 `var(--`、`data-gitgraph-export-row` 数 = 面板行数、`data-gitgraph-export-pinned` 存在、相邻圆 `cy` 差 = 面板行高、浅/深背景色正确。
+- 调试开关：`EXPORT_SVG_PATH=<path>` 把导出结果落盘（`node scripts/preview-tab.mjs …`）；`EXPORT_DARK=1` 让假 `document.body.hasAttribute("data-ds-dark-theme")` 返回真，可离线检查深色导出。
+
 ## 8. 待办清单（按优先级）
 
-1. **提交当前改动**（代码 + 本文件 + ROADMAP.md）——避免工作区丢失。
-2. **1.4.0 第 3 项：导出图谱 SVG/PNG**（设计见 `ROADMAP.md` Tier 1 #3）：序列化当前 `<svg>` + 行标签为独立 SVG（内联样式、显式宽高、主题背景）→ Blob 下载；无 `URL.createObjectURL` 时退化为复制 SVG 文本。验收：导出文可独立打开、按钮有反馈、`preview-tab.mjs` 断言序列化结果以 `<svg` 开头且有 `viewBox`。
-3. **发 1.4.0**：补 README/README.zh 两条功能说明 → 升版本 → 全链路测试 → pack → commit/push → Release（资产名无版本）→ 换装 → 让用户重启验收。
-4. **市场收录 PR**：门槛 = 仓库满 1 天 = `2026-10-24T22:07:00+08:00`。之后：
+1. **发 1.4.0**（代码已全绿，只差发布）：`package.json` 升 1.4.0 → 跑 §10 的全链路测试 → `npm pack` 到 `dsh-git-graph-dist/1.4.0/` → commit/push（`git gpush`）→ GitHub Release（资产名**不带版本**）→ `plugin_manager remove_bundle` + `install_bundle` → 让用户重启 DSH。
+2. **市场收录 PR**：门槛 = 仓库满 1 天 = `2026-10-24T22:07:00+08:00`。之后：
    ```bash
    bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
-5. **Tier 2（1.5.0）**：多仓库总览（`/git/repos` 加 `upstream`）、可清理分支（新路由 `/git/branches/merged`）、仓库体检。
-6. **Tier 3（1.6.0）**：提交合规提示、工作区总纲一键创建（`.dsh/GIT_CONVENTIONS.md`）、规范升级差异预览。
+3. **Tier 2（1.5.0）**：多仓库总览（`/git/repos` 加 `upstream` ahead/behind）、可清理分支（新路由 `/git/branches/merged`）、仓库体检。
+4. **Tier 3（1.6.0）**：提交合规提示、工作区总纲一键创建（`.dsh/GIT_CONVENTIONS.md`）、规范升级差异预览。
 
 ## 9. 坑与教训（每条都真踩过）
 
@@ -172,15 +178,21 @@ node scripts/preview-tab.mjs \
 12. **端口会变**：每次 DSH 重启 GUI 端口都不同，探测 `/git/repos` 前先读 runtime context，且 curl 超时要给足（冷启动 3 秒会 000）。
 13. **`lib/*.js` 的 region 内永手改**：手改会在下次 `build-lib.mjs` 被覆盖；要改就改 `src/**` 或 `scripts/patch-host.mjs`。
 14. **`build-lib.mjs` 的字典插入是按字典块判定的**（zh/en 各自），早期版本曾因为「全文件查 key」导致 en 漏插 4 个键。
+15. **长命令会被截断**：`ops_bash` 一次塞太长的 `cat > x <<'PY' … PY` 会被砍掉尾部（heredoc 未闭合，写出的脚本只剩前若干行）。长脚本要分块 `python - <<'PY'` 追加写。
+16. **多层引号里的反斜杠会掉一层**：Python 三引号里的 `\\n` 生成出来是真换行（`out.join("` + 换行 → `SyntaxError: Invalid or unexpected token`），正则 `[\\/]` 也会退化成 `[\/]`（匹配不到反斜杠）。写这类字符用 `chr(92)`/`chr(10)` 拼，别依赖转义层数。
 
 ## 10. 下一步照做即可（最短路径）
 
 ```bash
 cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
-# 1) 收尾并提交当前 1.4.0 前两项
-git add -A && git commit -m "feat(tab): rollback prompt and commit filters (tier 1, items 1-2)" && git gpush
-# 2) 做第 3 项（导出），然后跑 §4 的完整链路
-# 3) 升 1.4.0、发版、换装、让用户重启
+# 1) 全链路自检（都应为绿）
+node scripts/build-lib.mjs && node scripts/patch-host.mjs
+node --check lib/client.js && node --check lib/index.js
+node scripts/validate-lib.mjs && node scripts/test-host.mjs
+node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
+# 2) 升 1.4.0 后打包
+npm pack --pack-destination "../dsh-git-graph-dist/1.4.0"
+# 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```
 

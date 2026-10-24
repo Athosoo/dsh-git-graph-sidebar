@@ -771,6 +771,174 @@
 				return false;
 			}
 		}
+		/** Escape one string for XML text or attribute content. */
+		function sidebarTabXmlEscape(value) {
+			return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+		}
+		/** Whether the page is on a dark theme, read the way the app marks it. */
+		function sidebarTabIsDark() {
+			try {
+				const body = typeof document === "undefined" ? void 0 : document.body;
+				if (body !== void 0 && body !== null) {
+					if (typeof body.hasAttribute === "function" && body.hasAttribute("data-ds-dark-theme")) return true;
+					if (typeof body.getAttribute === "function" && body.getAttribute("data-ds-dark-theme") !== null) return true;
+				}
+				if (typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches === true) return true;
+			} catch {}
+			return false;
+		}
+		/** Font stacks of the exported image; a saved file carries no CSS. */
+		const SIDEBAR_TAB_EXPORT_FONT = "ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif";
+		const SIDEBAR_TAB_EXPORT_MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+		const SIDEBAR_TAB_EXPORT_PAD = 18;
+		const SIDEBAR_TAB_EXPORT_HEAD = 60;
+		const SIDEBAR_TAB_EXPORT_FOOT = 26;
+		const SIDEBAR_TAB_EXPORT_ROW = 34;
+		const SIDEBAR_TAB_EXPORT_WIDTH_MIN = 680;
+		const SIDEBAR_TAB_EXPORT_WIDTH_MAX = 1180;
+		const SIDEBAR_TAB_EXPORT_REF_MAX = 3;
+		/** Explicit colors for the exported image: CSS variables do not survive a save. */
+		function sidebarTabExportPalette(dark) {
+			return dark === true ? {
+				bg: "#0f1115",
+				line: "#242b36",
+				primary: "#e8ecf3",
+				secondary: "#a4acba",
+				tertiary: "#7b8494",
+				row: "#161d28"
+			} : {
+				bg: "#ffffff",
+				line: "#e3e6ea",
+				primary: "#14181f",
+				secondary: "#4b5563",
+				tertiary: "#6b7280",
+				row: "#f1f5fc"
+			};
+		}
+		/** The file name of an export: the repository's own directory name. */
+		function sidebarTabExportName(root) {
+			const text = String(root === void 0 || root === null ? "graph" : root).replace(/[\\/]+$/, "");
+			const base = text.split(/[\\/]/).pop();
+			const safe = String(base === void 0 || base === "" ? "graph" : base).replace(/[^A-Za-z0-9._-]+/g, "-");
+			return "git-graph-" + safe + ".svg";
+		}
+		/**
+		 * Serialise the current graph into a standalone SVG document: explicit
+		 * colors (no CSS variables), explicit width and height, the theme
+		 * background, the lane canvas and one text block per visible commit.
+		 * A picture is what gets pasted into a pull request or an issue, so the
+		 * file has to open on its own, without the panel or its stylesheet.
+		 * @param options - view, repo, commits (visible, newest first), lanes,
+		 *   geometry, rowHeight, dark, t and generatedAt.
+		 * @returns the SVG markup.
+		 */
+		function sidebarTabExportSvg(options) {
+			const view = options.view;
+			const repo = options.repo === void 0 ? null : options.repo;
+			const commits = Array.isArray(options.commits) ? options.commits : [];
+			const geometry = options.geometry === void 0 ? null : options.geometry;
+			const t = options.t;
+			const palette = sidebarTabExportPalette(options.dark === true);
+			const esc = sidebarTabXmlEscape;
+			// Exactly the pitch the lane geometry was built with, otherwise the nodes drift
+			// away from their rows as soon as the panel is zoomed.
+			const rowHeight = Math.max(24, Math.min(72, Math.round(typeof options.rowHeight === "number" ? options.rowHeight : SIDEBAR_TAB_ROW_H)));
+			const graphWidth = Math.max(24, Math.round(geometry === null ? 24 : geometry.width));
+			const pad = SIDEBAR_TAB_EXPORT_PAD;
+			const labelX = pad + graphWidth + 12;
+			const oidWidth = 54;
+			const subjectX = labelX + oidWidth + 8;
+			const metaWidth = 210;
+			let longest = 0;
+			for (const commit of commits) longest = Math.max(longest, String(commit.subject).length);
+			const width = Math.max(SIDEBAR_TAB_EXPORT_WIDTH_MIN, Math.min(SIDEBAR_TAB_EXPORT_WIDTH_MAX, Math.round(subjectX + longest * 6.6 + metaWidth)));
+			const head = SIDEBAR_TAB_EXPORT_HEAD;
+			const height = head + commits.length * rowHeight + SIDEBAR_TAB_EXPORT_FOOT;
+			const branch = view !== null && typeof view.branch === "string" ? view.branch : "";
+			const root = repo !== null && typeof repo.root === "string" ? repo.root : view !== null && typeof view.root === "string" ? view.root : "";
+			const label = repo !== null ? sidebarTabRepoLabel(repo) : String(root).split(/[\\/]/).pop();
+			const stamped = sidebarTabIsoTime(Math.floor((typeof options.generatedAt === "number" ? options.generatedAt : Date.now()) / 1000));
+			const heading = (label === "" || label === void 0 || label === null ? "graph" : label) + (branch === "" ? "" : "  ·  " + branch);
+			const out = [];
+			out.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" font-family="' + SIDEBAR_TAB_EXPORT_FONT + '" role="img">');
+			out.push("<title>" + esc(heading) + "</title>");
+			out.push('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="' + palette.bg + '"/>');
+			out.push('<text x="' + pad + '" y="27" fill="' + palette.primary + '" font-size="15" font-weight="600">' + esc(heading) + "</text>");
+			out.push('<text x="' + (width - pad) + '" y="27" text-anchor="end" fill="' + palette.secondary + '" font-size="11">' + esc(sidebarTabInterpolate(t("sidebar.commitsLanes"), { count: commits.length, lanes: geometry === null ? 1 : geometry.laneCount })) + "</text>");
+			if (repo !== null && typeof repo.path === "string") out.push('<text x="' + pad + '" y="45" fill="' + palette.tertiary + '" font-size="11" font-family="' + SIDEBAR_TAB_EXPORT_MONO + '">' + esc(repo.path) + "</text>");
+			out.push('<text x="' + (width - pad) + '" y="45" text-anchor="end" fill="' + palette.tertiary + '" font-size="11">' + esc(stamped) + "</text>");
+			out.push('<line x1="' + pad + '" y1="' + (head - 10) + '" x2="' + (width - pad) + '" y2="' + (head - 10) + '" stroke="' + palette.line + '" stroke-width="1"/>');
+			if (geometry !== null) {
+				out.push('<g transform="translate(0 ' + head + ')">');
+				for (const segment of geometry.segments) out.push('<path d="' + segment.d + '" fill="none" stroke="' + segment.color + '" stroke-width="' + segment.width + '" stroke-opacity="' + segment.opacity + '" stroke-linecap="round"/>');
+				for (const node of geometry.nodes) {
+					if (node.merge === true) out.push('<rect x="' + (node.x - 4.2) + '" y="' + (node.y - 4.2) + '" width="8.4" height="8.4" rx="1.4" fill="' + node.color + '" stroke="' + palette.bg + '" stroke-width="1.4" transform="rotate(45 ' + node.x + ' ' + node.y + ')"/>');
+					else out.push('<circle cx="' + node.x + '" cy="' + node.y + '" r="3.6" fill="' + node.color + '" stroke="' + palette.bg + '" stroke-width="1.4"/>');
+				}
+				out.push("</g>");
+			}
+			out.push('<line x1="' + (pad + graphWidth + 6) + '" y1="' + head + '" x2="' + (pad + graphWidth + 6) + '" y2="' + (head + commits.length * rowHeight) + '" stroke="' + palette.line + '" stroke-width="1"/>');
+			for (let position = 0; position < commits.length; position += 1) {
+				const commit = commits[position];
+				const top = head + position * rowHeight;
+				const mid = top + rowHeight / 2;
+				const pinned = options.pinned !== void 0 && options.pinned === commit.oid;
+				out.push('<g data-gitgraph-export-row="' + position + '"' + (pinned ? ' data-gitgraph-export-pinned="true"' : "") + ">");
+				if (pinned) out.push('<rect x="' + (pad - 4) + '" y="' + top + '" width="' + (width - pad * 2 + 8) + '" height="' + rowHeight + '" rx="6" fill="' + palette.row + '"/>');
+				out.push('<line x1="' + (labelX - 6) + '" y1="' + (head + (position + 1) * rowHeight) + '" x2="' + (width - pad) + '" y2="' + (head + (position + 1) * rowHeight) + '" stroke="' + palette.line + '" stroke-width="0.6" stroke-opacity="0.55"/>');
+				out.push('<text x="' + labelX + '" y="' + Math.round(mid + 4) + '" fill="' + palette.tertiary + '" font-size="11" font-family="' + SIDEBAR_TAB_EXPORT_MONO + '">' + esc(String(commit.oid).slice(0, 7)) + "</text>");
+				const subjectRoom = Math.max(12, Math.floor((width - pad - subjectX - 16) / 6.6));
+				const subjectText = String(commit.subject).length > subjectRoom ? String(commit.subject).slice(0, Math.max(1, subjectRoom - 1)) + "…" : commit.subject;
+				out.push('<text x="' + subjectX + '" y="' + Math.round(mid - 1) + '" fill="' + palette.primary + '" font-size="12.5">' + esc(subjectText) + "</text>");
+				const refs = Array.isArray(commit.refs) ? commit.refs.filter((ref) => String(ref).indexOf("HEAD -> ") !== 0) : [];
+				const shown = refs.slice(0, SIDEBAR_TAB_EXPORT_REF_MAX);
+				if (refs.length > shown.length) shown.push("+" + (refs.length - shown.length));
+				let meta = esc(commit.author);
+				if (shown.length > 0) {
+					const dots = '<tspan fill="' + palette.tertiary + '">  ·  </tspan>';
+					meta = shown.map((ref) => '<tspan fill="' + (String(ref) === branch ? palette.accent : palette.secondary) + '" font-weight="' + (String(ref) === branch ? "600" : "400") + '">' + esc(ref) + "</tspan>").join(dots);
+					meta += '<tspan fill="' + palette.tertiary + '">   — ' + esc(commit.author) + "</tspan>";
+				}
+				out.push('<text x="' + subjectX + '" y="' + Math.round(mid + 11) + '" fill="' + palette.secondary + '" font-size="10">' + meta + "</text>");
+				out.push('<text x="' + (width - pad) + '" y="' + Math.round(mid + 11) + '" text-anchor="end" fill="' + palette.tertiary + '" font-size="10">' + esc(sidebarTabIsoTime(commit.authorTime)) + "</text>");
+				out.push("</g>");
+			}
+			out.push('<text x="' + pad + '" y="' + (height - 9) + '" fill="' + palette.tertiary + '" font-size="10">' + esc(t("sidebar.exportNote")) + "</text>");
+			out.push('<text x="' + (width - pad) + '" y="' + (height - 9) + '" text-anchor="end" fill="' + palette.tertiary + '" font-size="10">github.com/Athosoo/dsh-git-graph-sidebar</text>');
+			out.push("</svg>");
+			return out.join("\n");
+		}
+		/**
+		 * Save one SVG string. A browser gets a real download through a Blob URL;
+		 * wherever that is unavailable (the offline preview harness, a webview
+		 * without object URLs) the markup is copied instead, so the action always
+		 * produces something the user can use.
+		 * @returns "download", "copy" or "failed".
+		 */
+		function sidebarTabSaveSvg(filename, svg) {
+			try {
+				const canBlob = typeof Blob !== "undefined" && typeof URL !== "undefined" && URL !== null && typeof URL.createObjectURL === "function";
+				const body = typeof document === "undefined" ? void 0 : document.body ?? document.documentElement;
+				if (canBlob && body !== void 0 && body !== null && typeof document.createElement === "function") {
+					const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+					const anchor = document.createElement("a");
+					anchor.href = url;
+					anchor.download = filename;
+					anchor.setAttribute("rel", "noopener");
+					anchor.style.display = "none";
+					body.appendChild(anchor);
+					anchor.click();
+					anchor.remove();
+					setTimeout(() => {
+						try {
+							URL.revokeObjectURL(url);
+						} catch {}
+					}, 1000);
+					return "download";
+				}
+			} catch {}
+			return sidebarTabCopy(svg) ? "copy" : "failed";
+		}
 		/**
 		 * One commit as a plain-text block a person can paste into a chat with an
 		 * agent: the repository it belongs to, the full object id, the subject,
@@ -1038,6 +1206,13 @@
 				const timer = setTimeout(() => setCopiedKey(void 0), 1600);
 				return () => clearTimeout(timer);
 			}, [copiedKey]);
+			/** Which export path ran last ("download"/"copy"), so the button can confirm. */
+			const [exportState, setExportState] = react.useState(void 0);
+			react.useEffect(() => {
+				if (exportState === void 0) return void 0;
+				const timer = setTimeout(() => setExportState(void 0), 2200);
+				return () => clearTimeout(timer);
+			}, [exportState]);
 			/** The proven convention frameworks, loaded from the host on demand. */
 			const [catalog, setCatalog] = react.useState(null);
 			/** Whether the framework picker is open under the conventions strip. */
@@ -1450,6 +1625,23 @@
 				return count;
 			}, [lanes]);
 			const geometry = react.useMemo(() => sidebarTabBuildGraph(visibleCommits, lanes, rowHeight), [visibleCommits, lanes, rowHeight]);
+			/** Export the visible graph as one standalone SVG file. */
+			const exportGraph = () => {
+				if (view === null || geometry === null) return;
+				const svg = sidebarTabExportSvg({
+					view,
+					repo: selected,
+					commits: visibleCommits,
+					lanes,
+					geometry,
+					rowHeight,
+					pinned: pinnedOid,
+					dark: sidebarTabIsDark(),
+					t,
+					generatedAt: Date.now()
+				});
+				setExportState(sidebarTabSaveSvg(sidebarTabExportName(selected !== void 0 && selected !== null ? selected.root ?? selected.path : view.root), svg));
+			};
 			/** Tree rows: the workspace root, the directories between, each repository. */
 			const treeRows = react.useMemo(() => scan.phase === "ready" ? sidebarTabRepoTree(scan.repos) : [], [scan]);
 			const status = selected !== void 0 && selected.status !== void 0 && selected.status !== null ? selected.status : null;
@@ -1485,6 +1677,16 @@
 				title: t("sidebar.zoomIn"),
 				"aria-label": t("sidebar.zoomIn")
 			}, "+"));
+			toolbarChildren.push(h("button", {
+				key: "export",
+				type: "button",
+				"data-gitgraph-action": "export",
+				style: SIDEBAR_TAB_BUTTON,
+				onClick: exportGraph,
+				disabled: view === null,
+				title: t("sidebar.exportGraph"),
+				"aria-label": t("sidebar.exportGraph")
+			}, exportState === "copy" ? t("sidebar.exportCopied") : exportState === "download" ? t("sidebar.exported") : t("sidebar.exportGraph")));
 			toolbarChildren.push(h("button", {
 				key: "expand",
 				type: "button",
