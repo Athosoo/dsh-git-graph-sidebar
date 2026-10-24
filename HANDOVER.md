@@ -6,7 +6,7 @@
 
 ## 0. 一句话状态
 
-插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）代码完成、测试全绿、待发版**（host 132/132、客户端预览含 tier-3 一节全过）。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。
+插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -128,7 +128,7 @@ node scripts/preview-tab.mjs \
 | 1.3.0 | 规范**就近继承** + 容器仓库缺文档时回退为指针清单（有界 BFS，三层） |
 | 1.4.0 | Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`）；已发布并已装 |
 | 1.5.0 | Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检；已发布并已装 |
-| 1.6.0 | Tier 3 三项：提交合规提示（`/git/compliance`）、工作区总纲（`/git/workspace-convention`）、规范升级预览（`/git/convention/preview`）；代码完成、待发版 |
+| 1.6.0 | Tier 3 三项：提交合规提示（`/git/compliance`）、工作区总纲（`/git/workspace-convention`）、规范升级预览（`/git/convention/preview`）；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -173,7 +173,7 @@ node scripts/preview-tab.mjs \
 - 21 个新 locale 键（zh/en）：`sidebar.overview`、`overviewBack`、`overviewHint`、`overviewClean`、`overviewDirty`、`overviewConflicts`、`overviewAhead`、`overviewBehind`、`overviewUpstream`、`overviewDetached`、`overviewNow`、`overviewMinutes`、`overviewHours`、`overviewDays`、`overviewDetail`、`overviewMerged`、`overviewUnmerged`、`overviewMeta`、`overviewBase`、`overviewFailed`、`overviewEmpty`；`validate-lib` 现在报 155 键。
 - 预览：`preview-tab.mjs` 新增 `git/cleanup` + `git/health` stub、给 `--repos` 条目装饰确定性的 `activity`/`upstream`、总览测试块（默认不显示 → 点开 → 行数 = 仓库数 → 排序与测试内独立重算一致 → 工具栏只剩 refresh+overview → 详情加载出 merged/unmerged/health → 点行回到图谱），并写出 `preview/graph-tab-overview.html`（+ `-light`）。
 
-## 7.2 1.6.0 的三项改动（Tier 3，代码完成待发版）
+## 7.2 1.6.0 的三项改动（Tier 3，已随 1.6.0 发布）
 
 **host `src/host/conventions.js`（1278 行，build-lib 拼进 `lib/index.js` 的 conventions region）**
 - 常量：`CONVENTION_TYPE_VOCAB`（feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert）、`CONVENTION_NON_IMPERATIVE`（added/adds/adding/fixed/…/supporting 等屈折动词）、`CONVENTION_NO_RULES = {maxSubject:null, types:null, lowercase:false, noPeriod:false, imperative:false}`、`CONVENTION_WORKSPACE_DIR = ".dsh"`。
@@ -198,7 +198,7 @@ node scripts/preview-tab.mjs \
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
-2. **发 1.6.0**（Tier 3 三项代码已完成、全绿）：
+2. ~~发 1.6.0~~ **已完成**（commit `92f15a1`、tag `v1.6.0`、Release id `422695343`、资产 `dsh-git-graph-sidebar.tgz` 854388 字节、`desktop` 已装 1.6.0）；用户需重启 DSH 才能用上三条新路由。原始步骤留档：
    - `package.json:3` → `1.6.0`（唯一要改的版本号）；
    - 跑 §10 的全链路自检（应得 `spliced 2991 / 1278 / 329`、`already present 22`、`178 locale keys`、`132/132`、预览 9 节全过）；
    - `mkdir -p ../dsh-git-graph-dist/1.6.0 && npm pack --pack-destination ../dsh-git-graph-dist/1.6.0`，并复制一份无版本名；
