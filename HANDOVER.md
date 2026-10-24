@@ -129,6 +129,7 @@ node scripts/preview-tab.mjs \
 | 1.4.0 | Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`）；已发布并已装 |
 | 1.5.0 | Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检；已发布并已装 |
 | 1.6.0 | Tier 3 三项：提交合规提示（`/git/compliance`）、工作区总纲（`/git/workspace-convention`）、规范升级预览（`/git/convention/preview`）；已发布并已装 |
+| 1.6.1 | 界面收尾：工具栏只留刷新 / 缩放 / 导出 / 初始化，去掉「总览」与「全屏查看」（只读路由 `/git/cleanup`、`/git/health` 保留）；面板字号整体加大一号；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 

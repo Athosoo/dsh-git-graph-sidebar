@@ -449,24 +449,6 @@ if (usingRealData) {
 	}
 }
 
-// The overview fields a live scan entry carries (`activity`, `upstream`) are
-// added by the host; canned `--repos` files predate them, so decorate every
-// entry with deterministic values: the first repository trails its upstream,
-// the second tracks nothing, and all of them were active recently.
-{
-	const entries = Array.isArray(REPOS.repos) ? REPOS.repos : [];
-	const now = Math.floor(Date.now() / 1000);
-	for (let index = 0; index < entries.length; index += 1) {
-		const entry = entries[index];
-		if (typeof entry.activity !== "number") entry.activity = now - (index + 1) * 5400;
-		if (entry.upstream === undefined) {
-			entry.upstream = index === 0
-				? { name: "origin/" + (entry.status !== null && entry.status !== undefined && typeof entry.status.branch === "string" && entry.status.branch !== "" ? entry.status.branch : "main"), ahead: 0, behind: 3 }
-				: index === 1 ? null : { name: "origin/main", ahead: index, behind: 0 };
-		}
-	}
-}
-
 // ------------------------------------------------------------------- stubs
 const styles = [];
 function fakeElement(tag) {
@@ -884,21 +866,17 @@ for (const toggle of refToggles) {
 if (mutedRefName === "") throw new Error("no ref toggle hid any commit");
 console.log("preview-tab: search narrows to " + rowsAfterSearch.length + " of " + rowsBeforeSearch + " rows, muting " + mutedRefName + " hides " + hiddenByRef);
 
-// The full-window view opens, renders the same graph and closes again.
-const expandMount = await mountComponent(descriptor.component, tabProps(focusPath));
-const expandButton = findAll(expandMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "expand")[0];
-if (expandButton === undefined) throw new Error("toolbar has no full-window control");
-click(expandButton, "expand graph");
-let expandHtml = (await expandMount.render()).html;
-if (expandHtml.indexOf("data-gitgraph-overlay") < 0) throw new Error("full-window view did not open");
-const overlayHtml = expandHtml;
-if (expandHtml.indexOf("<svg") < 0) throw new Error("full-window view rendered no graph");
-const closeButton = findAll(expandMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "close-overlay")[0];
-if (closeButton === undefined) throw new Error("full-window view has no close control");
-click(closeButton, "close full-window view");
-expandHtml = (await expandMount.render()).html;
-if (expandHtml.indexOf("data-gitgraph-overlay") >= 0) throw new Error("full-window view did not close");
-console.log("preview-tab: copy action and full-window view ok");
+// The toolbar carries only what the panel still offers: the full-window view
+// and the workspace overview were removed, the graph export stayed.
+const bareMount = await mountComponent(descriptor.component, tabProps(focusPath));
+await bareMount.render();
+const bareActions = findAll(bareMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-action"] === "string").map((node) => node.props["data-gitgraph-action"]);
+if (bareActions.indexOf("expand") >= 0) throw new Error("the full-window control is still in the toolbar");
+if (bareActions.indexOf("overview") >= 0) throw new Error("the overview switch is still in the toolbar");
+if (bareActions.indexOf("export") < 0) throw new Error("the export control is missing from the toolbar");
+if (bareActions.indexOf("refresh") < 0) throw new Error("the refresh control is missing from the toolbar");
+if (findAll(bareMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-overview-list"] === true).length > 0) throw new Error("the overview list is still rendered");
+console.log("preview-tab: toolbar offers " + bareActions.join(", "));
 
 // A refresh must never blank the panel. The scan keeps its previous rows on
 // screen while the request is in flight, and an identical result leaves the
@@ -952,66 +930,6 @@ if (switchedHtml.indexOf("data-gitgraph-repo-active") < 0) throw new Error("the 
 console.log("preview-tab: repository switch ok (" + repoRows.length + " tree rows, " +
 	(usingRealData ? "real repository graph loaded" : "nested graph loaded") + ")");
 
-
-/** The overview render, kept for the static page written at the end. */
-let overviewSnapshot = "";
-
-// The workspace overview: one row per repository, attention first, a read-only
-// detail per row (branch cleanup hints plus the health report) and a drill-in
-// back to that repository's graph.
-{
-	const overviewMount = await mountComponent(descriptor.component, tabProps(focusPath));
-	await new Promise((resolve) => setTimeout(resolve, 40));
-	let overviewHtml = (await overviewMount.render()).html;
-	if (overviewHtml.indexOf("data-gitgraph-overview-list") >= 0) throw new Error("the overview was open before it was asked for");
-	const overviewToggle = findAll(overviewMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "overview")[0];
-	if (overviewToggle === undefined) throw new Error("the overview toggle is missing from the toolbar");
-	click(overviewToggle, "overview");
-	overviewHtml = (await overviewMount.render()).html;
-	if (overviewHtml.indexOf("data-gitgraph-overview-list") < 0) throw new Error("the overview did not open");
-	if (overviewHtml.indexOf("data-gitgraph-sidebar-body") >= 0) throw new Error("the graph body is still painted under the overview");
-	const overviewActions = findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-action"] === "string").map((node) => node.props["data-gitgraph-action"]);
-	if (overviewActions.join(",") !== "refresh,overview") throw new Error("the overview toolbar should only offer rescan and back, got " + overviewActions.join(","));
-	const overviewRows = findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview"] === "string");
-	if (overviewRows.length !== REPOS.repos.length) throw new Error("overview rows " + overviewRows.length + " != repositories " + REPOS.repos.length);
-	const rankOf = (entry) => {
-		const status = entry.status !== undefined && entry.status !== null ? entry.status : null;
-		const conflicts = status !== null && typeof status.conflicts === "number" ? status.conflicts : 0;
-		const dirty = status === null ? 0 : (typeof status.dirtyFiles === "number" ? status.dirtyFiles : 0) + (typeof status.untrackedFiles === "number" ? status.untrackedFiles : 0);
-		const upstream = entry.upstream !== undefined && entry.upstream !== null ? entry.upstream : null;
-		const behind = upstream !== null && typeof upstream.behind === "number" ? upstream.behind : 0;
-		const branch = status !== null && typeof status.branch === "string" ? status.branch : "";
-		return [conflicts > 0 ? 0 : 1, dirty > 0 ? 0 : 1, behind > 0 ? 0 : 1, branch === "" ? 0 : 1, typeof entry.relPath === "string" ? entry.relPath : ""];
-	};
-	const expectedOrder = REPOS.repos.slice().sort((left, right) => {
-		const a = rankOf(left);
-		const b = rankOf(right);
-		for (let index = 0; index < a.length; index += 1) {
-			if (a[index] === b[index]) continue;
-			if (typeof a[index] === "number") return a[index] - b[index];
-			return a[index] < b[index] ? -1 : 1;
-		}
-		return 0;
-	}).map((entry) => entry.relPath);
-	const actualOrder = overviewRows.map((node) => node.props["data-gitgraph-overview"]);
-	if (actualOrder.join("|") !== expectedOrder.join("|")) throw new Error("overview order " + actualOrder.join("|") + " != " + expectedOrder.join("|"));
-	const overviewDetailToggle = findAll(overviewRows[0], (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview-detail"] === "string")[0];
-	if (overviewDetailToggle === undefined) throw new Error("the overview row has no detail toggle");
-	click(overviewDetailToggle, "overview detail");
-	await new Promise((resolve) => setTimeout(resolve, 40));
-	overviewHtml = (await overviewMount.render()).html;
-	if (overviewHtml.indexOf("data-gitgraph-overview-detail-body") < 0) throw new Error("the overview detail did not load");
-	if (overviewHtml.indexOf("feature/merged-old") < 0) throw new Error("the overview detail lost the merged branch");
-	if (overviewHtml.indexOf("feature/c") < 0) throw new Error("the overview detail lost the unmerged branch");
-	if (overviewHtml.indexOf("stash") < 0) throw new Error("the overview detail lost the health line");
-	overviewSnapshot = overviewHtml;
-	click(findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview"] === "string")[0], "overview row");
-	await new Promise((resolve) => setTimeout(resolve, 80));
-	overviewHtml = (await overviewMount.render()).html;
-	if (overviewHtml.indexOf("data-gitgraph-overview-list") >= 0) throw new Error("the overview stayed open after a repository was opened");
-	if (overviewHtml.indexOf("data-gitgraph-sidebar-body") < 0) throw new Error("the graph body did not come back after the drill-in");
-	console.log("preview-tab: workspace overview ok (" + overviewRows.length + " repositories, attention first, detail and drill-in wired)");
-}
 
 // The conventions strip: an unborn repository without a document must make the
 // tab write the empty scaffold by itself and open the framework picker.
@@ -1338,14 +1256,11 @@ const statesHtml = `<!doctype html>
 	body { margin: 0; padding: 24px; background: #0f1115; color: #e6e8eb; font: 13px/1.5 system-ui, sans-serif; }
 	h2 { font-size: 13px; font-weight: 600; margin: 24px 0 10px; color: #9aa1ab; text-transform: uppercase; letter-spacing: .06em; }
 	.panel { width: 400px; background: var(--dsw-alias-bg-base); border: 1px solid #2a2f38; border-radius: 10px; overflow: hidden; }
-	.overlay-box { position: relative; transform: translateZ(0); width: 1080px; max-width: 100%; height: 620px; border: 1px solid #2a2f38; border-radius: 10px; overflow: hidden; }
 </style>
 </head>
 <body>
 <h2>Pinned commit card</h2>
 <div class="panel">${detailHtml}</div>
-<h2>Full-window view</h2>
-<div class="overlay-box">${overlayHtml}</div>
 ${conventionsSection}${tier3Section}</body>
 </html>`;
 await writeFile(statesFile, statesHtml, "utf8");
@@ -1404,21 +1319,6 @@ const heroHtml = `<!doctype html>
 await writeFile(heroFile, heroHtml, "utf8");
 await writeFile(heroFile.replace(/\.html$/, "-light.html"), heroHtml.replace("<body>", '<body data-theme="light">'), "utf8");
 console.log("preview-tab: wrote " + heroFile);
-
-
-// The overview replaces the tree and the graph, so it gets a page of its own:
-// the same shell as the panel sheet, with one panel holding that render.
-if (overviewSnapshot !== "") {
-	const overviewFile = join(dirname(outFile), "graph-tab-overview.html");
-	const stageStart = html.indexOf('<div class="stage">');
-	const legendStart = html.indexOf('<div class="legend">');
-	if (stageStart < 0 || legendStart < 0) throw new Error("preview shell changed: cannot place the overview page");
-	const stage = '<div class="stage">\n\t\t<div class="panel">\n\t\t\t<header>工作区总览 · 每个仓库一行（需要处理在前）</header>\n\t\t\t<div>' + overviewSnapshot + '</div>\n\t\t</div>\n\t</div>\n\t';
-	const overviewPage = html.slice(0, stageStart) + stage + html.slice(legendStart);
-	await writeFile(overviewFile, overviewPage, "utf8");
-	await writeFile(overviewFile.replace(/\.html$/, "-light.html"), overviewPage.replace("<body>", '<body data-theme="light">'), "utf8");
-	console.log("preview-tab: wrote " + overviewFile);
-}
 
 // A page with just the Tier 3 states, for a quick visual check of the
 // compliance line, the upgrade preview and the workspace strip.

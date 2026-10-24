@@ -25,6 +25,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | 1.4.0 | **released and installed** / 已发布并已装 | Tier 1 complete: rollback prompt, commit search + ref filters, standalone SVG export. |
 | 1.5.0 | **released and installed** / 已发布并已装 | Tier 2: workspace overview, branch cleanup hints, repository health. |
 | 1.6.0 | **released and installed** / 已发布并已装 | Tier 3: commit compliance, workspace document, upgrade preview. |
+| 1.6.1 | **released and installed** / 已发布并已装 | UI cleanup: the toolbar keeps refresh, zoom, export and init; the workspace overview and the full-window view were removed (their read-only routes `/git/cleanup`, `/git/health` stayed) and every panel font grew one step. |
 
 1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
 

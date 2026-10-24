@@ -23,7 +23,7 @@
 		textOverflow: "ellipsis",
 		whiteSpace: "nowrap",
 		fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-		fontSize: 11,
+		fontSize: 12,
 		color: "var(--dsw-alias-text-secondary)"
 	};
 		/** Repositories reported by one scan at most (mirrors the host limit). */
@@ -177,7 +177,7 @@
 			border: "1px solid var(--dsw-alias-border-l2)",
 			background: "var(--dsw-alias-bg-base)",
 			color: "var(--dsw-alias-label-primary)",
-			fontSize: 12,
+			fontSize: 13,
 			padding: "0 6px"
 		};
 		const SIDEBAR_TAB_TREE_HEADER = {
@@ -190,7 +190,7 @@
 			border: "none",
 			background: "transparent",
 			color: "var(--dsw-alias-label-secondary)",
-			fontSize: 11,
+			fontSize: 12,
 			textAlign: "left",
 			cursor: "pointer"
 		};
@@ -209,7 +209,7 @@
 			alignItems: "center",
 			gap: 4,
 			padding: "2px 6px 2px 0",
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "16px",
 			whiteSpace: "nowrap",
 			cursor: "pointer"
@@ -246,7 +246,7 @@
 			background: "var(--dsw-alias-button-tool-bar-fill)",
 			color: "var(--dsw-alias-label-primary)",
 			borderRadius: 8,
-			fontSize: 12,
+			fontSize: 13,
 			padding: "0 10px",
 			cursor: "pointer"
 		};
@@ -256,7 +256,7 @@
 			gap: 6,
 			flexWrap: "wrap",
 			flex: "none",
-			fontSize: 11,
+			fontSize: 12,
 			minHeight: 16
 		};
 		const SIDEBAR_TAB_BADGE = {
@@ -264,24 +264,24 @@
 			background: "var(--dsw-alias-bg-layer-2)",
 			color: "var(--dsw-alias-label-secondary)",
 			padding: "1px 7px",
-			fontSize: 10
+			fontSize: 11
 		};
 		const SIDEBAR_TAB_MUTED = {
 			color: "var(--dsw-alias-label-tertiary)",
-			fontSize: 11
+			fontSize: 12
 		};
 		const SIDEBAR_TAB_WARN = {
 			color: "var(--dsw-alias-state-warn-primary)",
-			fontSize: 11
+			fontSize: 12
 		};
 		const SIDEBAR_TAB_ERROR = {
 			color: "var(--dsw-alias-state-error-primary)",
-			fontSize: 12,
+			fontSize: 13,
 			padding: "12px 4px"
 		};
 		const SIDEBAR_TAB_EMPTY = {
 			color: "var(--dsw-alias-label-tertiary)",
-			fontSize: 12,
+			fontSize: 13,
 			textAlign: "center",
 			padding: "20px 8px"
 		};
@@ -301,7 +301,7 @@
 			color: "var(--dsw-alias-label-secondary)",
 			borderRadius: 8,
 			padding: 6,
-			fontSize: 12,
+			fontSize: 13,
 			cursor: "pointer"
 		};
 		/** Lane palette of the SVG graph, indexed by lane number. */
@@ -334,7 +334,7 @@
 			flex: "none",
 			width: 44,
 			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-			fontSize: 10,
+			fontSize: 11,
 			color: "var(--dsw-alias-label-tertiary)"
 		};
 		/** Commit subject: the one elastic column of a row. */
@@ -344,7 +344,7 @@
 			overflow: "hidden",
 			textOverflow: "ellipsis",
 			whiteSpace: "nowrap",
-			fontSize: 12,
+			fontSize: 13,
 			color: "var(--dsw-alias-label-primary)"
 		};
 		/** One ref badge (branch, tag, HEAD). */
@@ -385,7 +385,7 @@
 			background: "var(--dsw-alias-bg-base)",
 			color: "var(--dsw-alias-label-primary)",
 			fontFamily: "inherit",
-			fontSize: 11
+			fontSize: 12
 		};
 		const SIDEBAR_TAB_FILTER_REFS = {
 			display: "flex",
@@ -401,7 +401,7 @@
 			background: "rgba(56, 189, 248, 0.18)",
 			color: "var(--dsw-alias-label-primary)",
 			fontFamily: "inherit",
-			fontSize: 10,
+			fontSize: 11,
 			lineHeight: "14px",
 			cursor: "pointer"
 		};
@@ -494,21 +494,21 @@
 			borderRadius: 10,
 			border: "1px solid var(--dsw-alias-border-l1)",
 			background: "var(--dsw-alias-bg-layer-2)",
-			fontSize: 12,
+			fontSize: 13,
 			color: "var(--dsw-alias-label-secondary)",
 			wordBreak: "break-all"
 		};
 		/** Full object id of the pinned commit card (monospace, wraps at the card width). */
 		const SIDEBAR_TAB_DETAIL_OID = {
 			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "16px",
 			color: "var(--dsw-alias-label-primary)",
 			wordBreak: "break-all"
 		};
 		/** Subject line of the pinned commit card. */
 		const SIDEBAR_TAB_DETAIL_SUBJECT = {
-			fontSize: 13,
+			fontSize: 14,
 			lineHeight: "18px",
 			color: "var(--dsw-alias-label-primary)",
 			wordBreak: "break-word"
@@ -522,67 +522,10 @@
 			background: "var(--dsw-alias-button-tool-bar-fill)",
 			color: "var(--dsw-alias-label-primary)",
 			borderRadius: 8,
-			fontSize: 13,
+			fontSize: 14,
 			lineHeight: "24px",
 			padding: 0,
 			cursor: "pointer"
-		};
-		/** Toolbar / card button that carries a word ("full view", "close"). */
-		const SIDEBAR_TAB_EXPAND = {
-			flex: "none",
-			height: 26,
-			border: "1px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-button-tool-bar-fill)",
-			color: "var(--dsw-alias-label-primary)",
-			borderRadius: 8,
-			fontSize: 11,
-			lineHeight: "24px",
-			padding: "0 8px",
-			whiteSpace: "nowrap",
-			cursor: "pointer"
-		};
-		/** Backdrop of the full-window graph view. */
-		const SIDEBAR_TAB_OVERLAY = {
-			position: "fixed",
-			inset: 0,
-			zIndex: 60,
-			display: "flex",
-			alignItems: "center",
-			justifyContent: "center",
-			padding: 24,
-			background: "rgba(8, 10, 14, 0.55)"
-		};
-		/** The full-window graph panel. */
-		const SIDEBAR_TAB_OVERLAY_PANEL = {
-			display: "flex",
-			flexDirection: "column",
-			width: "100%",
-			maxWidth: 1080,
-			maxHeight: "100%",
-			minHeight: 0,
-			borderRadius: 14,
-			border: "1px solid var(--dsw-alias-border-l1)",
-			background: "var(--dsw-alias-bg-base)",
-			boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45)",
-			overflow: "hidden"
-		};
-		/** Header of the full-window panel. */
-		const SIDEBAR_TAB_OVERLAY_HEAD = {
-			flex: "none",
-			display: "flex",
-			alignItems: "center",
-			gap: 8,
-			padding: "10px 14px",
-			borderBottom: "1px solid var(--dsw-alias-border-l1)",
-			fontSize: 13,
-			color: "var(--dsw-alias-label-primary)"
-		};
-		/** Scroll area of the full-window panel. */
-		const SIDEBAR_TAB_OVERLAY_BODY = {
-			flex: "1 1 auto",
-			minHeight: 0,
-			overflow: "auto",
-			padding: "10px 14px"
 		};
 		/** Small action button of the commit card. */
 		const SIDEBAR_TAB_DETAIL_BUTTON = {
@@ -593,7 +536,7 @@
 			background: "var(--dsw-alias-button-tool-bar-fill)",
 			color: "var(--dsw-alias-label-primary)",
 			borderRadius: 6,
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "22px",
 			whiteSpace: "nowrap",
 			cursor: "pointer"
@@ -610,7 +553,7 @@
 			display: "flex",
 			gap: 8,
 			minWidth: 0,
-			fontSize: 12,
+			fontSize: 13,
 			lineHeight: "18px"
 		};
 		/** Label column of a commit-card line. */
@@ -626,14 +569,13 @@
 			color: "var(--dsw-alias-label-secondary)",
 			wordBreak: "break-word"
 		};
-		/** The workspace overview: one row per repository, attention first. */
 		/** The compliance line: one sentence plus the offending subjects. */
 		const SIDEBAR_TAB_COMPLIANCE = {
 			display: "flex",
 			flexDirection: "column",
 			gap: 1,
 			padding: "2px 2px 0",
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "16px"
 		};
 		/** The upgrade preview: what a write would add, rewrite or drop. */
@@ -652,133 +594,14 @@
 			display: "flex",
 			alignItems: "baseline",
 			gap: 6,
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "16px"
 		};
 		const SIDEBAR_TAB_PREVIEW_SNIPPET = {
 			color: "var(--dsw-alias-label-tertiary)",
-			fontSize: 10,
+			fontSize: 11,
 			lineHeight: "15px",
 			wordBreak: "break-word"
-		};
-		const SIDEBAR_TAB_OVERVIEW = {
-			display: "flex",
-			flexDirection: "column",
-			gap: 6,
-			flex: "1 1 auto",
-			minHeight: 0,
-			overflowY: "auto",
-			padding: "2px 2px 6px"
-		};
-		/** The one-line caption above the overview rows. */
-		const SIDEBAR_TAB_OVERVIEW_HINT = {
-			fontSize: 11,
-			lineHeight: "16px",
-			color: "var(--dsw-alias-label-tertiary)",
-			padding: "0 2px 2px"
-		};
-		/** One repository: a clickable row that opens its graph. */
-		const SIDEBAR_TAB_OVERVIEW_ROW = {
-			display: "flex",
-			flexDirection: "column",
-			gap: 5,
-			padding: "7px 9px",
-			border: "1px solid var(--dsw-alias-border-1)",
-			borderRadius: 8,
-			background: "var(--dsw-alias-bg-layer-1)",
-			cursor: "pointer",
-			textAlign: "left",
-			color: "inherit",
-			flex: "none"
-		};
-		const SIDEBAR_TAB_OVERVIEW_HEAD = {
-			display: "flex",
-			alignItems: "center",
-			gap: 6,
-			minWidth: 0
-		};
-		const SIDEBAR_TAB_OVERVIEW_NAME = {
-			flex: "1 1 auto",
-			minWidth: 0,
-			overflow: "hidden",
-			textOverflow: "ellipsis",
-			whiteSpace: "nowrap",
-			fontSize: 12,
-			fontWeight: 600,
-			color: "var(--dsw-alias-label-primary)"
-		};
-		const SIDEBAR_TAB_OVERVIEW_REL = {
-			flex: "none",
-			fontSize: 10,
-			color: "var(--dsw-alias-label-tertiary)"
-		};
-		const SIDEBAR_TAB_OVERVIEW_META = {
-			display: "flex",
-			alignItems: "center",
-			gap: 5,
-			flexWrap: "wrap",
-			fontSize: 10,
-			lineHeight: "15px",
-			color: "var(--dsw-alias-label-secondary)"
-		};
-		/** A small pill in an overview row. */
-		const SIDEBAR_TAB_OVERVIEW_TAG = {
-			flex: "none",
-			padding: "0 5px",
-			borderRadius: 4,
-			fontSize: 10,
-			lineHeight: "15px",
-			background: "var(--dsw-alias-bg-layer-2)",
-			color: "var(--dsw-alias-label-secondary)"
-		};
-		/** The pill reserved for something the user should look at. */
-		const SIDEBAR_TAB_OVERVIEW_WARN = {
-			flex: "none",
-			padding: "0 5px",
-			borderRadius: 4,
-			fontSize: 10,
-			lineHeight: "15px",
-			background: "var(--dsw-alias-bg-layer-2)",
-			color: "var(--dsw-alias-label-warning, #b45309)"
-		};
-		/** The per-row detail toggle (a real button inside the row). */
-		const SIDEBAR_TAB_OVERVIEW_TOGGLE = {
-			flex: "none",
-			padding: "1px 6px",
-			border: "1px solid var(--dsw-alias-border-1)",
-			borderRadius: 5,
-			background: "transparent",
-			color: "var(--dsw-alias-label-secondary)",
-			font: "inherit",
-			fontSize: 10,
-			lineHeight: "14px",
-			cursor: "pointer"
-		};
-		/** The opened detail block: branch cleanup hints plus the health line. */
-		const SIDEBAR_TAB_OVERVIEW_DETAIL = {
-			display: "flex",
-			flexDirection: "column",
-			gap: 3,
-			paddingTop: 5,
-			borderTop: "1px dashed var(--dsw-alias-border-1)",
-			fontSize: 10,
-			lineHeight: "15px",
-			color: "var(--dsw-alias-label-secondary)"
-		};
-		/** One branch line inside the detail block. */
-		const SIDEBAR_TAB_OVERVIEW_BRANCH = {
-			display: "flex",
-			alignItems: "baseline",
-			gap: 5,
-			minWidth: 0
-		};
-		const SIDEBAR_TAB_OVERVIEW_BRANCH_NAME = {
-			flex: "0 1 auto",
-			minWidth: 0,
-			overflow: "hidden",
-			textOverflow: "ellipsis",
-			whiteSpace: "nowrap",
-			color: "var(--dsw-alias-label-primary)"
 		};
 		/**
 		 * The Git-conventions strip: it reports whether the selected repository
@@ -792,7 +615,7 @@
 			border: "1px solid var(--dsw-alias-border-1)",
 			borderRadius: 8,
 			background: "var(--dsw-alias-bg-layer-1)",
-			fontSize: 11,
+			fontSize: 12,
 			flex: "none"
 		};
 		const SIDEBAR_TAB_CONVENTIONS_HEAD = {
@@ -815,7 +638,7 @@
 			flex: "none",
 			padding: "1px 5px",
 			borderRadius: 4,
-			fontSize: 10,
+			fontSize: 11,
 			lineHeight: "14px",
 			background: "var(--dsw-alias-bg-layer-2)",
 			color: "var(--dsw-alias-label-secondary)"
@@ -840,17 +663,17 @@
 			color: "inherit"
 		};
 		const SIDEBAR_TAB_FRAMEWORK_NAME = {
-			fontSize: 12,
+			fontSize: 13,
 			fontWeight: 600,
 			color: "var(--dsw-alias-label-primary)"
 		};
 		const SIDEBAR_TAB_FRAMEWORK_TAG = {
-			fontSize: 11,
+			fontSize: 12,
 			lineHeight: "16px",
 			color: "var(--dsw-alias-label-secondary)"
 		};
 		const SIDEBAR_TAB_FRAMEWORK_META = {
-			fontSize: 10,
+			fontSize: 11,
 			lineHeight: "15px",
 			color: "var(--dsw-alias-label-tertiary)"
 		};
@@ -866,8 +689,7 @@
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-zoom]:hover{border-color:var(--dsw-alias-label-tertiary)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-action]:hover{border-color:var(--dsw-alias-label-tertiary)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-detail]{transition:opacity 120ms ease}",
-			"[data-gitgraph-sidebar-tab] [data-gitgraph-framework]:hover{border-color:var(--dsw-alias-label-tertiary)}",
-			"[data-gitgraph-overlay] [data-gitgraph-row]{border-radius:8px}"
+			"[data-gitgraph-sidebar-tab] [data-gitgraph-framework]:hover{border-color:var(--dsw-alias-label-tertiary)}"
 		].join("");
 		/** True once the tab stylesheet is in the document. */
 		let sidebarTabStyleInstalled = false;
@@ -1235,67 +1057,6 @@
 				laneCount
 			};
 		}
-		/**
-		 * Sort key of one repository in the overview. Repositories that need
-		 * attention come first: unresolved conflicts, then uncommitted changes,
-		 * then branches trailing their upstream, then a detached HEAD.
-		 */
-		function sidebarTabOverviewRank(entry) {
-			const status = entry !== null && entry !== void 0 && entry.status !== null && entry.status !== void 0 ? entry.status : null;
-			const conflicts = status !== null && typeof status.conflicts === "number" ? status.conflicts : 0;
-			const dirty = status === null ? 0 : (typeof status.dirtyFiles === "number" ? status.dirtyFiles : 0) + (typeof status.untrackedFiles === "number" ? status.untrackedFiles : 0);
-			const upstream = entry !== null && entry !== void 0 && entry.upstream !== null && entry.upstream !== void 0 ? entry.upstream : null;
-			const behind = upstream !== null && typeof upstream.behind === "number" ? upstream.behind : 0;
-			const branch = status !== null && typeof status.branch === "string" ? status.branch : "";
-			return [conflicts > 0 ? 0 : 1, dirty > 0 ? 0 : 1, behind > 0 ? 0 : 1, branch === "" ? 0 : 1, typeof entry.relPath === "string" ? entry.relPath : ""];
-		}
-		/** Compare two rank tuples, numbers before strings. */
-		function sidebarTabOverviewCompare(left, right) {
-			for (let index = 0; index < left.length; index += 1) {
-				if (left[index] === right[index]) continue;
-				if (typeof left[index] === "number") return left[index] - right[index];
-				return left[index] < right[index] ? -1 : 1;
-			}
-			return 0;
-		}
-		/** How long ago a commit timestamp was, in the reader's words. */
-		function sidebarTabOverviewAgo(stamp, t) {
-			if (typeof stamp !== "number" || !Number.isFinite(stamp) || stamp <= 0) return "";
-			const seconds = Math.max(0, Math.floor(Date.now() / 1000) - stamp);
-			if (seconds < 60) return t("sidebar.overviewNow");
-			const minutes = Math.floor(seconds / 60);
-			if (minutes < 60) return t("sidebar.overviewMinutes", { count: minutes });
-			const hours = Math.floor(minutes / 60);
-			if (hours < 24) return t("sidebar.overviewHours", { count: hours });
-			return t("sidebar.overviewDays", { count: Math.floor(hours / 24) });
-		}
-		/** A byte count for the health line (KB below a MiB, then one decimal). */
-		function sidebarTabOverviewBytes(bytes) {
-			if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "0 KB";
-			if (bytes < 1048576) return Math.max(1, Math.round(bytes / 1024)) + " KB";
-			return (Math.round(bytes / 104857.6) / 10).toFixed(1) + " MB";
-		}
-		/** The opened overview detail: branch cleanup hints and the health line. */
-		function sidebarTabOverviewDetailRows(detail, t) {
-			const lines = [];
-			if (detail === void 0 || detail === null) return h("div", { key: "detail", style: SIDEBAR_TAB_OVERVIEW_DETAIL }, lines);
-			if (detail.phase === "loading") lines.push(h("div", { key: "loading", style: SIDEBAR_TAB_OVERVIEW_BRANCH }, t("sidebar.overviewDetail") + " ..."));
-			if (detail.phase === "error") lines.push(h("div", { key: "failed", style: SIDEBAR_TAB_OVERVIEW_BRANCH }, t("sidebar.overviewFailed")));
-			const cleanup = detail.cleanup !== void 0 ? detail.cleanup : null;
-			if (cleanup !== null && typeof cleanup.base === "string" && cleanup.base !== "") lines.push(h("div", { key: "base", style: SIDEBAR_TAB_OVERVIEW_BRANCH }, h("span", { style: SIDEBAR_TAB_OVERVIEW_TAG }, t("sidebar.overviewBase", { name: cleanup.base }))));
-			const branches = cleanup !== null && Array.isArray(cleanup.branches) ? cleanup.branches : [];
-			const merged = branches.filter((row) => row.merged === true && row.base !== true && row.current !== true);
-			const pending = branches.filter((row) => row.merged === false && typeof row.unmerged === "number");
-			for (const row of merged.slice(0, 6)) lines.push(h("div", { key: "m-" + row.name, style: SIDEBAR_TAB_OVERVIEW_BRANCH }, [h("span", { key: "name", style: SIDEBAR_TAB_OVERVIEW_BRANCH_NAME }, row.name), h("span", { key: "state", style: SIDEBAR_TAB_OVERVIEW_TAG }, t("sidebar.overviewMerged"))]));
-			for (const row of pending.slice(0, 6)) lines.push(h("div", { key: "p-" + row.name, style: SIDEBAR_TAB_OVERVIEW_BRANCH }, [h("span", { key: "name", style: SIDEBAR_TAB_OVERVIEW_BRANCH_NAME }, row.name), h("span", { key: "state", style: SIDEBAR_TAB_OVERVIEW_WARN }, t("sidebar.overviewUnmerged", { count: row.unmerged }))]));
-			const health = detail.health !== void 0 ? detail.health : null;
-			if (health !== null) lines.push(h("div", { key: "health", style: SIDEBAR_TAB_OVERVIEW_BRANCH }, t("sidebar.overviewMeta", {
-				branches: typeof health.branches === "number" ? health.branches : 0,
-				stash: typeof health.stash === "number" ? health.stash : 0,
-				size: sidebarTabOverviewBytes(health.gitBytes)
-			})));
-			return h("div", { key: "detail", "data-gitgraph-overview-detail-body": true, style: SIDEBAR_TAB_OVERVIEW_DETAIL }, lines);
-		}
 		/** The localized name of one compliance reason code. */
 		function sidebarTabReasonLabel(t, reason) {
 			if (reason === "length") return t("sidebar.reasonLength");
@@ -1417,17 +1178,6 @@
 			const [query, setQuery] = react.useState("");
 			/** Refs whose commits are hidden; name -> true. */
 			const [mutedRefs, setMutedRefs] = react.useState(() => ({}));
-			/** Whether the full-window graph view is open. */
-			const [expanded, setExpanded] = react.useState(false);
-			/** Whether the workspace overview replaces the repository tree and graph. */
-			const [overviewOpen, setOverviewOpen] = react.useState(() => sidebarTabCached(sessionCwd, "overviewOpen") === true);
-			/** Lazy branch-cleanup and health detail per repository, by path. */
-			const [overviewDetail, setOverviewDetail] = react.useState({});
-			/** The detail map as of this render, so a toggle can read it. */
-			const overviewDetailRef = react.useRef(overviewDetail);
-			overviewDetailRef.current = overviewDetail;
-			/** Repositories whose detail request is in flight. */
-			const overviewInflight = react.useRef(new Set());
 			/** Which copy action ran last, so its button can flash "copied". */
 			const [copiedKey, setCopiedKey] = react.useState(void 0);
 			/** Remember one copy action for a moment, then clear the label. */
@@ -1466,16 +1216,6 @@
 			const [workspaceDoc, setWorkspaceDoc] = react.useState(null);
 			/** Repositories the auto-scaffold already ran for (once per session). */
 			const autoScaffolded = react.useRef(new Set());
-			/** Escape closes the full-window view, like any dialog. */
-			react.useEffect(() => {
-				if (!expanded) return void 0;
-				if (typeof document === "undefined" || typeof document.addEventListener !== "function") return void 0;
-				const onKeyDown = (event) => {
-					if (event.key === "Escape") setExpanded(false);
-				};
-				document.addEventListener("keydown", onKeyDown);
-				return () => document.removeEventListener("keydown", onKeyDown);
-			}, [expanded]);
 			const graphSeq = react.useRef(0);
 			/** The row count the graph is showing, so a silent reload keeps it. */
 			const graphLimitRef = react.useRef(INITIAL_LIMIT);
@@ -1494,9 +1234,8 @@
 				entry.selectedPath = selectedPath;
 				entry.rowHeight = rowHeight;
 				entry.treeOpen = treeOpen;
-				entry.overviewOpen = overviewOpen;
 				if (selectedPath !== void 0 && graph !== null && graph.view !== null) entry.viewByPath.set(selectedPath, graph.view);
-			}, [sessionCwd, scan, selectedPath, rowHeight, treeOpen, overviewOpen, graph]);
+			}, [sessionCwd, scan, selectedPath, rowHeight, treeOpen, graph]);
 			/**
 			 * Load the repository list. `silent` is the background path: it never
 			 * clears what is on screen, it drops a result identical to the current
@@ -1627,38 +1366,6 @@
 			react.useEffect(() => {
 				setPinnedOid(void 0);
 			}, [selectedPath]);
-			/**
-			 * Load (or drop) the read-only detail of one overview row: branch cleanup
-			 * hints plus the health report. Both are suggestions; nothing here acts.
-			 */
-			const toggleOverviewDetail = react.useCallback((repoPath) => {
-				if (overviewDetailRef.current[repoPath] !== void 0) {
-					setOverviewDetail((current) => {
-						const next = Object.assign({}, current);
-						delete next[repoPath];
-						return next;
-					});
-					return;
-				}
-				if (overviewInflight.current.has(repoPath)) return;
-				overviewInflight.current.add(repoPath);
-				setOverviewDetail((current) => Object.assign({}, current, { [repoPath]: { phase: "loading" } }));
-				const done = () => overviewInflight.current.delete(repoPath);
-				Promise.all([sidebarTabGit().cleanupBranches(repoPath), sidebarTabGit().repoHealth(repoPath)]).then(([cleanup, health]) => {
-					const cleanupValue = cleanup !== null && cleanup !== void 0 && cleanup.ok === true ? cleanup.value : null;
-					const healthValue = health !== null && health !== void 0 && health.ok === true ? health.value : null;
-					const phase = cleanupValue === null && healthValue === null ? "error" : "ready";
-					setOverviewDetail((current) => Object.assign({}, current, { [repoPath]: {
-						phase,
-						cleanup: cleanupValue,
-						health: healthValue
-					} }));
-					done();
-				}, () => {
-					setOverviewDetail((current) => Object.assign({}, current, { [repoPath]: { phase: "error" } }));
-					done();
-				});
-			}, []);
 			/** Pick a repository and persist the choice on the tab (cross-reload). */
 			const choose = (path) => {
 				setSelectedPath(path);
@@ -2051,16 +1758,6 @@
 				"aria-label": t("sidebar.zoomIn")
 			}, "+"));
 			toolbarChildren.push(h("button", {
-				key: "overview",
-				type: "button",
-				"data-gitgraph-action": "overview",
-				style: overviewOpen === true ? Object.assign({}, SIDEBAR_TAB_BUTTON, { borderColor: "var(--dsw-alias-label-tertiary)" }) : SIDEBAR_TAB_BUTTON,
-				onClick: () => setOverviewOpen((current) => current !== true),
-				disabled: scan.phase !== "ready" || scan.repos.length === 0,
-				title: overviewOpen === true ? t("sidebar.overviewBack") : t("sidebar.overview"),
-				"aria-label": overviewOpen === true ? t("sidebar.overviewBack") : t("sidebar.overview")
-			}, overviewOpen === true ? t("sidebar.overviewBack") : t("sidebar.overview")));
-			toolbarChildren.push(h("button", {
 				key: "export",
 				type: "button",
 				"data-gitgraph-action": "export",
@@ -2070,15 +1767,6 @@
 				title: t("sidebar.exportGraph"),
 				"aria-label": t("sidebar.exportGraph")
 			}, exportState === "copy" ? t("sidebar.exportCopied") : exportState === "download" ? t("sidebar.exported") : t("sidebar.exportGraph")));
-			toolbarChildren.push(h("button", {
-				key: "expand",
-				type: "button",
-				"data-gitgraph-action": "expand",
-				style: SIDEBAR_TAB_EXPAND,
-				onClick: () => setExpanded(true),
-				title: t("sidebar.expandGraph"),
-				"aria-label": t("sidebar.expandGraph")
-			}, t("sidebar.expandGraph")));
 			/** One-click init is offered only while the workspace root is not a repository. */
 			if (scan.phase === "ready" && !scan.repos.some((entry) => entry.kind === "root")) toolbarChildren.push(h("button", {
 				key: "init",
@@ -2164,7 +1852,7 @@
 				}, "\u2191"));
 				if (entryDirty > 0) children.push(h("span", {
 					key: "dirty",
-					style: Object.assign({}, SIDEBAR_TAB_WARN, { flex: "none", fontSize: 10 })
+					style: Object.assign({}, SIDEBAR_TAB_WARN, { flex: "none", fontSize: 11 })
 				}, t("sidebar.dirty", { count: entryDirty })));
 				return h("div", {
 					key: row.key,
@@ -2430,7 +2118,7 @@
 				color: "var(--dsw-alias-label-primary)",
 				wordBreak: "break-all"
 			}), detailLine("subject", t("sidebar.subject"), pinned.subject, {
-				fontSize: 13,
+				fontSize: 14,
 				lineHeight: "18px",
 				color: "var(--dsw-alias-label-primary)"
 			}), detailLine("author", t("sidebar.author"), pinned.author + " \u00b7 " + sidebarTabIsoTime(pinned.authorTime)), detailLine("refs", t("sidebar.references"), pinned.refs.length === 0 ? "\u2014" : pinned.refs.join(", ")), detailLine("parents", t("sidebar.parentsLabel"), pinned.parents.length === 0 ? "\u2014" : pinned.parents.map((parent) => String(parent).slice(0, 7)).join(", "), {
@@ -2790,131 +2478,13 @@
 				onClick: () => loadGraph(view.commits.length + PAGE_STEP)
 			}, t("graph.loadMore")) : null;
 			/**
-			 * The full-window view: the drawer panel of a sidebar is narrow, so the
-			 * same graph is offered in a modal that uses the whole window. It shares
-			 * the state (selected repository, zoom, pinned commit) with the panel.
-			 */
-			const overlay = expanded !== true ? null : h("div", {
-				key: "overlay",
-				"data-gitgraph-overlay": true,
-				style: SIDEBAR_TAB_OVERLAY,
-				onClick: () => setExpanded(false)
-			}, h("div", {
-				key: "panel",
-				style: SIDEBAR_TAB_OVERLAY_PANEL,
-				onClick: (event) => event.stopPropagation()
-			}, [h("div", {
-				key: "head",
-				style: SIDEBAR_TAB_OVERLAY_HEAD
-			}, [h("span", {
-				key: "title",
-				style: {
-					flex: "1 1 auto",
-					minWidth: 0,
-					overflow: "hidden",
-					textOverflow: "ellipsis",
-					whiteSpace: "nowrap"
-				}
-			}, selected !== void 0 ? sidebarTabRepoLabel(selected) : ""), h("span", {
-				key: "count",
-				style: Object.assign({}, SIDEBAR_TAB_MUTED, { flex: "none" })
-			}, t("sidebar.commitsLanes", {
-				count: visibleCommits.length,
-				lanes: laneCount
-			})), h("button", {
-				key: "close",
-				type: "button",
-				"data-gitgraph-action": "close-overlay",
-				style: SIDEBAR_TAB_EXPAND,
-				onClick: () => setExpanded(false),
-				title: t("sidebar.close"),
-				"aria-label": t("sidebar.close")
-			}, t("sidebar.close"))]), h("div", {
-				key: "body",
-				style: SIDEBAR_TAB_OVERLAY_BODY
-			}, body), moreChild, detail]));
-			/**
-			 * The workspace overview: one row per discovered repository while it is
-			 * open. Rows are ordered by what needs attention (conflicts, changes,
-			 * a branch trailing its upstream); a row opens that repository's graph
-			 * and its button opens the read-only detail (cleanup hints + health).
-			 */
-			/** In the overview only the rescan and the way back mean anything. */
-			const toolbarItems = overviewOpen !== true ? toolbarChildren : toolbarChildren.filter((node) => node.props.key === "refresh" || node.props.key === "overview");
-			const overviewPanel = overviewOpen !== true || scan.phase !== "ready" ? null : (() => {
-				const repos = scan.repos.slice();
-				repos.sort((left, right) => sidebarTabOverviewCompare(sidebarTabOverviewRank(left), sidebarTabOverviewRank(right)));
-				const rows = repos.map((entry) => {
-					const status = entry.status !== void 0 && entry.status !== null ? entry.status : null;
-					const upstream = entry.upstream !== void 0 && entry.upstream !== null ? entry.upstream : null;
-					const branch = status !== null && typeof status.branch === "string" && status.branch !== "" ? status.branch : "";
-					const conflicts = status !== null && typeof status.conflicts === "number" ? status.conflicts : 0;
-					const dirty = status === null ? 0 : (typeof status.dirtyFiles === "number" ? status.dirtyFiles : 0) + (typeof status.untrackedFiles === "number" ? status.untrackedFiles : 0);
-					const meta = [];
-					meta.push(h("span", { key: "branch", style: SIDEBAR_TAB_OVERVIEW_TAG }, branch === "" ? t("sidebar.overviewDetached") : branch));
-					if (conflicts > 0) meta.push(h("span", { key: "conflicts", style: SIDEBAR_TAB_OVERVIEW_WARN }, t("sidebar.overviewConflicts", { count: conflicts })));
-					if (dirty > 0) meta.push(h("span", { key: "dirty", style: SIDEBAR_TAB_OVERVIEW_WARN }, t("sidebar.overviewDirty", { count: dirty })));
-					if (conflicts === 0 && dirty === 0) meta.push(h("span", { key: "clean", style: SIDEBAR_TAB_OVERVIEW_TAG }, t("sidebar.overviewClean")));
-					if (upstream !== null) {
-						const ahead = typeof upstream.ahead === "number" ? upstream.ahead : 0;
-						const behind = typeof upstream.behind === "number" ? upstream.behind : 0;
-						if (ahead > 0) meta.push(h("span", { key: "ahead", style: SIDEBAR_TAB_OVERVIEW_TAG }, t("sidebar.overviewAhead", { count: ahead })));
-						if (behind > 0) meta.push(h("span", { key: "behind", style: SIDEBAR_TAB_OVERVIEW_WARN }, t("sidebar.overviewBehind", { count: behind })));
-					} else meta.push(h("span", { key: "no-upstream", style: SIDEBAR_TAB_OVERVIEW_TAG }, t("sidebar.overviewUpstream")));
-					const activity = sidebarTabOverviewAgo(entry.activity, t);
-					if (activity !== "") meta.push(h("span", { key: "activity", style: SIDEBAR_TAB_OVERVIEW_TAG }, activity));
-					const detail = overviewDetail[entry.path];
-					const parts = [h("div", { key: "head", style: SIDEBAR_TAB_OVERVIEW_HEAD }, [
-						h("span", { key: "name", style: SIDEBAR_TAB_OVERVIEW_NAME }, typeof entry.name === "string" && entry.name !== "" ? entry.name : entry.path),
-						typeof entry.relPath === "string" && entry.relPath !== "" ? h("span", { key: "rel", style: SIDEBAR_TAB_OVERVIEW_REL }, entry.relPath) : null,
-						h("button", {
-							key: "detail",
-							type: "button",
-							"data-gitgraph-overview-detail": entry.path,
-							style: SIDEBAR_TAB_OVERVIEW_TOGGLE,
-							onClick: (event) => {
-								event.stopPropagation();
-								toggleOverviewDetail(entry.path);
-							},
-							title: t("sidebar.overviewDetail"),
-							"aria-label": t("sidebar.overviewDetail")
-						}, t("sidebar.overviewDetail"))
-					]), h("div", { key: "meta", style: SIDEBAR_TAB_OVERVIEW_META }, meta)];
-					if (detail !== void 0) parts.push(sidebarTabOverviewDetailRows(detail, t));
-					return h("div", {
-						key: entry.path,
-						"data-gitgraph-overview": entry.relPath,
-						style: entry.path === selectedPath ? Object.assign({}, SIDEBAR_TAB_OVERVIEW_ROW, { borderColor: "var(--dsw-alias-label-tertiary)" }) : SIDEBAR_TAB_OVERVIEW_ROW,
-						role: "button",
-						tabIndex: 0,
-						onClick: () => {
-							setOverviewOpen(false);
-							choose(entry.path);
-						},
-						onKeyDown: (event) => {
-							if (event.key !== "Enter" && event.key !== " ") return;
-							event.preventDefault();
-							setOverviewOpen(false);
-							choose(entry.path);
-						}
-					}, parts);
-				});
-				const children = [h("div", { key: "hint", style: SIDEBAR_TAB_OVERVIEW_HINT }, t("sidebar.overviewHint"))].concat(rows);
-				if (rows.length === 0) children.push(h("div", { key: "empty", style: SIDEBAR_TAB_OVERVIEW_HINT }, t("sidebar.overviewEmpty")));
-				return h("div", {
-					key: "overview",
-					"data-gitgraph-overview-list": true,
-					style: SIDEBAR_TAB_OVERVIEW
-				}, children);
-			})();
-			/**
 			 * The shared workspace document: one `.dsh/<doc>` at the session
 			 * directory that every nested repository inherits unless it carries
 			 * its own. Only shown when the workspace actually holds more than one
 			 * repository, so a single checkout keeps the plain strip.
 			 */
 			const workspaceBar = (() => {
-				if (overviewPanel !== null || scan.phase !== "ready") return null;
+				if (scan.phase !== "ready") return null;
 				if (scan.repos.length < 2) return null;
 				if (workspaceDoc === null || sessionCwd === void 0) return null;
 				const exists = workspaceDoc.exists === true;
@@ -2977,15 +2547,15 @@
 			}, [h("div", {
 				key: "toolbar",
 				style: SIDEBAR_TAB_TOOLBAR
-			}, toolbarItems), overviewPanel === null ? workspaceBar : null, overviewPanel === null ? treeHeader : null, overviewPanel === null ? treeList : overviewPanel, overviewPanel === null && scan.phase === "ready" && scan.truncated === true ? h("div", {
+			}, toolbarChildren), workspaceBar, treeHeader, treeList, scan.phase === "ready" && scan.truncated === true ? h("div", {
 				key: "truncated",
 				style: SIDEBAR_TAB_MUTED
-			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, overviewPanel === null && selected !== void 0 ? h("div", {
+			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, selected !== void 0 ? h("div", {
 				key: "status",
 				style: SIDEBAR_TAB_STATUS
-			}, statusChildren) : null, overviewPanel === null ? conventionsBar : null, overviewPanel === null ? initBar : null, overviewPanel === null ? filterBar : null, overviewPanel === null ? h("div", {
+			}, statusChildren) : null, conventionsBar, initBar, filterBar, h("div", {
 				key: "body-wrap",
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true
-			}, body) : null, overviewPanel === null ? detail : null, overviewPanel === null ? moreChild : null, overlay]);
+			}, body), detail, moreChild]);
 		}
