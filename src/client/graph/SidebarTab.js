@@ -195,7 +195,9 @@
 			color: "var(--dsw-alias-label-tertiary)"
 		};
 		const SIDEBAR_TAB_TREE_ACTIVE = {
-			background: "var(--dsw-alias-bg-layer-2)"
+			background: "rgba(56, 189, 248, 0.18)",
+			boxShadow: "inset 0 0 0 1px rgba(56, 189, 248, 0.5)",
+			borderRadius: 6
 		};
 		const SIDEBAR_TAB_TREE_GLYPH = {
 			flex: "none",
@@ -827,7 +829,41 @@
 		 * switches, no worktree mutations.
 		 * @param props - the better-sidebar TabComponentProps.
 		 */
-		function GitGraphSidebarTab(props) {
+		/**
+	 * Why this cache exists: better-sidebar unmounts a tab when it is closed, so
+	 * a reopen used to start from zero and flash the empty state. Module scope
+	 * is deliberate - the cache outlives the unmount, so the first frame of a
+	 * reopened tab already has the repository list, the selection and the graph,
+	 * and the work behind them is a quiet refresh instead of a reload.
+	 */
+	const SIDEBAR_TAB_CACHE = new Map();
+	const SIDEBAR_TAB_CACHE_LIMIT = 6;
+	/** The cache entry of one workspace directory, created on first use. */
+	function sidebarTabCacheEntry(cwd) {
+		let entry = SIDEBAR_TAB_CACHE.get(cwd);
+		if (entry !== void 0) return entry;
+		entry = {
+			scan: void 0,
+			selectedPath: void 0,
+			rowHeight: void 0,
+			treeOpen: void 0,
+			viewByPath: new Map()
+		};
+		SIDEBAR_TAB_CACHE.set(cwd, entry);
+		while (SIDEBAR_TAB_CACHE.size > SIDEBAR_TAB_CACHE_LIMIT) {
+			const oldest = SIDEBAR_TAB_CACHE.keys().next();
+			if (oldest.done === true) break;
+			SIDEBAR_TAB_CACHE.delete(oldest.value);
+		}
+		return entry;
+	}
+	/** A cached field, or undefined when this tab never painted that workspace. */
+	function sidebarTabCached(cwd, field) {
+		if (cwd === void 0) return void 0;
+		const entry = sidebarTabCacheEntry(cwd);
+		return field === void 0 ? entry : entry[field];
+	}
+	function GitGraphSidebarTab(props) {
 			sidebarTabEnsureStyle();
 			const ctx = props.ctx;
 			const scope = props.scope !== void 0 && props.scope !== null ? props.scope : {};
@@ -859,20 +895,39 @@
 					return void 0;
 				}
 			}, [scope.cwd, scope.sessionId]);
-			/** The scan view: idle before the first run, then scanning/ready/error. */
-			const [scan, setScan] = react.useState({ phase: "idle" });
-			const [selectedPath, setSelectedPath] = react.useState(() => {
+			/** What this workspace looked like the last time the tab was open. */
+			const restore = sidebarTabCached(sessionCwd);
+			const restorePath = (() => {
 				const meta = tab !== void 0 && tab !== null ? tab.meta : void 0;
-				return meta !== void 0 && meta !== null && typeof meta.repoPath === "string" ? meta.repoPath : void 0;
+				if (meta !== void 0 && meta !== null && typeof meta.repoPath === "string") return meta.repoPath;
+				return restore !== void 0 && typeof restore.selectedPath === "string" ? restore.selectedPath : void 0;
+			})();
+			/** The scan view: idle before the first run, then scanning/ready/error. */
+			const [scan, setScan] = react.useState(() => {
+				const cached = sidebarTabCached(sessionCwd, "scan");
+				return cached !== void 0 ? cached : { phase: "idle" };
 			});
+			const [selectedPath, setSelectedPath] = react.useState(restorePath);
 			/** The graph view of the selected repository (null before the first load). */
-			const [graph, setGraph] = react.useState(null);
+			const [graph, setGraph] = react.useState(() => {
+				if (restore === void 0 || restorePath === void 0) return null;
+				const cached = restore.viewByPath.get(restorePath);
+				return cached !== void 0 ? { view: cached, error: null, loading: false } : null;
+			});
 			/** Vertical pitch of the graph rows (the zoom control). */
-			const [rowHeight, setRowHeight] = react.useState(SIDEBAR_TAB_ROW_H);
+			const [rowHeight, setRowHeight] = react.useState(() => {
+				const cached = sidebarTabCached(sessionCwd, "rowHeight");
+				return typeof cached === "number" ? cached : SIDEBAR_TAB_ROW_H;
+			});
+			/** True while this mount still shows a cached graph (its first load is silent). */
+			const warmGraph = react.useRef(graph !== null && graph.view !== null);
 			/** The commit whose card is currently pinned, by full oid. */
 			const [pinnedOid, setPinnedOid] = react.useState(void 0);
 			/** Whether the repository tree (level relationships) is expanded. */
-			const [treeOpen, setTreeOpen] = react.useState(true);
+			const [treeOpen, setTreeOpen] = react.useState(() => {
+				const cached = sidebarTabCached(sessionCwd, "treeOpen");
+				return typeof cached === "boolean" ? cached : true;
+			});
 			/** Whether the full-window graph view is open. */
 			const [expanded, setExpanded] = react.useState(false);
 			/** Which copy action ran last, so its button can flash "copied". */
@@ -913,6 +968,16 @@
 			const graphLimitRef = react.useRef(INITIAL_LIMIT);
 			/** A scan is in flight (the refresh button says so; nothing else moves). */
 			const [refreshing, setRefreshing] = react.useState(false);
+			/** Keep the last painted state for the next mount (see SIDEBAR_TAB_CACHE). */
+			react.useEffect(() => {
+				if (sessionCwd === void 0) return;
+				const entry = sidebarTabCacheEntry(sessionCwd);
+				entry.scan = scan;
+				entry.selectedPath = selectedPath;
+				entry.rowHeight = rowHeight;
+				entry.treeOpen = treeOpen;
+				if (selectedPath !== void 0 && graph !== null && graph.view !== null) entry.viewByPath.set(selectedPath, graph.view);
+			}, [sessionCwd, scan, selectedPath, rowHeight, treeOpen, graph]);
 			/**
 			 * Load the repository list. `silent` is the background path: it never
 			 * clears what is on screen, it drops a result identical to the current
@@ -971,7 +1036,7 @@
 				if (!active) return;
 				if (scannedFor.current === sessionCwd) return;
 				scannedFor.current = sessionCwd;
-				runScan(false);
+				runScan(false, sidebarTabCached(sessionCwd, "scan") !== void 0);
 			}, [active, sessionCwd, runScan]);
 			const selected = react.useMemo(() => {
 				if (scan.phase !== "ready") return void 0;
@@ -1029,6 +1094,11 @@
 				if (!active) return;
 				if (selected === void 0) {
 					setGraph(null);
+					return;
+				}
+				if (warmGraph.current) {
+					warmGraph.current = false;
+					loadGraph(void 0, true);
 					return;
 				}
 				graphLimitRef.current = INITIAL_LIMIT;

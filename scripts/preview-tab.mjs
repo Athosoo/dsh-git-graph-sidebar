@@ -684,6 +684,21 @@ if (rowsAfter !== rowsBefore) throw new Error("refresh changed the commit row co
 if (reposAfter !== reposBefore) throw new Error("refresh changed the repository row count: " + reposBefore + " -> " + reposAfter);
 console.log("preview-tab: refresh keeps content on screen ok");
 
+// A closed tab is unmounted by better-sidebar, so a reopen must paint from the
+// module cache on its very first frame instead of flashing an empty panel.
+const reopenInstance = { hooks: [], dirty: false };
+currentRender = { hooks: reopenInstance.hooks, index: 0, instance: reopenInstance, pendingEffects: [] };
+let reopenTree;
+try {
+	reopenTree = descriptor.component(tabProps(focusPath));
+} finally {
+	currentRender = null;
+}
+const reopenFirst = serialize(reopenTree);
+if (reopenFirst.indexOf("data-gitgraph-row") < 0) throw new Error("reopened tab painted no commit rows on its first frame");
+if (reopenFirst.indexOf("data-gitgraph-repo-tree") < 0) throw new Error("reopened tab painted no repository tree on its first frame");
+console.log("preview-tab: reopen paints from cache ok");
+
 // Repository switching: clicking another row in the tree must reload that
 // repository's graph and move the active highlight (choose() + fetch + state).
 const switchMount = await mountComponent(descriptor.component, tabProps(focusPath));

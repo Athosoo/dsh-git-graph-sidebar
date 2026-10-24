@@ -50,7 +50,11 @@ patch(
 	'\t\tagentTool: config?.agentTool?.get() ?? false,\n\t\tconventionsDoc: config?.conventionsDoc?.get() ?? "GIT_CONVENTIONS.md",\n\t\tconventionsAuto: config?.conventionsAuto?.get() ?? true\n\t};'
 );
 
-// 3. Region the conventions module is spliced into.
+// 3. Region the conventions module is spliced into. Keyed on the region marker
+//    alone: once build-lib has spliced the module in, the replacement string no
+//    longer matches, but the marker itself is still there.
+if (source.includes("//#region src/host/conventions.ts")) skipped.push("conventions-region");
+else
 patch(
 	"conventions-region",
 	"//#region src/host/repos.ts — multi-repo discovery (dsh-git-graph sidebar fork)",
@@ -179,6 +183,24 @@ patch(
 	"default-feature-config",
 	"const defaultFeatureConfig = () => ({\n\tautoIsolate: false,\n\tautoBaseline: \"current\",\n\tworktreesHome: worktreesHome()\n});",
 	"const defaultFeatureConfig = () => ({\n\tautoIsolate: false,\n\tautoBaseline: \"current\",\n\tworktreesHome: worktreesHome(),\n\tconventionsDoc: \"GIT_CONVENTIONS.md\",\n\tconventionsAuto: true\n});"
+);
+
+// 8. Prompt injection: the conventions module needs sync fs helpers, `dirname`
+//    and one call from apply() to register its system-prompt section.
+patch(
+	"imports-fs-sync",
+	'import { existsSync } from "node:fs";',
+	'import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";'
+);
+patch(
+	"imports-dirname",
+	'import { basename, isAbsolute, join, resolve, sep } from "node:path";',
+	'import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";'
+);
+patch(
+	"prompt-mount",
+	"\tctx.effect(() => {\n\t\tsyncTool();\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);",
+	"\tconventionsPromptMount(ctx, featureConfig);\n\tctx.effect(() => {\n\t\tsyncTool();\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);"
 );
 
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +

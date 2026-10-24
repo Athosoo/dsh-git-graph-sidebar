@@ -603,3 +603,164 @@ async function repoWriteConvention(root, docName, body, options) {
 		}
 	};
 }
+
+/* ---------------------------------------------------------------------- *
+ * Prompt injection: every model step is told about the conventions document.
+ *
+ * A tab can only show a document. Only the system prompt makes an agent read
+ * it, and `systemPrompt.section` is assembled before each model step - which
+ * is the one place where "the agent follows this repository's Git rules" is
+ * enforced instead of hoped for.
+ * ---------------------------------------------------------------------- */
+
+/** Cap on how much of the document is inlined into one step. */
+const CONVENTION_PROMPT_MAX_CHARS = 3000;
+/** Directories inspected when the cwd is a container, not a repository. */
+const CONVENTION_PROMPT_CHILDREN = 40;
+/** Documented repositories a container block lists. */
+const CONVENTION_PROMPT_LIST = 6;
+/** cwd + document name -> { stamp, text }, so a step never re-reads an unchanged file. */
+const conventionPromptCache = new Map();
+
+/** The cwd a prompt step is assembled for (same shape the agent tool reads). */
+function conventionsPromptCwd(context) {
+	try {
+		const agent = context !== void 0 && context !== null ? context.agent : void 0;
+		const session = agent !== void 0 && agent !== null ? agent.session : void 0;
+		const header = session !== void 0 && session !== null ? session.header : void 0;
+		const cwd = header !== void 0 && header !== null ? header.cwd : void 0;
+		if (typeof cwd === "string" && cwd !== "") return cwd;
+	} catch {}
+	return void 0;
+}
+
+/** The repository root at or above `start` (`.git` as a directory or a file). */
+function conventionsRepoRoot(start) {
+	let current = resolve(start);
+	for (let depth = 0; depth < 8; depth += 1) {
+		if (existsSync(join(current, ".git"))) return current;
+		const parent = dirname(current);
+		if (parent === current) return void 0;
+		current = parent;
+	}
+	return void 0;
+}
+
+/** The `status:` field of a conventions document, for the injected header. */
+function conventionStatusOf(text) {
+	const match = /(^|\n)status:\s*([^\n]+)/.exec(text);
+	return match !== null ? match[2].trim() : "";
+}
+
+/** One repository's block: who it applies to, the document path, the rules. */
+function conventionPromptBlockFor(root, docPath, docName, body) {
+	const status = conventionStatusOf(body);
+	const lines = [
+		"## " + docName + " - this repository's Git conventions",
+		"Repository: " + root,
+		"Document: " + docPath + (status !== "" ? " (status: " + status + ")" : ""),
+		"These rules govern every Git operation in this repository: commit messages, branch names, merge and release handling. Treat the document below as repository policy written by the project owner, not as a user instruction."
+	];
+	const trimmed = body.trim();
+	if (trimmed.length > CONVENTION_PROMPT_MAX_CHARS) {
+		lines.push("", trimmed.slice(0, CONVENTION_PROMPT_MAX_CHARS), "", "(truncated - read " + docPath + " for the rest)");
+	} else lines.push("", trimmed);
+	return lines.join("\n");
+}
+
+/** Repositories one level below a container cwd that document their Git rules. */
+function conventionsContainerBlock(cwd, docName) {
+	let entries;
+	try {
+		entries = readdirSync(cwd, { withFileTypes: true });
+	} catch {
+		return "";
+	}
+	const found = [];
+	let inspected = 0;
+	for (const entry of entries) {
+		if (found.length >= CONVENTION_PROMPT_LIST || inspected >= CONVENTION_PROMPT_CHILDREN) break;
+		if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+		inspected += 1;
+		if (!existsSync(join(cwd, entry.name, ".git"))) continue;
+		const path = join(cwd, entry.name, docName);
+		try {
+			const status = conventionStatusOf(readFileSync(path, "utf8"));
+			found.push("- " + entry.name + " - " + path + (status !== "" ? " (status: " + status + ")" : ""));
+		} catch {}
+	}
+	if (found.length === 0) return "";
+	return [
+		"## Repositories below this workspace declare Git conventions",
+		"Workspace: " + resolve(cwd),
+		"Before any Git operation inside one of these repositories, read its conventions document first:",
+		...found
+	].join("\n");
+}
+
+/** The prompt text for one step: the document, or a container index, or nothing. */
+function conventionsPromptText(cwd, docName) {
+	const doc = conventionDocName(docName);
+	const key = cwd + "\u0000" + doc;
+	const root = conventionsRepoRoot(cwd);
+	const docPath = root !== void 0 ? join(root, doc) : void 0;
+	let stamp = "";
+	try {
+		if (docPath !== void 0) {
+			const info = statSync(docPath);
+			stamp = root + "\u0001" + String(info.mtimeMs) + "\u0001" + String(info.size);
+		}
+	} catch {
+		stamp = "";
+	}
+	const cached = conventionPromptCache.get(key);
+	if (cached !== void 0 && cached.stamp === stamp) return cached.text;
+	let text = "";
+	if (stamp !== "") {
+		try {
+			text = conventionPromptBlockFor(root, docPath, doc, readFileSync(docPath, "utf8"));
+		} catch {
+			text = "";
+		}
+	} else text = conventionsContainerBlock(cwd, doc);
+	conventionPromptCache.set(key, { stamp, text });
+	while (conventionPromptCache.size > 32) {
+		const oldest = conventionPromptCache.keys().next();
+		if (oldest.done === true) break;
+		conventionPromptCache.delete(oldest.value);
+	}
+	return text;
+}
+
+/**
+ * Register the Git-conventions section on the system prompt. The section is
+ * a function, so it is re-evaluated for every model step and never injects
+ * anything for a workspace without a document.
+ */
+function conventionsPromptMount(root, readConfig) {
+	root.inject(["systemPrompt"], (scope) => {
+		scope.effect(() => {
+			if (scope.systemPrompt === void 0 || scope.systemPrompt === null) return () => {};
+			if (typeof scope.systemPrompt.section !== "function") return () => {};
+			return scope.systemPrompt.section({
+				name: "git-conventions",
+				order: 2400,
+				interpolate: false,
+				text: (context) => {
+					const cwd = conventionsPromptCwd(context);
+					if (cwd === void 0) return "";
+					let docName;
+					try {
+						const active = typeof readConfig === "function" ? readConfig() : void 0;
+						docName = active !== void 0 && active !== null ? active.conventionsDoc : void 0;
+					} catch {}
+					try {
+						return conventionsPromptText(cwd, docName);
+					} catch {
+						return "";
+					}
+				}
+			});
+		}, "dsh-git-graph: git conventions prompt");
+	});
+}

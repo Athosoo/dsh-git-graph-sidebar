@@ -60,6 +60,14 @@ Two comparison helpers make this cheap: `sidebarTabSameScan` and `sidebarTabSame
 
 For the same reason `preview-tab.mjs` asserts that clicking refresh neither empties the commit rows nor the repository tree. If that assertion fails, something is setting a `scanning`/`loading` phase unconditionally again.
 
+### Reopening the tab
+
+better-sidebar keeps inactive tabs mounted but unmounts a tab that is closed, so every piece of component state dies with it. A cold mount used to mean a blank panel, a fresh scan and a graph request.
+
+`SidebarTab.js` therefore keeps a module-level `SIDEBAR_TAB_CACHE` keyed by `sessionId|cwd`. It stores the last scan result, the selected repository, the row height, the open tree directories and the last graph view per repository (plus the tab's own `meta.repoPath` through `updateTab`, which survives restarts). On mount the state initialisers hydrate from that entry, so the first frame already draws the previous content; the mount-time scan and graph load then run **silently** behind it. The cache keeps 6 sessions (`SIDEBAR_TAB_CACHE_LIMIT`) and is written by one effect that mirrors `scan`/`selectedPath`/`rowHeight`/`treeOpen`/`graph`.
+
+`preview-tab.mjs` asserts this behaviour by mounting the component a second time through the registered descriptor and checking that the very first render already contains `data-gitgraph-row` and `data-gitgraph-repo-tree`.
+
 To render the real repositories of this machine, pass the JSON responses of `/git/repos` and `/git/graph` (one `--graph` per repository) and point the first panel at one of them:
 
 ```sh
@@ -90,6 +98,25 @@ Both are marked with `//#region` comments so they stay findable in the bundle.
 A third region, `src/host/conventions.ts` (source: `src/host/conventions.js`), holds the convention scaffold, the framework catalog and `repoConventionState` / `repoWriteConvention`. `scripts/patch-host.mjs` wires it into the config schema (`conventionsDoc`, `conventionsAuto`), attaches a `conventions` state to every scanned repository, and adds the `/git/conventions` and `/git/convention` routes.
 
 `scripts/test-host.mjs` is the cheapest way to check host changes: it needs no DSH process, no browser and no restart.
+
+### Prompt injection
+
+The conventions document is only useful if the model reads it. The host registers a `systemPrompt` section (`conventionsPromptMount` in `src/host/conventions.js`) that the harness assembles before every model step:
+
+```js
+root.inject(["systemPrompt"], (scope) => {
+  scope.effect(() => scope.systemPrompt.section({
+    name: "git-conventions",
+    order: 2400,
+    interpolate: false,
+    text: (context) => conventionsPromptText(conventionsPromptCwd(context), docName),
+  }), "dsh-git-graph: git conventions prompt");
+});
+```
+
+`interpolate: false` keeps the document text literal (no `$`-substitution), and `order: 2400` places the section ahead of the tooling policy that `dsh-ops` adds at 3250. The text function walks up from the session `cwd` to the repository root (`conventionsRepoRoot`), reads the document (capped at `CONVENTION_PROMPT_MAX_CHARS` = 3000 characters), and frames it as repository policy rather than a user instruction. When the session `cwd` is a container, it lists the documented repositories below it instead. Nothing is injected for a path without a document, and results are cached by `mtimeMs:size` so a step never re-reads an unchanged file.
+
+`test-host.mjs` covers this with a fake `systemPrompt` service: it captures the descriptor, then calls `section.text({ agent: { session: { header: { cwd } } } })` for a documented repository, an undocumented one, an edited document (cache invalidation) and a container directory.
 
 ## Known debt
 

@@ -12,7 +12,7 @@
  *   node scripts/test-host.mjs
  */
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -125,6 +125,7 @@ async function main() {
 	await git(commitRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "chore: initial");
 
 	const routes = [];
+	const injected = [];
 	const ctx = {
 		logger: { info() {}, warn() {}, error() {}, debug() {} },
 		subprocess: fakeSubprocess(),
@@ -144,7 +145,8 @@ async function main() {
 		on() {
 			return () => {};
 		},
-		inject() {
+		inject(deps, callback) {
+			injected.push({ deps, callback });
 			return { dispose() {} };
 		},
 		get() {
@@ -240,6 +242,49 @@ async function main() {
 	const unknown = await call("/git/convention", { path: commitRepo, framework: "no-such-framework" });
 	equal("unknown framework refused", unknown.json?.ok, false);
 	equal("unknown framework code", unknown.json?.error?.code, "convention-unknown-framework");
+
+	const NL = String.fromCharCode(10);
+	const fail = [];
+	const check2 = (name, ok) => {
+		check(name, ok);
+		if (!ok) fail.push(name);
+	};
+	// The system-prompt section is what makes an agent read the rules document;
+	// it is registered on apply and computed for every step.
+	const promptEntry = injected.find((entry) => Array.isArray(entry.deps) && entry.deps.includes("systemPrompt"));
+	check2("registers a system prompt section", promptEntry !== undefined);
+	const sections = [];
+	if (promptEntry !== undefined) {
+		promptEntry.callback({
+			systemPrompt: {
+				section(descriptor) {
+					sections.push(descriptor);
+					return () => {};
+				}
+			},
+			effect(fn) {
+				const disposer = fn();
+				return () => {
+					if (typeof disposer === "function") disposer();
+				};
+			}
+		});
+	}
+	const section = sections[0];
+	check2("section is named git-conventions", section !== undefined && section.name === "git-conventions");
+	check2("section text is a per-step function", section !== undefined && typeof section.text === "function");
+	const cwdOf = (path) => ({ agent: { session: { header: { cwd: path } } } });
+	check2("no prompt text without a document", section.text(cwdOf(join(workspace, "repos", "plain"))) === "");
+	const docPath = join(commitRepo, "GIT_CONVENTIONS.md");
+	await writeFile(docPath, ["# Git 规范", "status: settled", "", "- 使用 Conventional Commits", ""].join(NL), "utf8");
+	const filled = section.text(cwdOf(join(commitRepo, "src", "nested")));
+	check2("prompt carries the document", filled.includes("Conventional Commits"));
+	check2("prompt names the repository root", filled.includes(commitRepo));
+	check2("prompt reports the document status", filled.includes("status: settled"));
+	await appendFile(docPath, "- 分支命名 feature/<topic>" + NL, "utf8");
+	check2("prompt reloads an edited document", section.text(cwdOf(join(commitRepo, "src", "nested"))).includes("feature/<topic>"));
+	const container = section.text(cwdOf(join(workspace, "repos")));
+	check2("container lists documented repositories", container.includes("commit") && container.includes("GIT_CONVENTIONS.md"));
 
 	await rm(workspace, { recursive: true, force: true });
 

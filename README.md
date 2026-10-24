@@ -21,6 +21,8 @@ The tab works from the session's working directory and treats that directory as 
 - **Full-window view** — the sidebar is narrow, so the graph can be opened over the whole window at the same zoom, repository and pinned commit, and closed with `Esc`.
 - **Live updates, no flicker** — the tab subscribes to the host's Git change events and also polls quietly in the background, so a new commit or branch appears on its own. Every background refresh keeps the current rows on screen: an unchanged result is dropped without a re-render, and a failed poll never replaces real data with an error.
 - **Refresh** — re-scans on demand. A manual refresh also keeps the panel content visible while it runs. The host caches a scan for 60 s (the refresh button bypasses it).
+- **Reopens instantly** — closing and reopening the tab used to start from an empty panel. The tab now keeps the last painted list, selection and graph in memory, so a reopen draws that on its first frame and refreshes behind it.
+- **Selected repository is obvious** — the active row in the repository tree is highlighted with a cyan tint and ring, so the repository whose graph is on screen is never ambiguous.
 - **Git conventions** — a strip above the graph states which convention document the selected repository carries (`draft` / `settled` / missing), opens it in the editor, and offers six proven frameworks to bootstrap a brand-new repository.
 
 ### Branch chip (composer)
@@ -83,6 +85,7 @@ A commit graph shows what happened; a conventions document records what the team
   | GitLab Flow | explicit environment branches between `main` and production |
 
 - **Never overwrites** — an existing document is only replaced when the request carries `force`, which the UI does not offer for settled documents. The document is plain Markdown in the repository root, so it is reviewed and revised like any other source file.
+- **The assistant actually reads it** — the host registers a `systemPrompt` section that is assembled before *every* model step, so the running agent is always told where the document is for the session's repository and gets its rules (up to 3 000 characters) inline. Nothing is injected for a workspace without a document, and the text is cached per file mtime, so a step never re-reads an unchanged file. When the session's directory is a container, the section lists the documented repositories below it instead.
 
 ## HTTP routes
 
