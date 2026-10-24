@@ -123,6 +123,9 @@ function sameDeps(left, right) {
  */
 async function mountComponent(component, props) {
 	const instance = { hooks: [], dirty: false };
+	// `html` and `tree` are refreshed by every render, so a test can click a
+	// control and then look up the node it revealed on the next assertion.
+	const mount = { instance, render: undefined, html: "", tree: null };
 	const render = async () => {
 		let last = { html: "", tree: null };
 		for (let pass = 0; pass < 60; pass += 1) {
@@ -145,10 +148,13 @@ async function mountComponent(component, props) {
 			last = { html: serialize(tree), tree };
 			if (!instance.dirty) break;
 		}
+		mount.html = last.html;
+		mount.tree = last.tree;
 		return last;
 	};
-	const settled = await render();
-	return { instance, render, html: settled.html, tree: settled.tree };
+	mount.render = render;
+	await render();
+	return mount;
 }
 
 /** Depth-first walk over an element tree, collecting host nodes that match. */
@@ -171,6 +177,17 @@ function click(node, label) {
 	const handler = node.props !== undefined ? node.props.onClick : undefined;
 	if (typeof handler !== "function") throw new Error("node has no onClick: " + label);
 	handler({ stopPropagation() {}, preventDefault() {} });
+}
+
+/** Fire a synthetic pointer move at one y offset inside a node. */
+function movePointer(node, clientY, label) {
+	const handler = node.props !== undefined ? node.props.onMouseMove : undefined;
+	if (typeof handler !== "function") throw new Error("node has no onMouseMove: " + label);
+	handler({
+		currentTarget: { getBoundingClientRect: () => ({ top: 0, left: 0 }) },
+		clientX: 120,
+		clientY
+	});
 }
 
 // ------------------------------------------------------------- html serializer
@@ -377,6 +394,7 @@ function fakeElement(tag) {
 		removeAttribute() {},
 		appendChild() {},
 		remove() {},
+		select() {},
 		addEventListener() {},
 		removeEventListener() {}
 	};
@@ -387,6 +405,7 @@ const fakeDocument = {
 	documentElement: fakeElement("html"),
 	baseURI: "http://127.0.0.1:56515/",
 	createElement: fakeElement,
+	execCommand() { return true; },
 	querySelector() { return null; },
 	querySelectorAll() { return []; },
 	getElementById() { return null; },
@@ -536,6 +555,40 @@ for (let step = 0; step < 1; step += 1) {
 }
 if (detailHtml.indexOf("data-gitgraph-detail") < 0) throw new Error("zooming lost the pinned commit card");
 
+// Hovering a node opens the short card; the copy action turns its label into
+// the "copied" confirmation (the clipboard call is stubbed to succeed).
+const canvasHosts = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-canvas"] === true);
+if (canvasHosts.length === 0) throw new Error("graph canvas host missing");
+movePointer(canvasHosts[0], 27 * 2 + 13, "graph canvas");
+detailHtml = (await detailMount.render()).html;
+if (detailHtml.indexOf("data-gitgraph-tooltip") < 0) throw new Error("hovering a commit did not open the short card");
+const hoverHtml = detailHtml;
+const copyButton = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "copy-info")[0];
+if (copyButton === undefined) throw new Error("commit card has no copy action");
+click(copyButton, "copy commit info");
+detailHtml = (await detailMount.render()).html;
+if (!/已复制|Copied/.test(detailHtml)) throw new Error("copy action did not confirm");
+const leaveHandler = canvasHosts[0].props.onMouseLeave;
+if (typeof leaveHandler === "function") leaveHandler();
+detailHtml = (await detailMount.render()).html;
+if (detailHtml.indexOf("data-gitgraph-tooltip") >= 0) throw new Error("hover card did not close on pointer leave");
+
+// The full-window view opens, renders the same graph and closes again.
+const expandMount = await mountComponent(descriptor.component, tabProps(focusPath));
+const expandButton = findAll(expandMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "expand")[0];
+if (expandButton === undefined) throw new Error("toolbar has no full-window control");
+click(expandButton, "expand graph");
+let expandHtml = (await expandMount.render()).html;
+if (expandHtml.indexOf("data-gitgraph-overlay") < 0) throw new Error("full-window view did not open");
+const overlayHtml = expandHtml;
+if (expandHtml.indexOf("<svg") < 0) throw new Error("full-window view rendered no graph");
+const closeButton = findAll(expandMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "close-overlay")[0];
+if (closeButton === undefined) throw new Error("full-window view has no close control");
+click(closeButton, "close full-window view");
+expandHtml = (await expandMount.render()).html;
+if (expandHtml.indexOf("data-gitgraph-overlay") >= 0) throw new Error("full-window view did not close");
+console.log("preview-tab: hover card, copy action and full-window view ok");
+
 // Repository switching: clicking another row in the tree must reload that
 // repository's graph and move the active highlight (choose() + fetch + state).
 const switchMount = await mountComponent(descriptor.component, tabProps(focusPath));
@@ -557,6 +610,14 @@ console.log("preview-tab: repository switch ok (" + repoRows.length + " tree row
 
 const rootPanel = rootMount.html;
 const nestedPanel = nestedMount.html;
+
+// Screenshot frame for the README: default two-line rows, one row pinned so the
+// detail card is filled instead of showing its empty hint.
+const heroMount = await mountComponent(descriptor.component, tabProps(focusPath));
+const heroRows = findAll(heroMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true);
+if (heroRows.length > 3) click(heroRows[2], "commit row (hero)");
+const heroPanel = (await heroMount.render()).html;
+if (heroPanel.indexOf("data-gitgraph-detail") < 0) throw new Error("hero panel has no commit card");
 
 if (rootPanel.indexOf("<svg") < 0 || rootPanel.indexOf("<path") < 0) throw new Error("preview did not produce an SVG lane canvas");
 if (rootPanel === detailHtml) throw new Error("pinned/zoomed render is identical to the default render");
@@ -666,3 +727,102 @@ console.log("preview-tab: wrote " + outFile);
 const lightFile = outFile.replace(/\.html$/, "-light.html");
 await writeFile(lightFile, html.replace("<body>", '<body data-theme="light">'), "utf8");
 console.log("preview-tab: wrote " + lightFile);
+
+// A side-by-side sheet of the three states that are hard to judge from the
+// panel render alone: the pinned commit card, the hover card and the
+// full-window view. `transform: translateZ(0)` on the wrapper turns the
+// overlay's `position: fixed` into a box local to the wrapper, so a static
+// page can show it.
+const statesFile = join(dirname(outFile), "graph-tab-states.html");
+const statesHtml = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GIT-graph sidebar tab — states</title>
+<style>
+	:root {
+		--dsw-alias-bg-base: #1b1d21;
+		--dsw-alias-bg-layer-1: #212429;
+		--dsw-alias-bg-layer-2: #262a31;
+		--dsw-alias-label-primary: #e8eaed;
+		--dsw-alias-label-secondary: #a8b0ba;
+		--dsw-alias-label-tertiary: #7d858f;
+		--dsw-alias-border-l1: #2f343d;
+		--dsw-alias-border-l2: #3a404a;
+		--dsw-alias-button-tool-bar-fill: #262a31;
+		--dsw-alias-state-warn-primary: #e0a24a;
+		--dsw-alias-state-error-primary: #e57373;
+		--dsw-alias-state-business-primary: #4c8dff;
+	}
+	body { margin: 0; padding: 24px; background: #0f1115; color: #e6e8eb; font: 13px/1.5 system-ui, sans-serif; }
+	h2 { font-size: 13px; font-weight: 600; margin: 24px 0 10px; color: #9aa1ab; text-transform: uppercase; letter-spacing: .06em; }
+	.panel { width: 400px; background: var(--dsw-alias-bg-base); border: 1px solid #2a2f38; border-radius: 10px; overflow: hidden; }
+	.overlay-box { position: relative; transform: translateZ(0); width: 1080px; max-width: 100%; height: 620px; border: 1px solid #2a2f38; border-radius: 10px; overflow: hidden; }
+</style>
+</head>
+<body>
+<h2>Pinned commit card</h2>
+<div class="panel">${detailHtml}</div>
+<h2>Hover card (pointer over a node)</h2>
+<div class="panel">${hoverHtml}</div>
+<h2>Full-window view</h2>
+<div class="overlay-box">${overlayHtml}</div>
+</body>
+</html>`;
+await writeFile(statesFile, statesHtml, "utf8");
+console.log("preview-tab: wrote " + statesFile);
+
+// A single, taller panel per theme — this is what the README screenshots are
+// taken from: the sidebar is narrow, so a 420x960 frame is the realistic
+// proportion (tree, graph and the pinned detail card all visible at once).
+const heroFile = join(dirname(outFile), "graph-tab-hero.html");
+const heroHtml = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GIT-graph sidebar tab — hero</title>
+<style>
+\t:root {
+\t\t--dsw-alias-bg-base: #1b1d21;
+\t\t--dsw-alias-bg-layer-1: #212429;
+\t\t--dsw-alias-bg-layer-2: #262a31;
+\t\t--dsw-alias-label-primary: #e8eaed;
+\t\t--dsw-alias-label-secondary: #a8b0ba;
+\t\t--dsw-alias-label-tertiary: #7d858f;
+\t\t--dsw-alias-border-l1: #2f343d;
+\t\t--dsw-alias-border-l2: #3a404a;
+\t\t--dsw-alias-button-tool-bar-fill: #262a31;
+\t\t--dsw-alias-state-warn-primary: #e0a24a;
+\t\t--dsw-alias-state-error-primary: #e57373;
+\t\t--dsw-alias-state-business-primary: #4c8dff;
+\t}
+\tbody[data-theme="light"] {
+\t\t--dsw-alias-bg-base: #ffffff;
+\t\t--dsw-alias-bg-layer-1: #fafafa;
+\t\t--dsw-alias-bg-layer-2: #f1f3f5;
+\t\t--dsw-alias-label-primary: #1f2329;
+\t\t--dsw-alias-label-secondary: #5c6370;
+\t\t--dsw-alias-label-tertiary: #9aa1ab;
+\t\t--dsw-alias-border-l1: #e6e8eb;
+\t\t--dsw-alias-border-l2: #d5d8dd;
+\t\t--dsw-alias-button-tool-bar-fill: #f1f3f5;
+\t\t--dsw-alias-state-warn-primary: #b7791f;
+\t\t--dsw-alias-state-error-primary: #d64545;
+\t\t--dsw-alias-state-business-primary: #2f6fed;
+\t}
+\tbody { margin: 0; padding: 16px; background: #131417; font: 13px/1.5 system-ui, sans-serif; }
+\tbody[data-theme="light"] { background: #eef0f3; }
+\t.panel { width: 420px; height: 960px; border-radius: 12px; overflow: hidden;
+\t\tbackground: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1);
+\t\tcolor: var(--dsw-alias-label-primary); display: flex; flex-direction: column; }
+\t.panel > div { flex: 1 1 auto; min-height: 0; }
+</style>
+</head>
+<body>
+<div class="panel">${heroPanel}</div>
+</body>
+</html>`;
+await writeFile(heroFile, heroHtml, "utf8");
+await writeFile(heroFile.replace(/\.html$/, "-light.html"), heroHtml.replace("<body>", '<body data-theme="light">'), "utf8");
+console.log("preview-tab: wrote " + heroFile);
+

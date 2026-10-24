@@ -15,8 +15,11 @@ The tab works from the session's working directory and treats that directory as 
 - **Multi-repository discovery** — the workspace root itself, plus repositories nested up to 3 levels below it. Each entry carries its current branch, short head, dirty-file count and conflict count.
 - **Repository tree** — the root, the intermediate directories and each repository, so the level relationship between them is visible rather than implied by a path.
 - **SVG commit graph** — one row per commit, one colored lane per branch line, curved edges where a commit's parent sits on another lane, merge commits drawn as diamonds, ref badges and relative timestamps.
-- **Zoom** — rows are two lines by default; `−` / `+` fold them into compact single-line rows or open them up.
-- **Pinned commit card** — click a row for the full hash, subject, author, time and parent count.
+- **Zoom** — rows are two lines by default; `−` / `+` scale the rows and their text from a compact single line up to a roomy list.
+- **Hover card** — pointing at a node shows a compact summary (short hash, subject, refs, author, relative time) without stealing the click.
+- **Commit detail card** — the panel under the graph always shows the row you pinned: full hash, subject, author, absolute commit time, refs and parents. Click a row to pin it, click it again (or `×`) to clear.
+- **Copy for the assistant** — *Copy commit info* puts a ready-to-paste block on the clipboard (repository path, hash, subject, author, time, refs, parents), so asking the model to "roll back to this commit" needs no retyping; *Copy SHA* copies the full hash alone.
+- **Full-window view** — the sidebar is narrow, so the graph can be opened over the whole window at the same zoom, repository and pinned commit, and closed with `Esc`.
 - **Refresh** — re-scans on demand. The host caches a scan for 60 s.
 
 ### Branch chip (composer)

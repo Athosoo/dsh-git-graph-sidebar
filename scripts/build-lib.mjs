@@ -34,7 +34,21 @@ const EXTRA_KEYS = [
 			['"sidebar.repos"', '"{count} 个仓库"'],
 			['"sidebar.expand"', '"展开仓库树"'],
 			['"sidebar.collapse"', '"收起仓库树"'],
-			['"sidebar.workspaceRoot"', '"工作区根"']
+			['"sidebar.workspaceRoot"', '"工作区根"'],
+			['"sidebar.expandGraph"', '"全屏查看"'],
+			['"sidebar.close"', '"关闭"'],
+			['"sidebar.copyInfo"', '"复制提交信息"'],
+			['"sidebar.copySha"', '"复制 SHA"'],
+			['"sidebar.copied"', '"已复制"'],
+			['"sidebar.author"', '"作者"'],
+			['"sidebar.committedAt"', '"提交时间"'],
+			['"sidebar.references"', '"引用"'],
+			['"sidebar.commit"', '"提交"'],
+			['"sidebar.subject"', '"主题"'],
+			['"sidebar.detailHint"', '"点击任一提交查看详情"'],
+			['"sidebar.repoPath"', '"仓库"'],
+			['"sidebar.pinHint"', '"点击可固定此提交"'],
+			['"sidebar.parentsLabel"', '"父提交"']
 		]
 	},
 	{
@@ -47,7 +61,21 @@ const EXTRA_KEYS = [
 			['"sidebar.repos"', '"{count} repositories"'],
 			['"sidebar.expand"', '"Expand repository tree"'],
 			['"sidebar.collapse"', '"Collapse repository tree"'],
-			['"sidebar.workspaceRoot"', '"workspace root"']
+			['"sidebar.workspaceRoot"', '"workspace root"'],
+			['"sidebar.expandGraph"', '"Full-window view"'],
+			['"sidebar.close"', '"Close"'],
+			['"sidebar.copyInfo"', '"Copy commit info"'],
+			['"sidebar.copySha"', '"Copy SHA"'],
+			['"sidebar.copied"', '"Copied"'],
+			['"sidebar.author"', '"Author"'],
+			['"sidebar.committedAt"', '"Committed at"'],
+			['"sidebar.references"', '"References"'],
+			['"sidebar.commit"', '"Commit"'],
+			['"sidebar.subject"', '"Subject"'],
+			['"sidebar.detailHint"', '"Click a commit to see details"'],
+			['"sidebar.repoPath"', '"Repository"'],
+			['"sidebar.pinHint"', '"Click to pin this commit"'],
+			['"sidebar.parentsLabel"', '"Parents"']
 		]
 	}
 ];

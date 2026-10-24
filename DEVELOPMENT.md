@@ -31,7 +31,18 @@ node scripts/validate-lib.mjs   # locale keys + identifiers
 node scripts/preview-tab.mjs
 ```
 
-Writes `preview/graph-tab-preview.html` (three panels: default two-line rows, a nested repository, a pinned-commit view with compact zoom) and `preview/graph-tab-preview-light.html`. The script also exercises interaction: it clicks a row and asserts the details card appears, then clicks zoom and asserts the card survives.
+Writes `preview/graph-tab-preview.html` (three panels: default two-line rows, a nested repository, a pinned-commit view with compact zoom), `preview/graph-tab-preview-light.html`, and `preview/graph-tab-states.html` (the pinned detail card, the hover card and the full-window overlay).
+
+The script also exercises interaction against its own fake DOM: it moves a pointer over a row and asserts the hover card appears and disappears, clicks a row and asserts the detail card, clicks *Copy commit info* and asserts the button flips to "copied", opens the full-window view and asserts an overlay with an SVG, then closes it. Any broken prop, missing locale key or missing DOM guard fails the run instead of silently rendering nothing.
+
+To render the real repositories of this machine, pass the JSON responses of `/git/repos` and `/git/graph` (one `--graph` per repository) and point the first panel at one of them:
+
+```sh
+node scripts/preview-tab.mjs --repos .demo/data/repos.json \
+  --graph .demo/data/graph-graph-demo.json --focus graph-demo
+```
+
+Screenshot the generated HTML with Chrome headless (`--headless=new --screenshot=<absolute windows path> --window-size=1160,2100 --force-device-scale-factor=2`); relative paths and missing directories make it fail with exit code 0x3.
 
 ## Releasing
 

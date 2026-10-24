@@ -1,6 +1,6 @@
 {
   "name": "dsh-git-graph-sidebar",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Git commit graph and multi-repository browsing for DeepSeek Harness: a branch chip in the composer plus a better-sidebar tab that lists every repository below the workspace directory and draws its commit graph as an SVG lane canvas.",
   "icon": "icon.svg",
   "type": "module",
