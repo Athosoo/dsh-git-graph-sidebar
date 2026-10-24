@@ -23,7 +23,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | --- | --- | --- |
 | 1.3.0 | **released and installed** / 已发布并已装 | Conventions inheritance + repository index injection. |
 | 1.4.0 | **released and installed** / 已发布并已装 | Tier 1 complete: rollback prompt, commit search + ref filters, standalone SVG export. |
-| 1.5.0 | **code complete, unreleased** / 代码完成待发版 | Tier 2: workspace overview, branch cleanup hints, repository health. |
+| 1.5.0 | **released and installed** / 已发布并已装 | Tier 2: workspace overview, branch cleanup hints, repository health. |
 | 1.6.0 | planned / 计划中 | Tier 3 below. |
 
 1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
@@ -84,7 +84,7 @@ Filtering is purely local — no network call. / 过滤全在本地，不发请�
 
 **Implemented / 实现。** The toolbar's *Export image* serialises the current view — filtered rows, lanes, ref chips and the highlight on the pinned row — into one standalone SVG: the theme palette is written out as literal fills (no CSS variables, no classes), the size is explicit, the row pitch is taken from the live lane geometry so zoomed panels stay aligned, and a long subject is truncated instead of overflowing. Browsers get a real download named `git-graph-<repo>.svg`; where object URLs are unavailable (webviews, the preview harness) the markup is copied to the clipboard instead, and the button says which happened. / 工具栏「导出图片」把当前视图（筛选后的行、泳道、ref 徽章、固定行高亮）序列化为独立 SVG：主题色写字面量、显式尺寸、行距取自实时泳道几何（缩放后仍对齐）、过长主题截断而非溢出；浏览器直接下载 `git-graph-<仓库名>.svg`，无 object URL 环境退化为复制文本，按钮会说明发生了哪一种。
 
-## Tier 2 — 1.5.0 "many repositories at a glance" / 多仓库一眼看清 — **code complete, unreleased** / 代码完成待发版
+## Tier 2 — 1.5.0 "many repositories at a glance" / 多仓库一眼看清 — **shipped in 1.5.0** / 已随 1.5.0 发布
 
 ### 4. Workspace overview / 多仓库总览
 

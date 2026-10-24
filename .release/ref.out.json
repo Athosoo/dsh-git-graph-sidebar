@@ -1,0 +1,10 @@
+{
+  "ref": "refs/tags/v1.5.0",
+  "node_id": "REF_kwDOVU1Gm7ByZWZzL3RhZ3MvdjEuNS4w",
+  "url": "https://api.github.com/repos/Athosoo/dsh-git-graph-sidebar/git/refs/tags/v1.5.0",
+  "object": {
+    "sha": "2dcb974d6f3c62cd1e8d59943a06bad553f43dd2",
+    "type": "commit",
+    "url": "https://api.github.com/repos/Athosoo/dsh-git-graph-sidebar/git/commits/2dcb974d6f3c62cd1e8d59943a06bad553f43dd2"
+  }
+}

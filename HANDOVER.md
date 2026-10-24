@@ -2,11 +2,11 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-24 19:10 (+08)。
+> 最后更新：2026-10-24 19:20 (+08)。
 
 ## 0. 一句话状态
 
-插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）的代码已完成，构建与离线测试全绿**（host 95/95、客户端预览全过），只差发版换装。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。
+插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -127,7 +127,7 @@ node scripts/preview-tab.mjs \
 | 1.2.0 | 一键 `git init`（`/git/init`，可选初始分支） |
 | 1.3.0 | 规范**就近继承** + 容器仓库缺文档时回退为指针清单（有界 BFS，三层） |
 | 1.4.0 | Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`）；已发布并已装 |
-| 1.5.0 | **[代码已完成，待发布]** Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检 |
+| 1.5.0 | Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -153,7 +153,7 @@ node scripts/preview-tab.mjs \
 - 预览断言：以 `<svg` 开头、含 `xmlns`/`viewBox`/`<title>`/仓库名、无 `var(--`、`data-gitgraph-export-row` 数 = 面板行数、`data-gitgraph-export-pinned` 存在、相邻圆 `cy` 差 = 面板行高、浅/深背景色正确。
 - 调试开关：`EXPORT_SVG_PATH=<path>` 把导出结果落盘（`node scripts/preview-tab.mjs …`）；`EXPORT_DARK=1` 让假 `document.body.hasAttribute("data-ds-dark-theme")` 返回真，可离线检查深色导出。
 
-## 7.1 1.5.0 的三项改动（Tier 2，代码完成待发版）
+## 7.1 1.5.0 的三项改动（Tier 2，已随 1.5.0 发布）
 
 **host 新模块 `src/host/branches.js`**（由 build-lib 拼进 `//#region src/host/branches.ts`，位置紧跟 repos region、在 `registerGitRoutes` 之前）
 - 常量：`BRANCH_REPORT_LIMIT=120`、`BRANCH_REPORT_CONCURRENCY=4`、`BRANCH_STALE_DAYS=30`、`REPO_AUGMENT_CONCURRENCY=4`、`HEALTH_UNTRACKED_LIMIT=400`、`HEALTH_BIG_BYTES=1048576`、`HEALTH_UPSTREAM_LIMIT=20`、`BRANCH_BASE_CANDIDATES=["main","master","trunk","develop"]`。
@@ -174,7 +174,7 @@ node scripts/preview-tab.mjs \
 
 ## 8. 待办清单（按优先级）
 
-1. **发 1.5.0**（代码已全绿，只差发布）：`package.json` 升 1.5.0 → 跑 §10 的全链路测试 → `npm pack` 到 `dsh-git-graph-dist/1.5.0/` → commit/push（`git gpush`）→ GitHub Release（资产名**不带版本**）→ 用 pnpm 在 `desktop` profile 换装（见 §5 的绕法）→ 让用户重启 DSH。
+1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）；用户需重启 DSH 才能用上 host 新路由。
 2. **市场收录 PR**：门槛 = 仓库满 1 天 = `2026-10-24T22:07:00+08:00`。之后：
    ```bash
    bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
