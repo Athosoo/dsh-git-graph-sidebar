@@ -174,7 +174,7 @@
 			minWidth: 0,
 			height: 26,
 			borderRadius: 8,
-			border: "1px solid var(--dsw-alias-border-l2)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
 			background: "var(--dsw-alias-bg-base)",
 			color: "var(--dsw-alias-label-primary)",
 			fontSize: 13,
@@ -199,7 +199,7 @@
 			maxHeight: 170,
 			overflowY: "auto",
 			overflowX: "hidden",
-			border: "1px solid var(--dsw-alias-border-l2)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
 			borderRadius: 8,
 			background: "var(--dsw-alias-bg-base)",
 			padding: "2px 0"
@@ -242,9 +242,9 @@
 		};
 		const SIDEBAR_TAB_BUTTON = {			flex: "none",
 			height: 26,
-			border: "1px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-button-tool-bar-fill)",
-			color: "var(--dsw-alias-label-primary)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
+			background: "var(--dsh-gg-ctl-bg, #ffffff)",
+			color: "var(--dsh-gg-ctl-fg, #14181f)",
 			borderRadius: 8,
 			fontSize: 13,
 			padding: "0 10px",
@@ -518,9 +518,9 @@
 			flex: "none",
 			width: 24,
 			height: 26,
-			border: "1px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-button-tool-bar-fill)",
-			color: "var(--dsw-alias-label-primary)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
+			background: "var(--dsh-gg-ctl-bg, #ffffff)",
+			color: "var(--dsh-gg-ctl-fg, #14181f)",
 			borderRadius: 8,
 			fontSize: 14,
 			lineHeight: "24px",
@@ -532,9 +532,9 @@
 			flex: "none",
 			height: 24,
 			padding: "0 8px",
-			border: "1px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-button-tool-bar-fill)",
-			color: "var(--dsw-alias-label-primary)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
+			background: "var(--dsh-gg-ctl-bg, #ffffff)",
+			color: "var(--dsh-gg-ctl-fg, #14181f)",
 			borderRadius: 6,
 			fontSize: 12,
 			lineHeight: "22px",
@@ -569,8 +569,42 @@
 			color: "var(--dsw-alias-label-secondary)",
 			wordBreak: "break-word"
 		};
+		/** The strict switch row inside the framework picker. */
+		const SIDEBAR_TAB_STRICT_ROW = {
+			display: "flex",
+			alignItems: "center",
+			gap: "8px",
+			flexWrap: "wrap",
+			padding: "2px 0 0"
+		};
+		/** The strict switch, off: a dashed pill that reads as an option. */
+		const SIDEBAR_TAB_STRICT_OFF = {
+			font: "inherit",
+			fontSize: "12px",
+			padding: "3px 9px",
+			borderRadius: "999px",
+			border: "1px dashed var(--dsh-gg-ctl-bd, var(--dsw-alias-border-2))",
+			background: "var(--dsh-gg-ctl-bg, transparent)",
+			color: "var(--dsw-alias-label-secondary)",
+			cursor: "pointer",
+			whiteSpace: "nowrap"
+		};
+		/** The strict switch, on: solid and amber, because it changes policy. */
+		const SIDEBAR_TAB_STRICT_ON = Object.assign({}, SIDEBAR_TAB_STRICT_OFF, {
+			border: "1px solid var(--dsw-alias-state-warn-primary, #b45309)",
+			color: "var(--dsw-alias-state-warn-primary, #b45309)",
+			fontWeight: 600
+		});
+		/** The one line explanation next to the strict switch. */
+		const SIDEBAR_TAB_STRICT_NOTE = {
+			flex: "1 1 140px",
+			minWidth: "0",
+			fontSize: "11px",
+			lineHeight: "16px",
+			color: "var(--dsw-alias-label-tertiary)"
+		};
 		/** The compliance line: one sentence plus the offending subjects. */
-		const SIDEBAR_TAB_COMPLIANCE = {
+const SIDEBAR_TAB_COMPLIANCE = {
 			display: "flex",
 			flexDirection: "column",
 			gap: 1,
@@ -586,7 +620,7 @@
 			marginTop: 6,
 			padding: 8,
 			borderRadius: 8,
-			border: "1px dashed var(--dsw-alias-border-2)",
+			border: "1px dashed var(--dsh-gg-ctl-bd, var(--dsw-alias-border-2))",
 			background: "var(--dsw-alias-bg-layer-1)"
 		};
 		/** One section of the preview. */
@@ -612,7 +646,7 @@
 			flexDirection: "column",
 			gap: 6,
 			padding: "8px 10px",
-			border: "1px solid var(--dsw-alias-border-1)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-1))",
 			borderRadius: 8,
 			background: "var(--dsw-alias-bg-layer-1)",
 			fontSize: 12,
@@ -655,7 +689,7 @@
 			flexDirection: "column",
 			gap: 3,
 			padding: "7px 9px",
-			border: "1px solid var(--dsw-alias-border-1)",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-1))",
 			borderRadius: 8,
 			background: "var(--dsw-alias-bg-layer-2)",
 			cursor: "pointer",
@@ -683,6 +717,8 @@
 		* once per document.
 		*/
 		const SIDEBAR_TAB_CSS = [
+			"[data-gitgraph-sidebar-tab]{--dsh-gg-ctl-bg:#ffffff;--dsh-gg-ctl-fg:#14181f;--dsh-gg-ctl-bd:rgba(20,24,31,0.16)}",
+			"body[data-ds-dark-theme] [data-gitgraph-sidebar-tab]{--dsh-gg-ctl-bg:rgba(255,255,255,0.06);--dsh-gg-ctl-fg:#eef2f7;--dsh-gg-ctl-bd:rgba(255,255,255,0.22)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-row]{transition:background-color 120ms ease}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-row]:hover{background-color:var(--dsw-alias-bg-layer-2)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-row][data-gitgraph-pinned=\"true\"]{background-color:var(--dsw-alias-bg-layer-2)}",
@@ -1200,6 +1236,8 @@
 			const [catalog, setCatalog] = react.useState(null);
 			/** Whether the framework picker is open under the conventions strip. */
 			const [pickerOpen, setPickerOpen] = react.useState(false);
+			/** The picker's strict switch: rules become enforced policy, not advice. */
+			const [strictMode, setStrictMode] = react.useState(false);
 			/** Whether a convention document is being written right now. */
 			const [conventionBusy, setConventionBusy] = react.useState(false);
 			/** The last successful write, so the strip can confirm it. */
@@ -1408,13 +1446,14 @@
 			const writeConvention = react.useCallback((repoPath, frameworkId) => {
 				setConventionBusy(true);
 				setConventionError(null);
-				return sidebarTabGit().convention(repoPath, frameworkId, true).then((result) => {
+				return sidebarTabGit().conventionOptions(repoPath, frameworkId, true, strictMode).then((result) => {
 					setConventionBusy(false);
 					if (!result.ok) {
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
 						return false;
 					}
 					setConventionNotice(frameworkId === null ? "auto" : "applied");
+					setPickerOpen(false);
 					runScan(true);
 					return true;
 				}).catch(() => {
@@ -1422,7 +1461,7 @@
 					setConventionError(t("sidebar.error.conventions"));
 					return false;
 				});
-			}, [runScan, t]);
+			}, [runScan, strictMode, t]);
 			/** The selected repository's path, as an effect dependency. */
 			const selectedKey = selected !== void 0 ? selected.path : void 0;
 			/** The workspace whose shared document strip is shown, as a dependency. */
@@ -1435,6 +1474,7 @@
 			 */
 			const pickFramework = react.useCallback((repoPath, frameworkId, exists) => {
 				if (exists !== true) return writeConvention(repoPath, frameworkId);
+				setPickerOpen(false);
 				setUpgrade({
 					phase: "loading",
 					path: repoPath,
@@ -2199,6 +2239,15 @@
 						count: checked,
 						failing
 					}))];
+					if (compliance.strict === true) parts.push(h("span", {
+						key: "strict",
+						"data-gitgraph-compliance-strict": true,
+						title: t("sidebar.strictHint"),
+						style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_CHIP, {
+							alignSelf: "flex-start",
+							color: "var(--dsw-alias-state-warn-primary, #b45309)"
+						})
+					}, t("sidebar.strict")));
 					const offenders = compliance.offenders !== void 0 && compliance.offenders !== null ? compliance.offenders : [];
 					offenders.slice(0, 3).forEach((offender) => {
 						const reasons = offender.reasons !== void 0 && offender.reasons !== null ? offender.reasons.map((reason) => sidebarTabReasonLabel(t, reason)).join(", ") : "";
@@ -2326,6 +2375,23 @@
 						key: "meta",
 						style: SIDEBAR_TAB_FRAMEWORK_META
 					}, t("sidebar.conventionsBestFor") + (zh && typeof framework.bestForZh === "string" ? framework.bestForZh : framework.bestFor))]));
+					/** The strict switch: it turns the document into policy, not advice. */
+					const strictRow = h("div", {
+						key: "strict-row",
+						style: SIDEBAR_TAB_STRICT_ROW
+					}, [h("button", {
+						key: "strict",
+						type: "button",
+						"data-gitgraph-action": "conventions-strict",
+						"data-gitgraph-strict": strictMode === true ? "on" : "off",
+						title: t("sidebar.strictHint"),
+						style: strictMode === true ? SIDEBAR_TAB_STRICT_ON : SIDEBAR_TAB_STRICT_OFF,
+						disabled: conventionBusy,
+						onClick: () => setStrictMode((current) => current !== true)
+					}, (strictMode === true ? "☑ " : "☐ ") + t("sidebar.strict")), h("span", {
+						key: "strict-hint",
+						style: SIDEBAR_TAB_STRICT_NOTE
+					}, t("sidebar.strictHint"))]);
 					children.push(h("div", {
 						key: "picker",
 						"data-gitgraph-conventions-picker": true,
@@ -2333,7 +2399,7 @@
 					}, [h("span", {
 						key: "hint",
 						style: SIDEBAR_TAB_CONVENTIONS_NOTE
-					}, conventionBusy ? t("sidebar.conventionsWriting") : t("sidebar.conventionsPick"))].concat(cards).concat([h("button", {
+					}, conventionBusy ? t("sidebar.conventionsWriting") : t("sidebar.conventionsPick")), strictRow].concat(cards).concat([h("button", {
 						key: "scaffold",
 						type: "button",
 						"data-gitgraph-action": "conventions-scaffold",

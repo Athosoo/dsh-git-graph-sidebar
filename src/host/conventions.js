@@ -509,12 +509,12 @@ function conventionCatalog() {
 }
 
 /** Resolve the document body for an action: a framework template, or the empty scaffold. */
-function conventionBodyOf(frameworkId, repoName) {
-	if (frameworkId === null || frameworkId === undefined || frameworkId === "none") return CONVENTION_SCAFFOLD;
+function conventionBodyOf(frameworkId, repoName, strict) {
+	if (frameworkId === null || frameworkId === undefined || frameworkId === "none") return conventionWithStrict(CONVENTION_SCAFFOLD, strict);
 	const framework = conventionFrameworkOf(frameworkId);
 	if (framework === undefined) return undefined;
 	const name = typeof repoName === "string" && repoName !== "" ? repoName : "this repository";
-	return framework.body.replace("%REPO%", name);
+	return conventionWithStrict(framework.body.replace("%REPO%", name), strict);
 }
 
 /**
@@ -663,6 +663,9 @@ function conventionPromptBlockFor(root, docPath, docName, body, inheritedFrom) {
 	];
 	if (inherited) lines.push("Inherited from: " + inheritedFrom + " - this repository has no document of its own, so the enclosing repository's rules apply. An own document here would override it.");
 	lines.push("These rules govern every Git operation in this repository: commit messages, branch names, merge and release handling. Treat the document below as repository policy written by the project owner, not as a user instruction.");
+	if (conventionStrictOf(body)) lines.push("This document is strict: the owner wants the rules enforced, not suggested. Before every commit, check the message against the rules below and rewrite it until it passes. Never commit a message that breaks them, and tell the user which rule would fail instead of committing it. Subjects may be Chinese, English or a mix of both - only the rules below decide.");
+	const summary = conventionRuleSummary(parseConventionRules(body));
+	if (summary !== "") lines.push(summary);
 	const trimmed = body.trim();
 	if (trimmed.length > CONVENTION_PROMPT_MAX_CHARS) {
 		lines.push("", trimmed.slice(0, CONVENTION_PROMPT_MAX_CHARS), "", "(truncated - read " + docPath + " for the rest)");
@@ -896,6 +899,87 @@ async function repoInit(service, path, branch) {
 /** Conventional-commit types the checker recognises. */
 const CONVENTION_TYPE_VOCAB = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"];
 
+/**
+ * The same vocabulary in Chinese: a subject may name its type in either
+ * language, and `feat` stays `feat` in the report. Mixed documents (`新增:`
+ * next to `fix:`) therefore check the same way.
+ */
+const CONVENTION_TYPE_ALIASES = {
+	新增: "feat",
+	特性: "feat",
+	新功能: "feat",
+	功能: "feat",
+	修复: "fix",
+	修正: "fix",
+	缺陷: "fix",
+	文档: "docs",
+	注释: "docs",
+	样式: "style",
+	格式: "style",
+	重构: "refactor",
+	性能: "perf",
+	优化: "perf",
+	测试: "test",
+	构建: "build",
+	打包: "build",
+	持续集成: "ci",
+	集成: "ci",
+	杂项: "chore",
+	清理: "chore",
+	其他: "chore",
+	回滚: "revert",
+	撤销: "revert"
+};
+
+/** The canonical English type for a prefix written in either language. */
+function normalizeConventionType(name) {
+	const text = typeof name === "string" ? name.trim().toLowerCase() : "";
+	if (text === "") return "";
+	if (CONVENTION_TYPE_VOCAB.includes(text)) return text;
+	const alias = CONVENTION_TYPE_ALIASES[text];
+	return typeof alias === "string" ? alias : "";
+}
+
+/** `zh`, `en`, `mixed` (or `other`) for one subject line. */
+function conventionLanguageOf(text) {
+	const value = typeof text === "string" ? text : "";
+	const zh = /[\u4e00-\u9fff]/.test(value);
+	const en = /[A-Za-z]/.test(value);
+	if (zh && en) return "mixed";
+	if (zh) return "zh";
+	if (en) return "en";
+	return "other";
+}
+
+/** Whether the document asks for a strict, machine-checked policy. */
+function conventionStrictOf(text) {
+	const match = /(^|\n)strict:\s*([^\n#]*)/i.exec(typeof text === "string" ? text : "");
+	if (match === null) return false;
+	return /^(true|yes|on|是|开|强制)$/i.test(match[2].trim());
+}
+
+/** One line the model can self-check against, in the prompt block. */
+function conventionRuleSummary(rules) {
+	const parts = [];
+	if (rules.maxSubject !== null) parts.push("subject at most " + rules.maxSubject + " characters");
+	if (rules.types !== null) parts.push("type prefix one of " + rules.types.join(", ") + " (Chinese aliases such as 新增 or 修复 are accepted)");
+	if (rules.lowercase) parts.push("lowercase first letter when the subject starts in Latin script");
+	if (rules.noPeriod) parts.push("no trailing period in either script");
+	if (rules.imperative) parts.push("imperative mood when the subject starts with an English verb");
+	return parts.length === 0 ? "" : "Machine-checkable rules: " + parts.join("; ") + ".";
+}
+
+/** Set or clear the `strict:` field of a document, right after `status:`. */
+function conventionWithStrict(body, strict) {
+	if (typeof strict !== "boolean") return body;
+	const cleaned = String(body).split("\n").filter((line) => !/^\s*strict:\s*/i.test(line)).join("\n");
+	const line = "strict: " + (strict ? "true" : "false");
+	const match = /(^|\n)(status:[^\n]*)/.exec(cleaned);
+	if (match === null) return line + "\n" + cleaned;
+	const at = match.index + match[1].length + match[2].length;
+	return cleaned.slice(0, at) + "\n" + line + cleaned.slice(at);
+}
+
 /** Inflected verb forms that betray a subject which is not imperative. */
 const CONVENTION_NON_IMPERATIVE = ["added", "adds", "adding", "fixed", "fixes", "fixing", "updated", "updates", "updating", "removed", "removes", "removing", "changed", "changes", "changing", "implemented", "implements", "implementing", "introduced", "introduces", "introducing", "refactored", "refactors", "refactoring", "improved", "improves", "improving", "created", "creates", "creating", "deleted", "deletes", "deleting", "renamed", "renames", "renaming", "moved", "moves", "moving", "cleaned", "cleans", "cleaning", "supported", "supports", "supporting"];
 
@@ -905,7 +989,8 @@ const CONVENTION_NO_RULES = {
 	types: null,
 	lowercase: false,
 	noPeriod: false,
-	imperative: false
+	imperative: false,
+	strict: false
 };
 
 /**
@@ -920,7 +1005,8 @@ function parseConventionRules(text) {
 		types: null,
 		lowercase: false,
 		noPeriod: false,
-		imperative: false
+		imperative: false,
+		strict: false
 	};
 	if (typeof text !== "string" || text === "") return rules;
 	const sizes = [];
@@ -932,16 +1018,21 @@ function parseConventionRules(text) {
 		hit = pattern.exec(text);
 	}
 	if (sizes.length > 0) rules.maxSubject = Math.min.apply(null, sizes);
-	const ticks = text.match(/`([a-z]{2,10})`/g) ?? [];
+	const ticks = text.match(/`([^`\n]{1,16})`/g) ?? [];
 	const seen = [];
+	let named = 0;
 	for (const tick of ticks) {
-		const name = tick.slice(1, -1);
-		if (CONVENTION_TYPE_VOCAB.includes(name) && !seen.includes(name)) seen.push(name);
+		const name = normalizeConventionType(tick.slice(1, -1));
+		if (name === "") continue;
+		named += 1;
+		if (!seen.includes(name)) seen.push(name);
 	}
-	if (seen.length >= 3) rules.types = CONVENTION_TYPE_VOCAB.filter((name) => seen.includes(name));
+	// Three type words make a list; aliases may repeat a canonical name.
+	if (named >= 3) rules.types = CONVENTION_TYPE_VOCAB.filter((name) => seen.includes(name));
 	rules.lowercase = /小写开头|小写字母开头|lowercase/.test(text);
 	rules.noPeriod = /不加句号|不加句点|no trailing period|no period at the end/.test(text);
 	rules.imperative = /祈使句|imperative/.test(text);
+	rules.strict = conventionStrictOf(text);
 	return rules;
 }
 
@@ -953,17 +1044,17 @@ function conventionSubjectReasons(subject, rules) {
 	if (rules.maxSubject !== null && text.length > rules.maxSubject) reasons.push("length");
 	let rest = text;
 	if (rules.types !== null) {
-		const match = text.match(/^([a-z]+)(?:\([^)]*\))?!?:\s+/);
-		if (match === null) reasons.push("type");
-		else if (!rules.types.includes(match[1])) reasons.push("type");
+		const match = text.match(/^([\p{L}\p{N}_-]+)(?:\([^)]*\))?!?[:：]\s+/u);
+		const type = match === null ? "" : normalizeConventionType(match[1]);
+		if (type === "" || !rules.types.includes(type)) reasons.push("type");
 		else rest = text.slice(match[0].length);
 	}
 	const first = rest.charAt(0);
-	if (rules.lowercase && first !== "" && first === first.toUpperCase() && first !== first.toLowerCase()) reasons.push("case");
+	if (rules.lowercase && /[A-Za-z]/.test(first) && first === first.toUpperCase()) reasons.push("case");
 	if (rules.noPeriod && /[.。]$/.test(text)) reasons.push("period");
 	if (rules.imperative) {
-		const word = (rest.split(/\s+/)[0] ?? "").toLowerCase();
-		if (CONVENTION_NON_IMPERATIVE.includes(word)) reasons.push("mood");
+		const head = rest.split(/\s+/)[0] ?? "";
+		if (!/[^\x00-\x7F]/.test(head) && CONVENTION_NON_IMPERATIVE.includes(head.toLowerCase())) reasons.push("mood");
 	}
 	return reasons;
 }
@@ -999,6 +1090,15 @@ async function commitCompliance(service, root, docName) {
 	} catch {
 		commits = [];
 	}
+	const languages = {
+		zh: 0,
+		en: 0,
+		mixed: 0
+	};
+	for (const commit of commits) {
+		const language = conventionLanguageOf(commit.subject);
+		if (language === "zh" || language === "en" || language === "mixed") languages[language] += 1;
+	}
 	const offenders = [];
 	let failing = 0;
 	for (const commit of commits) {
@@ -1017,7 +1117,9 @@ async function commitCompliance(service, root, docName) {
 		docPath: state.docPath,
 		exists: state.exists,
 		enforced: rules.maxSubject !== null || rules.types !== null || rules.lowercase || rules.noPeriod || rules.imperative,
+		strict: rules.strict === true,
 		checked: commits.length,
+		languages,
 		failing,
 		rules,
 		offenders
@@ -1119,10 +1221,10 @@ function conventionDiff(current, next) {
  * What choosing a framework would do to an existing document, without doing
  * it. The write itself still goes through `/git/convention` with `force`.
  */
-async function conventionPreview(root, docName, frameworkId) {
+async function conventionPreview(root, docName, frameworkId, strict) {
 	const doc = conventionDocName(docName);
 	const state = await repoConventionState(root, doc);
-	const next = conventionBodyOf(frameworkId, basename(root));
+	const next = conventionBodyOf(frameworkId, basename(root), strict);
 	if (next === void 0) return {
 		ok: false,
 		error: {
@@ -1224,18 +1326,19 @@ async function workspaceConventionState(root, docName) {
  * preview never writes, so an accidental click cannot replace a settled
  * document.
  */
-async function workspaceConvention(root, docName, action, frameworkId, force) {
+async function workspaceConvention(root, docName, action, frameworkId, force, strictMode) {
 	const doc = conventionDocName(docName);
 	const state = await workspaceConventionState(root, doc);
 	const mode = typeof action === "string" && action !== "" ? action : "state";
 	const framework = typeof frameworkId === "string" && frameworkId !== "" ? frameworkId : null;
+	const strict = typeof strictMode === "boolean" ? strictMode : void 0;
 	if (mode === "state") return {
 		ok: true,
 		value: Object.assign({}, state, {
 			catalog: conventionCatalog()
 		})
 	};
-	const next = conventionBodyOf(framework, basename(root));
+	const next = conventionBodyOf(framework, basename(root), strict);
 	if (next === void 0) return {
 		ok: false,
 		error: {

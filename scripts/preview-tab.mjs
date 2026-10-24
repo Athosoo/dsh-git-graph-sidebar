@@ -569,6 +569,7 @@ const fakeFetch = async (path, init) => {
 			docPath: String(payload.path) + "/GIT_CONVENTIONS.md",
 			exists,
 			enforced: exists,
+			strict: true,
 			checked: 5,
 			failing: exists ? 2 : 0,
 			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true },
@@ -956,6 +957,7 @@ if (!usingRealData) {
 	if (settled === undefined || settled.conventions === undefined || settled.conventions.draft !== false) throw new Error("picking a framework did not settle the document");
 	if (blankHtml.indexOf('data-gitgraph-conventions-state="settled"') < 0) throw new Error("conventions strip did not report the settled document");
 	if (draftHtml.indexOf('data-gitgraph-conventions-state="draft"') < 0) throw new Error("conventions strip did not report the draft after the auto scaffold");
+	if (blankHtml.indexOf("data-gitgraph-conventions-picker") >= 0) throw new Error("the framework list stayed open after the write");
 	console.log("preview-tab: conventions strip, auto scaffold and framework picker ok");
 }
 
@@ -966,6 +968,7 @@ if (!usingRealData) {
 const TIER3_PATH = WORKSPACE + "/repos-tier3/ruled";
 let tier3Html = "";
 let tier3PreviewHtml = "";
+let pickerHtml = "";
 {
 	const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 	const savedRepos = REPOS;
@@ -1000,6 +1003,7 @@ let tier3PreviewHtml = "";
 	if (tierHtml.indexOf('data-gitgraph-compliance="failing"') < 0) throw new Error("the compliance line did not report the failing commits");
 	if (tierHtml.indexOf("aaaaaaa") < 0) throw new Error("the compliance line lost the offending subject");
 	if (tierHtml.indexOf("不符合") < 0 && tierHtml.indexOf("do not match") < 0) throw new Error("the compliance line lost its sentence");
+	if (tierHtml.indexOf("data-gitgraph-compliance-strict") < 0) throw new Error("a strict document shows no strict chip");
 	if (tierHtml.indexOf("data-gitgraph-workspace-bar") < 0) throw new Error("the workspace document strip is missing");
 	if (tierHtml.indexOf('data-gitgraph-action="workspace-doc-create"') < 0) throw new Error("the workspace document strip has no create button");
 	if (tierHtml.indexOf('data-gitgraph-workspace-doc="none"') < 0) throw new Error("the workspace document strip did not report the missing document");
@@ -1007,9 +1011,14 @@ let tier3PreviewHtml = "";
 	const switchButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "switch-conventions")[0];
 	if (switchButton === undefined) throw new Error("a settled document offers no switch-framework button");
 	click(switchButton, "switch framework");
+	await wait(60);
+	pickerHtml = (await tierMount.render()).html;
+	if (pickerHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("the picker snapshot is empty");
 	await wait(40);
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("the switch button did not open the framework picker");
+	if (tierHtml.indexOf('data-gitgraph-action="conventions-strict"') < 0) throw new Error("the picker has no strict switch");
+	if (tierHtml.indexOf('data-gitgraph-strict="off"') < 0) throw new Error("the strict switch should start off");
 	const tierCard = findAll(tierMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string")[0];
 	if (tierCard === undefined) throw new Error("no framework card to preview");
 	const tierFramework = tierCard.props["data-gitgraph-framework"];
@@ -1018,6 +1027,7 @@ let tier3PreviewHtml = "";
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf('data-gitgraph-upgrade="ready"') < 0) throw new Error("the upgrade preview did not render");
 	if (tierHtml.indexOf("data-gitgraph-upgrade-counts") < 0) throw new Error("the upgrade preview lost its counts");
+	if (tierHtml.indexOf("data-gitgraph-conventions-picker") >= 0) throw new Error("the framework list stayed open next to the preview");
 	if (tierHtml.indexOf("Commit types") < 0) throw new Error("the upgrade preview lost the rewritten section");
 	tier3PreviewHtml = tierHtml;
 	if (CONVENTION_CALLS.length !== 0) throw new Error("the upgrade preview wrote the document before the confirmation");
@@ -1027,6 +1037,7 @@ let tier3PreviewHtml = "";
 	await wait(60);
 	if (CONVENTION_CALLS.length !== 1) throw new Error("confirming the preview must write the document exactly once, got " + CONVENTION_CALLS.length);
 	if (CONVENTION_CALLS[0].framework !== tierFramework) throw new Error("the confirmation wrote " + CONVENTION_CALLS[0].framework + " instead of " + tierFramework);
+	if (CONVENTION_CALLS[0].strict !== false) throw new Error("the strict flag should travel as false, got " + String(CONVENTION_CALLS[0].strict));
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf("data-gitgraph-upgrade") >= 0) throw new Error("the upgrade preview stayed open after the write");
 	const createButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "workspace-doc-create")[0];
@@ -1127,6 +1138,9 @@ const html = `<!doctype html>
 		--dsw-alias-bg-layer-1: #fafafa;
 		--dsw-alias-bg-layer-2: #f1f3f5;
 		--dsw-alias-label-primary: #1f2329;
+		--dsh-gg-ctl-bg: #ffffff;
+		--dsh-gg-ctl-fg: #14181f;
+		--dsh-gg-ctl-bd: rgba(20,24,31,0.16);
 		--dsw-alias-label-secondary: #5c6370;
 		--dsw-alias-label-tertiary: #9aa1ab;
 		--dsw-alias-border-l1: #e6e8eb;
@@ -1142,6 +1156,9 @@ const html = `<!doctype html>
 			--dsw-alias-bg-layer-1: #22252a;
 			--dsw-alias-bg-layer-2: #2b2f36;
 			--dsw-alias-label-primary: #e8eaed;
+			--dsh-gg-ctl-bg: rgba(255,255,255,0.06);
+			--dsh-gg-ctl-fg: #eef2f7;
+			--dsh-gg-ctl-bd: rgba(255,255,255,0.22);
 			--dsw-alias-label-secondary: #a8aeb8;
 			--dsw-alias-label-tertiary: #767d88;
 			--dsw-alias-border-l1: #33383f;
@@ -1154,6 +1171,9 @@ const html = `<!doctype html>
 		--dsw-alias-bg-layer-1: #fafafa;
 		--dsw-alias-bg-layer-2: #f1f3f5;
 		--dsw-alias-label-primary: #1f2329;
+		--dsh-gg-ctl-bg: #ffffff;
+		--dsh-gg-ctl-fg: #14181f;
+		--dsh-gg-ctl-bd: rgba(20,24,31,0.16);
 		--dsw-alias-label-secondary: #5c6370;
 		--dsw-alias-label-tertiary: #9aa1ab;
 		--dsw-alias-border-l1: #e6e8eb;
@@ -1244,6 +1264,9 @@ const statesHtml = `<!doctype html>
 		--dsw-alias-bg-layer-1: #212429;
 		--dsw-alias-bg-layer-2: #262a31;
 		--dsw-alias-label-primary: #e8eaed;
+		--dsh-gg-ctl-bg: rgba(255,255,255,0.06);
+		--dsh-gg-ctl-fg: #eef2f7;
+		--dsh-gg-ctl-bd: rgba(255,255,255,0.22);
 		--dsw-alias-label-secondary: #a8b0ba;
 		--dsw-alias-label-tertiary: #7d858f;
 		--dsw-alias-border-l1: #2f343d;
@@ -1281,6 +1304,9 @@ const heroHtml = `<!doctype html>
 \t\t--dsw-alias-bg-layer-1: #212429;
 \t\t--dsw-alias-bg-layer-2: #262a31;
 \t\t--dsw-alias-label-primary: #e8eaed;
+--dsh-gg-ctl-bg: rgba(255,255,255,0.06);
+--dsh-gg-ctl-fg: #eef2f7;
+--dsh-gg-ctl-bd: rgba(255,255,255,0.22);
 \t\t--dsw-alias-label-secondary: #a8b0ba;
 \t\t--dsw-alias-label-tertiary: #7d858f;
 \t\t--dsw-alias-border-l1: #2f343d;
@@ -1295,6 +1321,9 @@ const heroHtml = `<!doctype html>
 \t\t--dsw-alias-bg-layer-1: #fafafa;
 \t\t--dsw-alias-bg-layer-2: #f1f3f5;
 \t\t--dsw-alias-label-primary: #1f2329;
+--dsh-gg-ctl-bg: #ffffff;
+--dsh-gg-ctl-fg: #14181f;
+--dsh-gg-ctl-bd: rgba(20,24,31,0.16);
 \t\t--dsw-alias-label-secondary: #5c6370;
 \t\t--dsw-alias-label-tertiary: #9aa1ab;
 \t\t--dsw-alias-border-l1: #e6e8eb;
@@ -1329,6 +1358,8 @@ if (tier3Html !== "") {
 	const panels = "<body>" +
 		"<h2>Compliance and the workspace document</h2>" +
 		'<div class="panel">' + tier3Html + "</div>" +
+		"<h2>The framework picker, with the strict switch</h2>" +
+		'<div class="panel">' + pickerHtml + "</div>" +
 		"<h2>Upgrade preview - nothing written yet</h2>" +
 		'<div class="panel">' + tier3PreviewHtml + "</div>" +
 		"</body>\n</html>\n";

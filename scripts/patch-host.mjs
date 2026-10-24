@@ -347,6 +347,22 @@ patch(
 	'\t\t\tcase "/git/compliance": {'
 );
 
+// 14. The strict flag travels with the write: both the repository document and
+// the workspace document accept it and stamp it into the front matter.
+patch(
+	"convention-strict-write",
+	'				const body = conventionBodyOf(framework, basename(snapshot.root));',
+	'				const body = conventionBodyOf(framework, basename(snapshot.root), payload !== null && typeof payload === "object" ? payload.strict : void 0);',
+	'conventionBodyOf(framework, basename(snapshot.root), payload !== null'
+);
+
+patch(
+	"workspace-strict-write",
+	'				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force);',
+	'				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null && typeof payload === "object" ? payload.strict : void 0);',
+	'workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null'
+);
+
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +
 	(applied.length > 0 ? " -> " + applied.join(", ") : ""));
 writeFileSync(file, source, "utf8");

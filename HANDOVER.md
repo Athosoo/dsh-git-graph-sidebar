@@ -6,7 +6,7 @@
 
 ## 0. 一句话状态
 
-插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。
+插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0（代码完成、待发版）**：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -130,6 +130,7 @@ node scripts/preview-tab.mjs \
 | 1.5.0 | Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检；已发布并已装 |
 | 1.6.0 | Tier 3 三项：提交合规提示（`/git/compliance`）、工作区总纲（`/git/workspace-convention`）、规范升级预览（`/git/convention/preview`）；已发布并已装 |
 | 1.6.1 | 界面收尾：工具栏只留刷新 / 缩放 / 导出 / 初始化，去掉「总览」与「全屏查看」（只读路由 `/git/cleanup`、`/git/health` 保留）；面板字号整体加大一号；已发布并已装 |
+| 1.7.0 | 合规接受中文 / 英文 / 中英混排，可选强约束（`strict: true`），选择列表选完自动收起，控制按钮换白色皮肤；[代码已完成，待发布] |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -196,6 +197,34 @@ node scripts/preview-tab.mjs \
 - 42 个新 locale 键（zh/en 各 21，含 `sidebar.conventionsSwitch`、5 个原因码）；`validate-lib` 现在报 178 键。
 - 预览：`preview-tab.mjs` 新增 `git/compliance`、`git/convention/preview`、`git/workspace-convention` stub 与 `CONVENTION_CALLS`/`WORKSPACE_CALLS`/`WORKSPACE_DOC` 计数器、注入合成条目 `repos-tier3/ruled` 的 tier-3 测试块（断言未确认不写：`CONVENTION_CALLS.length === 0`）、写出 `preview/graph-tab-tier3.html`。
 
+## 7.3 1.7.0 的改动（语言、强约束、收起与皮肤，代码完成待发版）
+
+### 7.3.1 合规接受中文 / 英文 / 中英混排（`src/host/conventions.js`）
+
+- `CONVENTION_TYPE_ALIASES` 把「新增 / 特性 / 功能 → feat」「修复 / 修正 / 缺陷 → fix」「文档 / 注释 → docs」「样式 / 格式 → style」「重构 → refactor」「性能 / 优化 → perf」「测试 → test」「构建 / 打包 → build」「持续集成 → ci」「杂项 / 清理 → chore」「回滚 / 撤销 → revert」映射到规范 type；`normalizeConventionType(name)` 先查词表再查别名，查不到返回空串。
+- `parseConventionRules` 的 ticks 正则放宽成 `/`([^`
+]{1,16})`/g` 再经 `normalizeConventionType` 过滤；**阈值从「任意 ≥3 个词」改成「合法 type（含别名）出现 ≥3 次」**，所以「type 取值：`feat` / `fix` / `新增`」也算数。`rules.strict = conventionStrictOf(text)`。
+- `conventionSubjectReasons` 的 type 正则改成 `/^([\p{L}\p{N}_-]+)(?:\([^)]*\))?!?[:：]\s+/u`——允许中文 type 与全角冒号；比较前先 `normalizeConventionType`；`case` 只在 `/[A-Za-z]/.test(first)` 时才判，`mood` 只在首词是纯 ASCII 时才查英文屈折表，所以中文标题不会被误判；`period` 仍是 `/[.。]$/`。
+- `commitCompliance` 多了 `languages: {zh, en, mixed}`（`conventionLanguageOf`）与 `strict`；`conventionRuleSummary(rules)` 生成一行 `Machine-checkable rules: …`，写进注入块的提示里。
+
+### 7.3.2 强约束模式
+
+- 文档里写 `strict: true`（`conventionStrictOf` 认 true / yes / on / 是 / 开 / 强制）。`conventionWithStrict(body, strict)` 负责改写：先删掉所有 `strict:` 行，再插到 `status:` 行之后；`conventionBodyOf(frameworkId, repoName, strict)` 对六套框架都过一遍。
+- `conventionPreview(root, docName, frameworkId, strict)` 与 `workspaceConvention(root, docName, action, frameworkId, force, strictMode)` 都透传；`scripts/patch-host.mjs` 的第 14 段（`convention-strict-write`、`workspace-strict-write`）把 `payload.strict` 从 `/git/convention` 与 `/git/workspace-convention` 接到 `conventionBodyOf` / `workspaceConvention`。
+- 注入提示：strict 文档追加「This document is strict … never commit a message that breaks them … Subjects may be Chinese, English or a mix of both - only the rules below decide.」，并附上 `conventionRuleSummary` 那一行。
+- 客户端 `GitApi.conventionOptions(path, framework, force, strict)`（`scripts/build-lib.mjs` 的 `API_METHODS`，**guard 必须选只出现在注入代码里的子串** `conventionOptions(path, framework, force, strict)`，否则会被 tab 源码里的调用点误判成「已存在」）。
+
+### 7.3.3 选择列表自动收起
+
+- `writeConvention` 成功后 `setPickerOpen(false)`；`pickFramework` 走「已存在文档」分支时也在 `setUpgrade(...)` 之前 `setPickerOpen(false)`。依赖数组跟着加上 `strictMode`。
+
+### 7.3.4 控制按钮的白色皮肤（`src/client/graph/SidebarTab.js`）
+
+- 新增两个 CSS 变量，写在 `SIDEBAR_TAB_CSS` 里：`[data-gitgraph-sidebar-tab]{--dsh-gg-ctl-bg:#ffffff;--dsh-gg-ctl-fg:#14181f;--dsh-gg-ctl-bd:rgba(20,24,31,0.16)}`，深色主题用 `body[data-ds-dark-theme] [data-gitgraph-sidebar-tab]{--dsh-gg-ctl-bg:rgba(255,255,255,0.06);--dsh-gg-ctl-fg:#eef2f7;--dsh-gg-ctl-bd:rgba(255,255,255,0.22)}` 覆盖。
+- `SIDEBAR_TAB_BUTTON`、`SIDEBAR_TAB_ZOOM`、`SIDEBAR_TAB_DETAIL_BUTTON` 的背景 / 边框 / 文字都改成 `var(--dsh-gg-ctl-bg, #ffffff)`、`var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))`、`var(--dsh-gg-ctl-fg, #14181f)`——**fallback 必须能单独在白色底上成立**，否则样式表没注入时会出现白底浅字。
+- 框架卡片保持 `--dsw-alias-bg-layer-2`（卡片不是按钮）；虚线面板与「强约束」药丸改用 `--dsh-gg-ctl-bd`。
+- `scripts/preview-tab.mjs` 的静态页 shell 里同步补上这三个变量（亮色 / 深色两处），否则预览页会白底浅字。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -256,7 +285,7 @@ node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
 # 2) 升 1.6.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.6.0"
+npm pack --pack-destination "../dsh-git-graph-dist/1.7.0"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

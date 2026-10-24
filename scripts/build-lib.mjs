@@ -75,6 +75,8 @@ const EXTRA_KEYS = [
 			['"sidebar.reasonCase"', '"大小写"'],
 			['"sidebar.reasonPeriod"', '"句号"'],
 			['"sidebar.reasonMood"', '"语气"'],
+			['"sidebar.strict"', '"强约束"'],
+			['"sidebar.strictHint"', '"写进文档的 strict: true：不合规的提交必须先改写，再提交"'],
 			['"sidebar.previewTitle"', '"写入前的差异"'],
 			['"sidebar.previewAdded"', '"{count} 节新增"'],
 			['"sidebar.previewChanged"', '"{count} 节改写"'],
@@ -165,6 +167,8 @@ const EXTRA_KEYS = [
 			['"sidebar.reasonCase"', '"case"'],
 			['"sidebar.reasonPeriod"', '"period"'],
 			['"sidebar.reasonMood"', '"mood"'],
+			['"sidebar.strict"', '"Strict"'],
+			['"sidebar.strictHint"', '"Writes strict: true into the document: a message that breaks the rules must be rewritten before it is committed"'],
 			['"sidebar.previewTitle"', '"What would change"'],
 			['"sidebar.previewAdded"', '"{count} sections added"'],
 			['"sidebar.previewChanged"', '"{count} sections rewritten"'],
@@ -222,6 +226,17 @@ const API_METHODS = [{
 				const payload = { path };
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
 				if (force === true) payload.force = true;
+				return post("git/convention", payload);
+			}`
+}, {
+	guard: "conventionOptions(path, framework, force, strict)",
+	code: `
+			/** Write a convention document with an explicit strict flag. */
+			conventionOptions(path, framework, force, strict) {
+				const payload = { path };
+				if (typeof framework === "string" && framework !== "") payload.framework = framework;
+				if (force === true) payload.force = true;
+				if (typeof strict === "boolean") payload.strict = strict;
 				return post("git/convention", payload);
 			}`
 }, {

@@ -185,6 +185,33 @@ On the client, `pickFramework(path, framework, exists)` writes straight away onl
 
 `test-host.mjs` adds a `repos/ruled` fixture (a document spelling out a 40-character cap and three types, four commits of which three break a rule), a `repos/docless` fixture proving an absent document yields `enforced: false`, and a container/child pair proving the workspace document is created, reported and inherited. `preview-tab.mjs` stubs the three routes, injects a synthetic `repos-tier3/ruled` entry, and asserts that the compliance line and offenders render, that opening the picker fetches a preview **without** calling `/git/convention` (the counter must stay at zero), that confirming calls it exactly once, and that the workspace button writes once.
 
+## Chinese, English and strict documents (1.7.0)
+
+Compliance never assumes English. `normalizeConventionType()` maps Chinese aliases
+(`新增`, `修复`, `文档`, ...) onto the canonical types, `parseConventionRules()` only
+treats a tick list as a type vocabulary when at least three *valid* names appear, and
+`conventionSubjectReasons()` runs the lowercase and imperative checks only when the
+first word of the subject is Latin - a Chinese subject can never be flagged for case
+or mood, only for length and a trailing period (`/[\.。]$/`).
+
+`strict: true` in a document is read by `conventionStrictOf()`;
+`conventionWithStrict()` rewrites the front matter so the flag lands right after
+`status:`, and the injected prompt block gains an explicit paragraph plus one
+`Machine-checkable rules: ...` line from `conventionRuleSummary()`.
+
+Two traps worth remembering:
+
+- `API_METHODS` in `scripts/build-lib.mjs` is guarded by `next.includes(guard)`, and the
+  tab source is spliced *before* the GitApi methods are injected - so a guard of
+  `"conventionOptions"` matches the tab's own call site and the method never lands.
+  Guards must be substrings that only exist in the injected code.
+  (`"conventionOptions(path, framework, force, strict)"`).
+- The control skin lives in `--dsh-gg-ctl-{bg,fg,bd}` on `[data-gitgraph-sidebar-tab]`,
+  overridden under `body[data-ds-dark-theme]`. Every inline fallback must be legible on
+  its own (`#ffffff` background, `#14181f` text), because the static preview pages never
+  run `sidebarTabEnsureStyle()`; `scripts/preview-tab.mjs` declares the same three
+  variables in its own shell so the previews match.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.

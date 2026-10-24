@@ -29,6 +29,8 @@ The tab works from the session's working directory and treats that directory as 
 - **Commit compliance** — below the conventions strip the last 20 commits are checked against the rules the document itself states (subject length cap, the type vocabulary, lowercase start, no trailing period, imperative mood); it reports *2 of the last 5 commits do not match* and lists the first few offenders with their reasons. A document with no checkable rule says so instead of guessing.
 - **Upgrade preview** — on a repository that already carries a document, *Switch framework* no longer overwrites it: the tab first shows *What would change* — how many sections are added, rewritten or removed, with the titles — and nothing is written until *Write it* is pressed. *Cancel* leaves the file untouched.
 - **Workspace document** — once the workspace holds more than one repository a *Workspace conventions* strip appears under the toolbar and writes `<workspace>/.dsh/GIT_CONVENTIONS.md` in one click; a repository without its own document inherits it and the injected block names the directory it came from.
+- **Strict mode** — the picker used for a new document, a framework switch and the workspace document carries a *Strict* switch: it writes `strict: true`, and the injected block then tells the agent to rewrite an offending message before committing; the conventions strip shows a *Strict* badge. The list collapses as soon as a card is picked.
+- **Chinese, English and mixed subjects** — compliance accepts all three: `新增` / `修复` / `文档` work as type aliases (so does a full-width colon), and the lowercase and imperative checks only run when the first word is Latin, so Chinese subjects are never flagged for case.
 
 ### Branch chip (composer)
 

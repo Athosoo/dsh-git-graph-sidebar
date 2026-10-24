@@ -478,7 +478,64 @@ async function main() {
 	check("a mixed-case subject breaks type, case and period", reasons.includes("type+case+period"), JSON.stringify(reasons));
 	check("an unknown type breaks the type rule", reasons.includes("type"), JSON.stringify(reasons));
 	check("an over-long subject breaks only the length rule", reasons.includes("length") && !reasons.includes("type+length"), JSON.stringify(reasons));
-		const docless = join(workspace, "repos", "docless");
+		// The rules must read the same for Chinese, English and mixed subjects, and a
+	// document may ask for them to be enforced instead of suggested.
+	const EOLX = String.fromCharCode(10);
+	const cjk = join(workspace, "repos", "cjk");
+	await mkdir(cjk, { recursive: true });
+	await git(cjk, "init", "-b", "main");
+	await writeFile(join(cjk, "GIT_CONVENTIONS.md"), [
+		"# Git 规范",
+		"",
+		"```yaml",
+		"status: settled",
+		"strict: true",
+		"```",
+		"",
+		"## 1. 提交信息",
+		"",
+		"- type 取值：`feat` / `fix` / `新增`",
+		"- 标题小写开头、不加句号，≤ 40 字符",
+		""
+	].join(EOLX), "utf8");
+	const cjkSubjects = [
+		"feat: 加入解析器",
+		"新增: 加入解析器",
+		"fix: 修复崩溃",
+		"fix: repair the crash",
+		"Feat: 混合 subject with English 和中文。",
+		"fix: Repair the crash 修复"
+	];
+	for (let index = 0; index < cjkSubjects.length; index += 1) {
+		await writeFile(join(cjk, "row-" + index + ".txt"), String(index) + EOLX, "utf8");
+		await git(cjk, "add", ".");
+		await git(cjk, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", cjkSubjects[index]);
+	}
+	const cjkReport = await call("/git/compliance", { path: cjk });
+	check("/git/compliance ok for a Chinese document", cjkReport.json?.ok === true, cjkReport.raw.slice(0, 200));
+	equal("a Chinese type label joins the vocabulary", (cjkReport.json?.value?.rules?.types ?? []).join(","), "feat,fix");
+	equal("a Chinese document can ask for a strict policy", cjkReport.json?.value?.strict, true);
+	equal("only the two careless subjects fail", cjkReport.json?.value?.failing, 2);
+	equal("both failing subjects are reported", (cjkReport.json?.value?.offenders ?? []).length, 2);
+	const cjkReasons = (cjkReport.json?.value?.offenders ?? []).map((entry) => (entry.reasons ?? []).join("+"));
+	check("a Chinese period still counts as a period", cjkReasons.includes("period"), JSON.stringify(cjkReasons));
+	check("a Latin capital after the type still counts as case", cjkReasons.includes("case"), JSON.stringify(cjkReasons));
+	check("Chinese subjects are counted as Chinese", (cjkReport.json?.value?.languages?.zh ?? 0) >= 1, JSON.stringify(cjkReport.json?.value?.languages));
+	check("mixed subjects are counted as mixed", (cjkReport.json?.value?.languages?.mixed ?? 0) >= 2, JSON.stringify(cjkReport.json?.value?.languages));
+	const cjkSection = section.text(cwdOf(cjk));
+	check("the injected block calls a strict document strict", /strict/i.test(cjkSection), cjkSection.slice(0, 400));
+	check("the injected block lists the machine-checked rules", /Machine-checkable rules/.test(cjkSection), cjkSection.slice(0, 400));
+	const strictWrite = await call("/git/convention", { path: cjk, framework: "github-flow", force: true, strict: true });
+	check("a strict write is accepted", strictWrite.json?.ok === true, strictWrite.raw.slice(0, 200));
+	const strictBody = await readFile(join(cjk, "GIT_CONVENTIONS.md"), "utf8");
+	check("the strict flag lands in the front matter", strictBody.indexOf("strict: true") >= 0, strictBody.slice(0, 200));
+	check("the strict flag sits next to the status", strictBody.indexOf(EOLX + "strict: true") >= 0, strictBody.slice(0, 200));
+	const looseWrite = await call("/git/convention", { path: cjk, framework: "github-flow", force: true, strict: false });
+	check("a loose write is accepted", looseWrite.json?.ok === true, looseWrite.raw.slice(0, 200));
+	const looseBody = await readFile(join(cjk, "GIT_CONVENTIONS.md"), "utf8");
+	check("a loose write keeps a single flag", looseBody.split("strict:").length === 2 && looseBody.indexOf("strict: false") >= 0, looseBody.slice(0, 200));
+
+	const docless = join(workspace, "repos", "docless");
 	await mkdir(docless, { recursive: true });
 	await git(docless, "init", "-b", "main");
 	await writeFile(join(docless, "README.md"), "# docless", "utf8");
