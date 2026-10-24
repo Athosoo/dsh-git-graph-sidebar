@@ -190,17 +190,6 @@ function click(node, label) {
 	handler({ stopPropagation() {}, preventDefault() {} });
 }
 
-/** Fire a synthetic pointer move at one y offset inside a node. */
-function movePointer(node, clientY, label) {
-	const handler = node.props !== undefined ? node.props.onMouseMove : undefined;
-	if (typeof handler !== "function") throw new Error("node has no onMouseMove: " + label);
-	handler({
-		currentTarget: { getBoundingClientRect: () => ({ top: 0, left: 0 }) },
-		clientX: 120,
-		clientY
-	});
-}
-
 // ------------------------------------------------------------- html serializer
 const VOID_TAGS = new Set(["circle", "path", "rect", "line", "br", "input", "img", "polyline", "polygon", "ellipse", "use"]);
 const UNITLESS = new Set(["flex", "flexGrow", "flexShrink", "opacity", "zIndex", "lineHeight", "fontWeight", "order", "minHeight", "minWidth"]);
@@ -648,23 +637,18 @@ for (let step = 0; step < 1; step += 1) {
 }
 if (detailHtml.indexOf("data-gitgraph-detail") < 0) throw new Error("zooming lost the pinned commit card");
 
-// Hovering a node opens the short card; the copy action turns its label into
-// the "copied" confirmation (the clipboard call is stubbed to succeed).
+// The copy action turns its label into the "copied" confirmation (the
+// clipboard call is stubbed to succeed).
 const canvasHosts = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-canvas"] === true);
 if (canvasHosts.length === 0) throw new Error("graph canvas host missing");
-movePointer(canvasHosts[0], 27 * 2 + 13, "graph canvas");
-detailHtml = (await detailMount.render()).html;
-if (detailHtml.indexOf("data-gitgraph-tooltip") < 0) throw new Error("hovering a commit did not open the short card");
-const hoverHtml = detailHtml;
+if (findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-tooltip"] === true).length > 0) {
+    throw new Error("the hover card was removed but a tooltip is still rendered");
+}
 const copyButton = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "copy-info")[0];
 if (copyButton === undefined) throw new Error("commit card has no copy action");
 click(copyButton, "copy commit info");
 detailHtml = (await detailMount.render()).html;
 if (!/已复制|Copied/.test(detailHtml)) throw new Error("copy action did not confirm");
-const leaveHandler = canvasHosts[0].props.onMouseLeave;
-if (typeof leaveHandler === "function") leaveHandler();
-detailHtml = (await detailMount.render()).html;
-if (detailHtml.indexOf("data-gitgraph-tooltip") >= 0) throw new Error("hover card did not close on pointer leave");
 
 // The full-window view opens, renders the same graph and closes again.
 const expandMount = await mountComponent(descriptor.component, tabProps(focusPath));
@@ -680,7 +664,7 @@ if (closeButton === undefined) throw new Error("full-window view has no close co
 click(closeButton, "close full-window view");
 expandHtml = (await expandMount.render()).html;
 if (expandHtml.indexOf("data-gitgraph-overlay") >= 0) throw new Error("full-window view did not close");
-console.log("preview-tab: hover card, copy action and full-window view ok");
+console.log("preview-tab: copy action and full-window view ok");
 
 // Repository switching: clicking another row in the tree must reload that
 // repository's graph and move the active highlight (choose() + fetch + state).
@@ -849,9 +833,8 @@ const lightFile = outFile.replace(/\.html$/, "-light.html");
 await writeFile(lightFile, html.replace("<body>", '<body data-theme="light">'), "utf8");
 console.log("preview-tab: wrote " + lightFile);
 
-// A side-by-side sheet of the three states that are hard to judge from the
-// panel render alone: the pinned commit card, the hover card and the
-// full-window view. `transform: translateZ(0)` on the wrapper turns the
+// A side-by-side sheet of the states that are hard to judge from the panel
+// render alone: the pinned commit card and the full-window view. `transform: translateZ(0)` on the wrapper turns the
 // overlay's `position: fixed` into a box local to the wrapper, so a static
 // page can show it.
 const statesFile = join(dirname(outFile), "graph-tab-states.html");
@@ -889,8 +872,6 @@ const statesHtml = `<!doctype html>
 <body>
 <h2>Pinned commit card</h2>
 <div class="panel">${detailHtml}</div>
-<h2>Hover card (pointer over a node)</h2>
-<div class="panel">${hoverHtml}</div>
 <h2>Full-window view</h2>
 <div class="overlay-box">${overlayHtml}</div>
 ${conventionsSection}</body>

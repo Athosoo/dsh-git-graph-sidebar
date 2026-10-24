@@ -367,7 +367,7 @@
 			color: "#ffffff",
 			background: "var(--dsw-alias-state-business-primary, #4c8dff)"
 		};
-		/** Author + relative time of one row (author lives in the tooltip). */
+		/** Author + relative time of one row. */
 		const SIDEBAR_TAB_ROW_META = {
 			flex: "none",
 			fontSize: 9,
@@ -474,24 +474,6 @@
 			minHeight: 0,
 			overflow: "auto",
 			padding: "10px 14px"
-		};
-		/** The hover card that follows the pointer across the graph. */
-		const SIDEBAR_TAB_TOOLTIP = {
-			position: "fixed",
-			zIndex: 70,
-			maxWidth: 320,
-			padding: "8px 10px",
-			borderRadius: 8,
-			border: "1px solid var(--dsw-alias-border-l1)",
-			background: "var(--dsw-alias-bg-layer-1)",
-			boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
-			fontSize: 11,
-			lineHeight: "16px",
-			color: "var(--dsw-alias-label-secondary)",
-			pointerEvents: "none",
-			display: "flex",
-			flexDirection: "column",
-			gap: 2
 		};
 		/** Small action button of the commit card. */
 		const SIDEBAR_TAB_DETAIL_BUTTON = {
@@ -851,8 +833,6 @@
 			const [treeOpen, setTreeOpen] = react.useState(true);
 			/** Whether the full-window graph view is open. */
 			const [expanded, setExpanded] = react.useState(false);
-			/** The commit under the pointer and where the pointer sits (hover card). */
-			const [hover, setHover] = react.useState(null);
 			/** Which copy action ran last, so its button can flash "copied". */
 			const [copiedKey, setCopiedKey] = react.useState(void 0);
 			/** Remember one copy action for a moment, then clear the label. */
@@ -1371,75 +1351,13 @@
 				}, children);
 			});
 			const pinned = view === null ? void 0 : view.commits.find((commit) => commit.oid === pinnedOid);
-			/** The commit the pointer rests on, resolved from the hover state. */
-			const hoverCommit = view === null || hover === null ? void 0 : view.commits.find((commit) => commit.oid === hover.oid);
-			const hoverCard = hoverCommit === void 0 || hover === null ? null : h("div", {
-				key: "tooltip",
-				"data-gitgraph-tooltip": true,
-				style: Object.assign({}, SIDEBAR_TAB_TOOLTIP, {
-					top: hover.top,
-					left: hover.left
-				})
-			}, [h("span", {
-				key: "oid",
-				style: SIDEBAR_TAB_DETAIL_OID
-			}, String(hoverCommit.oid).slice(0, 7)), h("span", {
-				key: "subject",
-				style: {
-					fontSize: 12,
-					lineHeight: "17px",
-					color: "var(--dsw-alias-label-primary)",
-					wordBreak: "break-word"
-				}
-			}, hoverCommit.subject), hoverCommit.refs.length === 0 ? null : h("span", {
-				key: "refs",
-				style: {
-					color: "var(--dsw-alias-label-tertiary)",
-					wordBreak: "break-word"
-				}
-			}, hoverCommit.refs.join(", ")), h("span", {
-				key: "meta",
-				style: SIDEBAR_TAB_MUTED
-			}, hoverCommit.author + " \u00b7 " + formatTime(hoverCommit.authorTime, t)), h("span", {
-				key: "hint",
-				style: Object.assign({}, SIDEBAR_TAB_MUTED, { fontSize: 10 })
-			}, t("sidebar.pinHint"))]);
-			/**
-			 * Track the commit under the pointer. The hover card is anchored to the
-			 * node (not to the pointer), so it never jitters while the mouse moves
-			 * inside one row and the component only re-renders when the row changes.
-			 */
-			const handlePointerMove = (event) => {
-				if (view === null || geometry === null) return;
-				const host = event.currentTarget;
-				const rect = host !== void 0 && host !== null && typeof host.getBoundingClientRect === "function" ? host.getBoundingClientRect() : {
-					top: 0,
-					left: 0
-				};
-				const position = Math.floor((event.clientY - rect.top) / rowHeight);
-				const commit = view.commits[position];
-				if (commit === void 0) {
-					if (hover !== null) setHover(null);
-					return;
-				}
-				if (hover !== null && hover.oid === commit.oid) return;
-				const viewportWidth = typeof window === "undefined" ? 1024 : window.innerWidth;
-				const viewportHeight = typeof window === "undefined" ? 768 : window.innerHeight;
-				setHover({
-					oid: commit.oid,
-					left: Math.max(8, Math.min(rect.left + geometry.width + 12, viewportWidth - 336)),
-					top: Math.max(8, Math.min(rect.top + position * rowHeight + rowHeight, viewportHeight - 140))
-				});
-			};
 			const graphBody = view === null || geometry === null ? null : h("div", {
 				key: "canvas-host",
 				"data-gitgraph-canvas": true,
 				style: {
 					position: "relative",
 					minHeight: geometry.height
-				},
-				onMouseMove: handlePointerMove,
-				onMouseLeave: () => setHover(null)
+				}
 			}, [canvas].concat(rows));
 			/** One labelled line of the commit card. */
 			const detailLine = (key, label, value, valueStyle) => h("div", {
@@ -1697,5 +1615,5 @@
 				key: "body-wrap",
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true
-			}, body), detail, moreChild, overlay, hoverCard]);
+			}, body), detail, moreChild, overlay]);
 		}
