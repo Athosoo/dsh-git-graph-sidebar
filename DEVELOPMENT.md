@@ -44,6 +44,22 @@ The script also exercises interaction against its own fake DOM: it asserts that 
 
 The tab keeps a slow poll running so repositories created while it is open appear by themselves. Because the preview mounts components and never unmounts them, the script unrefs `setInterval` timers; without that Node waits for them forever and the run hangs.
 
+## Live updates
+
+The tab must never blank itself. Everything that reloads data follows one rule: keep the previous content on screen until a genuinely different result arrives.
+
+| Path | Trigger | Behaviour |
+| --- | --- | --- |
+| `git/events` SSE | `subscribeChanges(path)` on the selected repository | 600 ms debounce, then a silent scan + graph reload |
+| slow poll | every 20 s while the tab is active | silent scan + graph reload, skipped when `document.visibilityState === "hidden"` |
+| `window` focus | user returns to the app | silent reload, throttled to one per 2 s |
+| `visible` prop | tab becomes visible again | silent reload |
+| refresh button | user | non-silent, keeps the current rows in place, button shows the scanning label |
+
+Two comparison helpers make this cheap: `sidebarTabSameScan` and `sidebarTabSameGraph` (both in `SidebarTab.js`). When a reload returns the same repositories or the same commits, the state setter returns the previous object, so React skips the render entirely — no scroll jump, no flash. A silent reload that fails leaves the existing data alone instead of showing an error.
+
+For the same reason `preview-tab.mjs` asserts that clicking refresh neither empties the commit rows nor the repository tree. If that assertion fails, something is setting a `scanning`/`loading` phase unconditionally again.
+
 To render the real repositories of this machine, pass the JSON responses of `/git/repos` and `/git/graph` (one `--graph` per repository) and point the first panel at one of them:
 
 ```sh

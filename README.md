@@ -19,7 +19,8 @@ The tab works from the session's working directory and treats that directory as 
 - **Commit detail card** — the panel under the graph always shows the row you pinned: full hash, subject, author, absolute commit time, refs and parents. Click a row to pin it, click it again (or `×`) to clear.
 - **Copy for the assistant** — *Copy commit info* puts a ready-to-paste block on the clipboard (repository path, hash, subject, author, time, refs, parents), so asking the model to "roll back to this commit" needs no retyping; *Copy SHA* copies the full hash alone.
 - **Full-window view** — the sidebar is narrow, so the graph can be opened over the whole window at the same zoom, repository and pinned commit, and closed with `Esc`.
-- **Refresh** — re-scans on demand. The host caches a scan for 60 s.
+- **Live updates, no flicker** — the tab subscribes to the host's Git change events and also polls quietly in the background, so a new commit or branch appears on its own. Every background refresh keeps the current rows on screen: an unchanged result is dropped without a re-render, and a failed poll never replaces real data with an error.
+- **Refresh** — re-scans on demand. A manual refresh also keeps the panel content visible while it runs. The host caches a scan for 60 s (the refresh button bypasses it).
 - **Git conventions** — a strip above the graph states which convention document the selected repository carries (`draft` / `settled` / missing), opens it in the editor, and offers six proven frameworks to bootstrap a brand-new repository.
 
 ### Branch chip (composer)

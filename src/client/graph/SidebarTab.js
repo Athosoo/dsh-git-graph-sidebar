@@ -367,6 +367,48 @@
 			color: "#ffffff",
 			background: "var(--dsw-alias-state-business-primary, #4c8dff)"
 		};
+		/**
+		 * Whether two scan results describe the same repositories. A silent poll
+		 * that finds nothing new must not re-render the whole panel: the graph,
+		 * the tree and the scroll position would all flicker for no reason.
+		 */
+		function sidebarTabSameScan(previous, next) {
+			if (previous === void 0 || previous === null || previous.phase !== "ready") return false;
+			if (previous.truncated !== next.truncated || previous.autoScaffold !== next.autoScaffold || previous.docName !== next.docName) return false;
+			const before = previous.repos;
+			const after = next.repos;
+			if (before.length !== after.length) return false;
+			for (let index = 0; index < before.length; index += 1) {
+				const a = before[index];
+				const b = after[index];
+				const aState = a.conventions !== void 0 && a.conventions !== null ? a.conventions : {};
+				const bState = b.conventions !== void 0 && b.conventions !== null ? b.conventions : {};
+				if (a.path !== b.path || a.kind !== b.kind || a.relPath !== b.relPath) return false;
+				if (JSON.stringify(a.status ?? null) !== JSON.stringify(b.status ?? null)) return false;
+				if (aState.exists !== bState.exists || aState.draft !== bState.draft || aState.size !== bState.size || aState.doc !== bState.doc) return false;
+			}
+			return true;
+		}
+		/**
+		 * Whether two graph views are the same for display purposes. Ref logins
+		 * and commit rows decide it; the commit graph of a quiet repository then
+		 * costs one request and zero DOM work.
+		 */
+		function sidebarTabSameGraph(previous, next) {
+			if (previous === void 0 || previous === null || next === void 0 || next === null) return false;
+			if (previous.branch !== next.branch || previous.hasMore !== next.hasMore) return false;
+			const before = previous.commits;
+			const after = next.commits;
+			if (before.length !== after.length) return false;
+			for (let index = 0; index < before.length; index += 1) {
+				const a = before[index];
+				const b = after[index];
+				if (a.oid !== b.oid || a.subject !== b.subject) return false;
+				if (JSON.stringify(a.refs) !== JSON.stringify(b.refs)) return false;
+				if (JSON.stringify(a.parents) !== JSON.stringify(b.parents)) return false;
+			}
+			return true;
+		}
 		/** Author + relative time of one row. */
 		const SIDEBAR_TAB_ROW_META = {
 			flex: "none",
@@ -867,42 +909,61 @@
 				return () => document.removeEventListener("keydown", onKeyDown);
 			}, [expanded]);
 			const graphSeq = react.useRef(0);
-			const runScan = react.useCallback((refresh) => {
+			/** The row count the graph is showing, so a silent reload keeps it. */
+			const graphLimitRef = react.useRef(INITIAL_LIMIT);
+			/** A scan is in flight (the refresh button says so; nothing else moves). */
+			const [refreshing, setRefreshing] = react.useState(false);
+			/**
+			 * Load the repository list. `silent` is the background path: it never
+			 * clears what is on screen, it drops a result identical to the current
+			 * one (no re-render, no scroll jump) and it does not report transient
+			 * failures over data the panel already has.
+			 */
+			const runScan = react.useCallback((refresh, silent) => {
+				const quiet = silent === true;
 				if (sessionCwd === void 0) {
-					setScan({
+					setScan(current => current.phase === "ready" ? current : {
 						phase: "error",
 						error: t("error.workspaceUnknown")
 					});
 					return;
 				}
-				setScan({ phase: "scanning" });
+				if (!quiet) setRefreshing(true);
+				if (!quiet) setScan(current => current.phase === "ready" ? current : { phase: "scanning" });
+				const done = () => {
+					if (!quiet) setRefreshing(false);
+				};
 				sidebarTabGit().repos(sessionCwd, refresh).then((result) => {
 					if (!result.ok || result.value === null) {
-						setScan({
+						setScan(current => current.phase === "ready" ? current : {
 							phase: "error",
 							error: t("sidebar.error.repos")
 						});
+						done();
 						return;
 					}
 					const value = result.value;
 					const repos = Array.isArray(value.repos) ? value.repos : [];
 					const meta = value.conventions !== void 0 && value.conventions !== null ? value.conventions : {};
-					setScan({
+					const next = {
 						phase: "ready",
 						repos,
 						truncated: value.truncated === true,
 						autoScaffold: meta.autoScaffold === true,
 						docName: typeof meta.doc === "string" ? meta.doc : "GIT_CONVENTIONS.md"
-					});
+					};
+					setScan(current => sidebarTabSameScan(current, next) ? current : next);
 					setSelectedPath((current) => {
 						if (typeof current === "string" && repos.some((entry) => entry.path === current)) return current;
 						return repos.length > 0 ? repos[0].path : void 0;
 					});
+					done();
 				}).catch(() => {
-					setScan({
+					setScan(current => current.phase === "ready" ? current : {
 						phase: "error",
 						error: t("sidebar.error.repos")
 					});
+					done();
 				});
 			}, [sessionCwd, t]);
 			const scannedFor = react.useRef();
@@ -916,38 +977,51 @@
 				if (scan.phase !== "ready") return void 0;
 				return scan.repos.find((entry) => entry.path === selectedPath);
 			}, [scan, selectedPath]);
-			const loadGraph = react.useCallback((limit) => {
+			/**
+			 * Load the commit graph of the selected repository. A silent reload
+			 * keeps the current rows on screen until an actually different graph
+			 * arrives, so live updates never blank the panel or reset the scroll.
+			 */
+			const loadGraph = react.useCallback((limit, silent) => {
 				if (selected === void 0) return;
+				const wanted = typeof limit === "number" && limit > 0 ? limit : graphLimitRef.current;
+				graphLimitRef.current = wanted;
+				const quiet = silent === true;
 				const seq = graphSeq.current + 1;
 				graphSeq.current = seq;
-				setGraph((current) => ({
+				if (!quiet) setGraph((current) => ({
 					view: current !== null ? current.view : null,
 					error: null,
 					loading: true
 				}));
-				sidebarTabGit().graph(selected.path, limit).then((result) => {
+				sidebarTabGit().graph(selected.path, wanted).then((result) => {
 					if (seq !== graphSeq.current) return;
-					if (!result.ok) setGraph({
-						view: null,
-						error: t("sidebar.error.graph"),
-						loading: false
-					});
-					else if (result.value === null) setGraph({
-						view: null,
-						error: t("error.internal"),
-						loading: false
-					});
-					else setGraph({
-						view: result.value,
+					if (!result.ok || result.value === null) {
+						setGraph((current) => {
+							if (quiet && current !== null && current.view !== null) return current;
+							return {
+								view: null,
+								error: !result.ok ? t("sidebar.error.graph") : t("error.internal"),
+								loading: false
+							};
+						});
+						return;
+					}
+					const value = result.value;
+					setGraph((current) => sidebarTabSameGraph(current !== null ? current.view : null, value) ? Object.assign({}, current, { loading: false, error: null }) : {
+						view: value,
 						error: null,
 						loading: false
 					});
 				}).catch(() => {
 					if (seq !== graphSeq.current) return;
-					setGraph({
-						view: null,
-						error: t("sidebar.error.graph"),
-						loading: false
+					setGraph((current) => {
+						if (quiet && current !== null && current.view !== null) return current;
+						return {
+							view: null,
+							error: t("sidebar.error.graph"),
+							loading: false
+						};
 					});
 				});
 			}, [selected, t]);
@@ -957,6 +1031,7 @@
 					setGraph(null);
 					return;
 				}
+				graphLimitRef.current = INITIAL_LIMIT;
 				loadGraph(INITIAL_LIMIT);
 			}, [active, selected, loadGraph]);
 			/** Drop the pinned card whenever another repository is selected. */
@@ -1035,12 +1110,82 @@
 					if (ok) setPickerOpen(true);
 				});
 			}, [active, scan, selected, writeConvention]);
-			/** A repository created while the tab is open appears without a manual refresh. */
+			/**
+			 * One debounced background refresh. Git fires a change per edited file,
+			 * so the events are folded into a single reload shortly after they
+			 * settle; the panel keeps showing its current content the whole time.
+			 */
+			const reloadTimer = react.useRef();
+			const scheduleReload = react.useCallback(() => {
+				if (reloadTimer.current !== void 0) clearTimeout(reloadTimer.current);
+				reloadTimer.current = setTimeout(() => {
+					reloadTimer.current = void 0;
+					runScan(false, true);
+					loadGraph(void 0, true);
+				}, 600);
+			}, [runScan, loadGraph]);
+			react.useEffect(() => () => {
+				if (reloadTimer.current !== void 0) clearTimeout(reloadTimer.current);
+			}, []);
+			/**
+			 * Live updates. The host watches the selected repository and pushes a
+			 * `change` event when its branch, head, worktree list or dirty state
+			 * moves; subscribing here is what makes commits appear without the
+			 * user pressing refresh.
+			 */
+			react.useEffect(() => {
+				if (!active || selectedKey === void 0) return void 0;
+				const git = sidebarTabGit();
+				if (typeof git.subscribeChanges !== "function") return void 0;
+				let unsubscribe;
+				try {
+					unsubscribe = git.subscribeChanges(selectedKey, () => scheduleReload());
+				} catch {
+					return void 0;
+				}
+				return () => {
+					try {
+						if (typeof unsubscribe === "function") unsubscribe();
+					} catch {}
+				};
+			}, [active, selectedKey, scheduleReload]);
+			/** A slow poll catches repositories created while the tab is open. */
 			react.useEffect(() => {
 				if (!active) return void 0;
-				const timer = setInterval(() => runScan(false), 25000);
+				const tick = () => {
+					if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+					runScan(false, true);
+					loadGraph(void 0, true);
+				};
+				const timer = setInterval(tick, 20000);
 				return () => clearInterval(timer);
-			}, [active, runScan]);
+			}, [active, runScan, loadGraph]);
+			/**
+			 * Coming back to the window (or reopening the tab) refreshes quietly:
+			 * the sidebar is a glance surface, so it must be current on arrival
+			 * instead of whenever the next poll fires.
+			 */
+			react.useEffect(() => {
+				if (!active) return void 0;
+				if (typeof window === "undefined" || typeof window.addEventListener !== "function") return void 0;
+				let lastFocus = 0;
+				const onFocus = () => {
+					const now = Date.now();
+					if (now - lastFocus < 2000) return;
+					lastFocus = now;
+					scheduleReload();
+				};
+				window.addEventListener("focus", onFocus);
+				return () => {
+					try {
+						window.removeEventListener("focus", onFocus);
+					} catch {}
+				};
+			}, [active, scheduleReload]);
+			react.useEffect(() => {
+				if (!active || props.visible !== true) return;
+				scheduleReload();
+			}, [active, props.visible, scheduleReload]);
 			const view = graph !== null ? graph.view : null;
 			const graphError = graph !== null ? graph.error : null;
 			const graphLoading = graph !== null && graph.loading === true;
@@ -1059,12 +1204,13 @@
 			toolbarChildren.push(h("button", {
 				key: "refresh",
 				type: "button",
+				"data-gitgraph-action": "refresh",
 				style: SIDEBAR_TAB_BUTTON,
 				onClick: () => runScan(true),
-				disabled: scan.phase === "scanning",
+				disabled: refreshing === true,
 				title: t("sidebar.refresh"),
 				"aria-label": t("sidebar.refresh")
-			}, scan.phase === "scanning" ? t("sidebar.scanning") : t("sidebar.refresh")));
+			}, refreshing === true ? t("sidebar.scanning") : t("sidebar.refresh")));
 			toolbarChildren.push(h("button", {
 				key: "zoom-out",
 				type: "button",

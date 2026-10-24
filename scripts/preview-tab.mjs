@@ -666,6 +666,24 @@ expandHtml = (await expandMount.render()).html;
 if (expandHtml.indexOf("data-gitgraph-overlay") >= 0) throw new Error("full-window view did not close");
 console.log("preview-tab: copy action and full-window view ok");
 
+// A refresh must never blank the panel. The scan keeps its previous rows on
+// screen while the request is in flight, and an identical result leaves the
+// rendered tree untouched (no scroll jump, no loading placeholder).
+const refreshMount = await mountComponent(descriptor.component, tabProps(focusPath));
+const rowsBefore = findAll(refreshMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true).length;
+const reposBefore = findAll(refreshMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-repo"] !== undefined).length;
+const refreshButton = findAll(refreshMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "refresh")[0];
+if (refreshButton === undefined) throw new Error("toolbar has no refresh control");
+click(refreshButton, "refresh");
+const refreshHtml = (await refreshMount.render()).html;
+if (refreshHtml.indexOf("data-gitgraph-row") < 0) throw new Error("refreshing blanked the commit rows");
+if (refreshHtml.indexOf("data-gitgraph-repo-tree") < 0) throw new Error("refreshing blanked the repository tree");
+const rowsAfter = findAll(refreshMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true).length;
+const reposAfter = findAll(refreshMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-repo"] !== undefined).length;
+if (rowsAfter !== rowsBefore) throw new Error("refresh changed the commit row count: " + rowsBefore + " -> " + rowsAfter);
+if (reposAfter !== reposBefore) throw new Error("refresh changed the repository row count: " + reposBefore + " -> " + reposAfter);
+console.log("preview-tab: refresh keeps content on screen ok");
+
 // Repository switching: clicking another row in the tree must reload that
 // repository's graph and move the active highlight (choose() + fetch + state).
 const switchMount = await mountComponent(descriptor.component, tabProps(focusPath));
