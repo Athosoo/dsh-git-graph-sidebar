@@ -48,7 +48,22 @@ const EXTRA_KEYS = [
 			['"sidebar.detailHint"', '"点击任一提交查看详情"'],
 			['"sidebar.repoPath"', '"仓库"'],
 			['"sidebar.pinHint"', '"点击可固定此提交"'],
-			['"sidebar.parentsLabel"', '"父提交"']
+			['"sidebar.parentsLabel"', '"父提交"'],
+			['"sidebar.conventions"', '"Git 规范"'],
+			['"sidebar.conventionsNone"', '"未建立"'],
+			['"sidebar.conventionsDraft"', '"草稿"'],
+			['"sidebar.conventionsSettled"', '"已定稿"'],
+			['"sidebar.conventionsMissing"', '"这个仓库还没有 Git 规范。建议先定下提交与分支约定，再继续提交。"'],
+			['"sidebar.conventionsSetup"', '"建立规范"'],
+			['"sidebar.conventionsPick"', '"选一套经过验证的框架，或先建立空文档由团队填写。"'],
+			['"sidebar.conventionsScaffold"', '"只建空文档"'],
+			['"sidebar.conventionsCancel"', '"取消"'],
+			['"sidebar.conventionsOpen"', '"查看文档"'],
+			['"sidebar.conventionsAuto"', '"已为空仓库建立规范文档，请选择一套框架定稿。"'],
+			['"sidebar.conventionsApplied"', '"规范文档已写入。"'],
+			['"sidebar.conventionsWriting"', '"写入中…"'],
+			['"sidebar.conventionsBestFor"', '"适合："'],
+			['"sidebar.error.conventions"', '"读取或写入 Git 规范失败"'],
 		]
 	},
 	{
@@ -75,10 +90,43 @@ const EXTRA_KEYS = [
 			['"sidebar.detailHint"', '"Click a commit to see details"'],
 			['"sidebar.repoPath"', '"Repository"'],
 			['"sidebar.pinHint"', '"Click to pin this commit"'],
-			['"sidebar.parentsLabel"', '"Parents"']
+			['"sidebar.parentsLabel"', '"Parents"'],
+			['"sidebar.conventions"', '"Git conventions"'],
+			['"sidebar.conventionsNone"', '"not set up"'],
+			['"sidebar.conventionsDraft"', '"draft"'],
+			['"sidebar.conventionsSettled"', '"settled"'],
+			['"sidebar.conventionsMissing"', '"This repository has no Git conventions yet. Agree on commit and branch rules before the next commit."'],
+			['"sidebar.conventionsSetup"', '"Set up"'],
+			['"sidebar.conventionsPick"', '"Pick one of the proven frameworks, or write the empty document and fill it in as a team."'],
+			['"sidebar.conventionsScaffold"', '"Empty document only"'],
+			['"sidebar.conventionsCancel"', '"Cancel"'],
+			['"sidebar.conventionsOpen"', '"Open document"'],
+			['"sidebar.conventionsAuto"', '"An empty convention document was created for this repository. Pick a framework to settle it."'],
+			['"sidebar.conventionsApplied"', '"Convention document written."'],
+			['"sidebar.conventionsWriting"', '"Writing…"'],
+			['"sidebar.conventionsBestFor"', '"Best for: "'],
+			['"sidebar.error.conventions"', '"Reading or writing the Git convention document failed"'],
 		]
 	}
 ];
+
+/**
+ * GitApi methods the tab needs that the upstream API class does not carry.
+ * Inserted after `repos()`; the marker comment keeps this idempotent.
+ */
+const API_METHODS = `
+			/** The repository's Git-convention state plus the framework catalogue. */
+			conventions(path) {
+				return post("git/conventions", { path });
+			}
+			/** Write the convention document: a framework template, or the empty scaffold. */
+			convention(path, framework, force) {
+				const payload = { path };
+				if (typeof framework === "string" && framework !== "") payload.framework = framework;
+				if (force === true) payload.force = true;
+				return post("git/convention", payload);
+			}`;
+const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";
 
 const lib = await readFile(libFile, "utf8");
 const region = (await readFile(regionFile, "utf8")).replace(/\s+$/, "");
@@ -90,6 +138,13 @@ const endIndex = lib.indexOf(REGION_END, startLineEnd);
 if (endIndex < 0) throw new Error("region end marker not found in lib/client.js");
 
 let next = lib.slice(0, startLineEnd + 1) + region + lib.slice(endIndex);
+
+// GitApi additions (conventions/convention). Guarded by the marker so re-runs
+// neither duplicate the methods nor depend on their exact formatting.
+if (!next.includes("git/conventions")) {
+	if (!next.includes(API_ANCHOR)) throw new Error("build-lib: GitApi.repos() anchor not found in lib/client.js");
+	next = next.replace(API_ANCHOR, API_ANCHOR + API_METHODS);
+}
 
 /** Absolute `[open, close]` brace positions of one `const <name> = { ... }` literal. */
 function dictionaryRange(text, name) {
@@ -132,3 +187,24 @@ for (let dictIndex = 0; dictIndex < DICTIONARIES.length; dictIndex += 1) {
 
 await writeFile(libFile, next, "utf8");
 console.log("build-lib: spliced " + region.split("\n").length + " lines of tab source into lib/client.js");
+
+// ---------------------------------------------------------------------------
+// Host half: the conventions module (framework catalogue + document writers)
+// lives in `src/host/conventions.js` and is spliced into the host bundle
+// between its own region markers. Same idea, different artifact.
+// ---------------------------------------------------------------------------
+const hostRegionFile = join(root, "src/host/conventions.js");
+const hostLibFile = join(root, "lib/index.js");
+const HOST_START = "//#region src/host/conventions.ts";
+const HOST_END = "\n//#endregion\n//#region src/host/repos.ts";
+
+const hostLib = await readFile(hostLibFile, "utf8");
+const hostRegion = (await readFile(hostRegionFile, "utf8")).replace(/\s+$/, "");
+const hostStart = hostLib.indexOf(HOST_START);
+if (hostStart < 0) throw new Error("host region start marker not found in lib/index.js (run scripts/patch-host.mjs first)");
+const hostLineEnd = hostLib.indexOf("\n", hostStart);
+const hostEnd = hostLib.indexOf(HOST_END, hostLineEnd);
+if (hostEnd < 0) throw new Error("host region end marker not found in lib/index.js");
+const nextHost = hostLib.slice(0, hostLineEnd + 1) + hostRegion + hostLib.slice(hostEnd);
+await writeFile(hostLibFile, nextHost, "utf8");
+console.log("build-lib: spliced " + hostRegion.split("\n").length + " lines of conventions source into lib/index.js");

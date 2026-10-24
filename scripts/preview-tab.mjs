@@ -17,6 +17,17 @@
 //   node scripts/preview-tab.mjs --out preview/real.html \
 //     --repos /tmp/repos.json --graph /tmp/graph-a.json --graph /tmp/graph-b.json
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+
+// The tab keeps a slow poll running (`setInterval`) so repositories created
+// while it is open show up without a manual refresh. The preview mounts
+// components and never unmounts them, so those timers must not keep the
+// process alive after the assertions are done.
+const nativeSetInterval = globalThis.setInterval;
+globalThis.setInterval = (fn, ms, ...rest) => {
+	const id = nativeSetInterval(fn, ms, ...rest);
+	if (id !== null && typeof id === "object" && typeof id.unref === "function") id.unref();
+	return id;
+};
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -290,6 +301,7 @@ let REPOS = {
 	maxDepth: 3,
 	scannedAt: Date.now(),
 	truncated: false,
+	conventions: { doc: "GIT_CONVENTIONS.md", autoScaffold: true },
 	repos: [
 		{
 			path: WORKSPACE,
@@ -298,6 +310,13 @@ let REPOS = {
 			relPath: "",
 			kind: "root",
 			outside: false,
+			conventions: {
+				doc: "GIT_CONVENTIONS.md",
+				docPath: WORKSPACE + "/GIT_CONVENTIONS.md",
+				exists: true,
+				size: 2048,
+				draft: false
+			},
 			status: {
 				root: WORKSPACE,
 				branch: "main",
@@ -315,6 +334,13 @@ let REPOS = {
 			relPath: "dsh-git-graph-src",
 			kind: "nested",
 			outside: false,
+			conventions: {
+				doc: "GIT_CONVENTIONS.md",
+				docPath: NESTED + "/GIT_CONVENTIONS.md",
+				exists: true,
+				size: 900,
+				draft: true
+			},
 			status: {
 				root: NESTED,
 				branch: "feature/multi-repo",
@@ -332,6 +358,13 @@ let REPOS = {
 			relPath: "dsh-git-graph-dist",
 			kind: "nested",
 			outside: false,
+			conventions: {
+				doc: "GIT_CONVENTIONS.md",
+				docPath: WORKSPACE + "/dsh-git-graph-dist/GIT_CONVENTIONS.md",
+				exists: false,
+				size: 0,
+				draft: false
+			},
 			status: null
 		},
 		// Deep entry: exercises the intermediate directory rows. Real discovery
@@ -343,6 +376,13 @@ let REPOS = {
 			relPath: "tools/releases/nightly",
 			kind: "nested",
 			outside: false,
+			conventions: {
+				doc: "GIT_CONVENTIONS.md",
+				docPath: WORKSPACE + "/tools/releases/nightly/GIT_CONVENTIONS.md",
+				exists: true,
+				size: 1200,
+				draft: false
+			},
 			status: {
 				root: WORKSPACE + "/tools/releases/nightly",
 				branch: "wt/nightly",
@@ -352,9 +392,47 @@ let REPOS = {
 				conflicts: 0,
 				operationInProgress: false
 			}
+		},
+		// A freshly initialised repository: no commit yet (unborn HEAD) and no
+		// convention document. This is the trigger the conventions feature is
+		// built around, so the harness renders it and watches the auto scaffold.
+		{
+			path: WORKSPACE + "/sandbox/blank",
+			root: WORKSPACE + "/sandbox/blank",
+			name: "blank",
+			relPath: "sandbox/blank",
+			kind: "nested",
+			outside: false,
+			conventions: {
+				doc: "GIT_CONVENTIONS.md",
+				docPath: WORKSPACE + "/sandbox/blank/GIT_CONVENTIONS.md",
+				exists: false,
+				size: 0,
+				draft: false
+			},
+			status: {
+				root: WORKSPACE + "/sandbox/blank",
+				branch: "main",
+				head: "",
+				dirtyFiles: 0,
+				untrackedFiles: 0,
+				conflicts: 0,
+				operationInProgress: false
+			}
 		}
 	]
 };
+
+// The six proven frameworks the host serves on /git/conventions. The harness
+// only needs the card fields; the document bodies live on the host.
+const CONVENTION_CATALOG = [
+	{ id: "conventional-commits", name: "Conventional Commits", nameZh: "约定式提交", tagline: "type(scope): subject, with a machine-readable body and footer", taglineZh: "type(scope): 描述，正文与脚注机器可读", bestFor: "projects that generate changelogs", bestForZh: "需要自动生成变更日志的项目", url: "https://www.conventionalcommits.org/" },
+	{ id: "github-flow", name: "GitHub Flow", nameZh: "GitHub Flow", tagline: "short-lived branches, one review, merge to main", taglineZh: "短分支、一次评审、合并回主干", bestFor: "continuously deployed web apps", bestForZh: "持续部署的 Web 应用", url: "https://docs.github.com/get-started/using-github/github-flow" },
+	{ id: "git-flow", name: "Git Flow", nameZh: "Git Flow", tagline: "main, develop, release, hotfix and feature branches", taglineZh: "main/develop/release/hotfix/feature 五类分支", bestFor: "versioned releases with several supported versions", bestForZh: "多版本并行维护的发布节奏", url: "https://nvie.com/posts/a-successful-git-branching-model/" },
+	{ id: "trunk-based", name: "Trunk-Based Development", nameZh: "主干开发", tagline: "tiny commits straight to trunk behind flags", taglineZh: "小步提交直接进主干，用特性开关隔离", bestFor: "high-trust teams with strong CI", bestForZh: "CI 完善、协作紧密的团队", url: "https://trunkbaseddevelopment.com/" },
+	{ id: "conventional-branch", name: "Conventional Branch", nameZh: "约定式分支名", tagline: "feature/, bugfix/, hotfix/, release/ with ticket ids", taglineZh: "feature/、bugfix/、hotfix/、release/ 加需求编号", bestFor: "repositories that mine branch names in tooling", bestForZh: "用工具依赖分支名做自动化的仓库", url: "https://conventional-branch.github.io/" },
+	{ id: "gitlab-flow", name: "GitLab Flow", nameZh: "GitLab Flow", tagline: "environment branches plus feature branches", taglineZh: "环境分支加特性分支", bestFor: "staged deployments (staging before production)", bestForZh: "分阶段发布（预发再上线）", url: "https://docs.gitlab.com/ee/topics/gitlab_flow.html" }
+];
 
 // --------------------------------------------------- optional real workspace
 // `--repos` / `--graph` replace the canned samples with live host responses, so
@@ -422,6 +500,21 @@ const fakeFetch = async (path, init) => {
 		value = GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.has(key)
 			? GRAPH_BY_ROOT.get(key)
 			: String(payload.path).indexOf("dsh-git-graph-src") >= 0 ? NESTED_GRAPH : ROOT_GRAPH;
+	} else if (path === "git/conventions") {
+		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
+		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null
+			? entry.conventions
+			: { doc: "GIT_CONVENTIONS.md", docPath: String(payload.path) + "/GIT_CONVENTIONS.md", exists: false, size: 0, draft: false };
+		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG }, state);
+	} else if (path === "git/convention") {
+		// The host writes the document and reports the new state; the stub flips
+		// the repository entry so the following /git/repos refresh sees it.
+		const framework = typeof payload.framework === "string" ? payload.framework : "none";
+		const docPath = String(payload.path) + "/GIT_CONVENTIONS.md";
+		const bytes = framework === "none" ? 820 : 2400;
+		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
+		if (entry !== undefined) entry.conventions = { doc: "GIT_CONVENTIONS.md", docPath, exists: true, size: bytes, draft: framework === "none" };
+		value = { root: payload.path, docPath, bytes, created: true, framework, doc: "GIT_CONVENTIONS.md" };
 	} else value = { ok: false, error: { code: "not-found", message: "stub" } };
 	return { ok: true, json: async () => ({ ok: true, value }) };
 };
@@ -608,6 +701,34 @@ if (switchedHtml.indexOf("data-gitgraph-repo-active") < 0) throw new Error("the 
 console.log("preview-tab: repository switch ok (" + repoRows.length + " tree rows, " +
 	(usingRealData ? "real repository graph loaded" : "nested graph loaded") + ")");
 
+// The conventions strip: an unborn repository without a document must make the
+// tab write the empty scaffold by itself and open the framework picker.
+let conventionsHtml = "";
+if (!usingRealData) {
+	const blankEntry = REPOS.repos.find((entry) => entry.relPath === "sandbox/blank");
+	if (blankEntry === undefined) throw new Error("preview data lost the blank repository");
+	const blankMount = await mountComponent(descriptor.component, tabProps(blankEntry.path));
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	let blankHtml = (await blankMount.render()).html;
+	if (blankHtml.indexOf("data-gitgraph-conventions") < 0) throw new Error("conventions strip missing");
+	const scaffolded = REPOS.repos.find((entry) => entry.path === blankEntry.path);
+	if (scaffolded === undefined || scaffolded.conventions === undefined || scaffolded.conventions.exists !== true) throw new Error("auto scaffold did not write the empty document");
+	if (scaffolded.conventions.draft !== true) throw new Error("auto scaffold must leave the document as a draft");
+	if (blankHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("auto scaffold did not open the framework picker");
+	const cards = findAll(blankMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
+	if (cards.length !== 6) throw new Error("expected six framework cards, got " + cards.length);
+	const draftHtml = blankHtml;
+	conventionsHtml = blankHtml;
+	click(cards[0], "framework card");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	blankHtml = (await blankMount.render()).html;
+	const settled = REPOS.repos.find((entry) => entry.path === blankEntry.path);
+	if (settled === undefined || settled.conventions === undefined || settled.conventions.draft !== false) throw new Error("picking a framework did not settle the document");
+	if (blankHtml.indexOf('data-gitgraph-conventions-state="settled"') < 0) throw new Error("conventions strip did not report the settled document");
+	if (draftHtml.indexOf('data-gitgraph-conventions-state="draft"') < 0) throw new Error("conventions strip did not report the draft after the auto scaffold");
+	console.log("preview-tab: conventions strip, auto scaffold and framework picker ok");
+}
+
 const rootPanel = rootMount.html;
 const nestedPanel = nestedMount.html;
 
@@ -734,6 +855,11 @@ console.log("preview-tab: wrote " + lightFile);
 // overlay's `position: fixed` into a box local to the wrapper, so a static
 // page can show it.
 const statesFile = join(dirname(outFile), "graph-tab-states.html");
+/** Fourth states section: the conventions picker, only when the fixture ran. */
+const conventionsSection = conventionsHtml === ""
+	? ""
+	: "<h2>Git conventions — empty scaffold written, framework picker open</h2>" +
+		'<div class="panel">' + conventionsHtml + "</div>";
 const statesHtml = `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -767,7 +893,7 @@ const statesHtml = `<!doctype html>
 <div class="panel">${hoverHtml}</div>
 <h2>Full-window view</h2>
 <div class="overlay-box">${overlayHtml}</div>
-</body>
+${conventionsSection}</body>
 </html>`;
 await writeFile(statesFile, statesHtml, "utf8");
 console.log("preview-tab: wrote " + statesFile);

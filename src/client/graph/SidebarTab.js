@@ -536,6 +536,80 @@
 			wordBreak: "break-word"
 		};
 		/**
+		 * The Git-conventions strip: it reports whether the selected repository
+		 * carries a convention document and opens the framework picker.
+		 */
+		const SIDEBAR_TAB_CONVENTIONS = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 6,
+			padding: "8px 10px",
+			border: "1px solid var(--dsw-alias-border-1)",
+			borderRadius: 8,
+			background: "var(--dsw-alias-bg-layer-1)",
+			fontSize: 11,
+			flex: "none"
+		};
+		const SIDEBAR_TAB_CONVENTIONS_HEAD = {
+			display: "flex",
+			alignItems: "center",
+			gap: 6,
+			flexWrap: "wrap"
+		};
+		const SIDEBAR_TAB_CONVENTIONS_TITLE = {
+			fontWeight: 600,
+			color: "var(--dsw-alias-label-primary)",
+			flex: "1 1 auto",
+			minWidth: 0
+		};
+		const SIDEBAR_TAB_CONVENTIONS_NOTE = {
+			color: "var(--dsw-alias-label-tertiary)",
+			lineHeight: "16px"
+		};
+		const SIDEBAR_TAB_CONVENTIONS_CHIP = {
+			flex: "none",
+			padding: "1px 5px",
+			borderRadius: 4,
+			fontSize: 10,
+			lineHeight: "14px",
+			background: "var(--dsw-alias-bg-layer-2)",
+			color: "var(--dsw-alias-label-secondary)"
+		};
+		const SIDEBAR_TAB_PICKER = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 6,
+			maxHeight: 360,
+			overflowY: "auto"
+		};
+		const SIDEBAR_TAB_FRAMEWORK = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 3,
+			padding: "7px 9px",
+			border: "1px solid var(--dsw-alias-border-1)",
+			borderRadius: 8,
+			background: "var(--dsw-alias-bg-layer-2)",
+			cursor: "pointer",
+			textAlign: "left",
+			color: "inherit"
+		};
+		const SIDEBAR_TAB_FRAMEWORK_NAME = {
+			fontSize: 12,
+			fontWeight: 600,
+			color: "var(--dsw-alias-label-primary)"
+		};
+		const SIDEBAR_TAB_FRAMEWORK_TAG = {
+			fontSize: 11,
+			lineHeight: "16px",
+			color: "var(--dsw-alias-label-secondary)"
+		};
+		const SIDEBAR_TAB_FRAMEWORK_META = {
+			fontSize: 10,
+			lineHeight: "15px",
+			color: "var(--dsw-alias-label-tertiary)"
+		};
+		/**
 		* Row hover / pinned surfaces and smooth lane transitions. Inline styles
 		* cannot express `:hover`, so the tab ships one tiny stylesheet, injected
 		* once per document.
@@ -547,6 +621,7 @@
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-zoom]:hover{border-color:var(--dsw-alias-label-tertiary)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-action]:hover{border-color:var(--dsw-alias-label-tertiary)}",
 			"[data-gitgraph-sidebar-tab] [data-gitgraph-detail]{transition:opacity 120ms ease}",
+			"[data-gitgraph-sidebar-tab] [data-gitgraph-framework]:hover{border-color:var(--dsw-alias-label-tertiary)}",
 			"[data-gitgraph-overlay] [data-gitgraph-row]{border-radius:8px}"
 		].join("");
 		/** True once the tab stylesheet is in the document. */
@@ -789,6 +864,18 @@
 				const timer = setTimeout(() => setCopiedKey(void 0), 1600);
 				return () => clearTimeout(timer);
 			}, [copiedKey]);
+			/** The proven convention frameworks, loaded from the host on demand. */
+			const [catalog, setCatalog] = react.useState(null);
+			/** Whether the framework picker is open under the conventions strip. */
+			const [pickerOpen, setPickerOpen] = react.useState(false);
+			/** Whether a convention document is being written right now. */
+			const [conventionBusy, setConventionBusy] = react.useState(false);
+			/** The last successful write, so the strip can confirm it. */
+			const [conventionNotice, setConventionNotice] = react.useState(null);
+			/** The last failed read/write, shown instead of the hint. */
+			const [conventionError, setConventionError] = react.useState(null);
+			/** Repositories the auto-scaffold already ran for (once per session). */
+			const autoScaffolded = react.useRef(new Set());
 			/** Escape closes the full-window view, like any dialog. */
 			react.useEffect(() => {
 				if (!expanded) return void 0;
@@ -819,10 +906,13 @@
 					}
 					const value = result.value;
 					const repos = Array.isArray(value.repos) ? value.repos : [];
+					const meta = value.conventions !== void 0 && value.conventions !== null ? value.conventions : {};
 					setScan({
 						phase: "ready",
 						repos,
-						truncated: value.truncated === true
+						truncated: value.truncated === true,
+						autoScaffold: meta.autoScaffold === true,
+						docName: typeof meta.doc === "string" ? meta.doc : "GIT_CONVENTIONS.md"
 					});
 					setSelectedPath((current) => {
 						if (typeof current === "string" && repos.some((entry) => entry.path === current)) return current;
@@ -903,6 +993,74 @@
 					sidebar.updateTab(tab.id, { meta: Object.assign({}, meta, { repoPath: path }) }, scope.sessionId);
 				} catch {}
 			};
+			/**
+			 * Write a convention document into one repository: a framework
+			 * template, or the empty scaffold when `frameworkId` is null.
+			 */
+			const writeConvention = react.useCallback((repoPath, frameworkId) => {
+				setConventionBusy(true);
+				setConventionError(null);
+				return sidebarTabGit().convention(repoPath, frameworkId, true).then((result) => {
+					setConventionBusy(false);
+					if (!result.ok) {
+						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						return false;
+					}
+					setConventionNotice(frameworkId === null ? "auto" : "applied");
+					runScan(true);
+					return true;
+				}).catch(() => {
+					setConventionBusy(false);
+					setConventionError(t("sidebar.error.conventions"));
+					return false;
+				});
+			}, [runScan, t]);
+			/** The selected repository's path, as an effect dependency. */
+			const selectedKey = selected !== void 0 ? selected.path : void 0;
+			/** Load the framework catalogue for the selected repository. */
+			react.useEffect(() => {
+				if (selectedKey === void 0) return void 0;
+				let alive = true;
+				sidebarTabGit().conventions(selectedKey).then((result) => {
+					if (!alive || !result.ok || result.value === null || result.value === void 0) return;
+					setCatalog(Array.isArray(result.value.catalog) ? result.value.catalog : []);
+					setConventionError(null);
+				}).catch(() => void 0);
+				return () => {
+					alive = false;
+				};
+			}, [selectedKey]);
+			react.useEffect(() => {
+				setConventionNotice(null);
+				setConventionError(null);
+				setPickerOpen(false);
+			}, [selectedKey]);
+			/**
+			 * The trigger the feature is built around: a repository that exists but
+			 * has no commit yet (`git init`, HEAD unborn) and no convention document
+			 * is a bare workspace. The plugin writes the empty scaffold once, then
+			 * opens the picker so the team chooses one of the proven frameworks.
+			 * Host-side `conventionsAuto` is the master switch.
+			 */
+			react.useEffect(() => {
+				if (!active || scan.phase !== "ready" || selected === void 0) return;
+				if (scan.autoScaffold !== true) return;
+				const state = selected.conventions !== void 0 && selected.conventions !== null ? selected.conventions : null;
+				if (state === null || state.exists === true) return;
+				const status = selected.status !== void 0 && selected.status !== null ? selected.status : null;
+				if (status === null || status.head !== "") return;
+				if (autoScaffolded.current.has(selected.path)) return;
+				autoScaffolded.current.add(selected.path);
+				writeConvention(selected.path, null).then((ok) => {
+					if (ok) setPickerOpen(true);
+				});
+			}, [active, scan, selected, writeConvention]);
+			/** A repository created while the tab is open appears without a manual refresh. */
+			react.useEffect(() => {
+				if (!active) return void 0;
+				const timer = setInterval(() => runScan(false), 25000);
+				return () => clearInterval(timer);
+			}, [active, runScan]);
 			const view = graph !== null ? graph.view : null;
 			const graphError = graph !== null ? graph.error : null;
 			const graphLoading = graph !== null && graph.loading === true;
@@ -1348,6 +1506,123 @@
 			}), detailLine("author", t("sidebar.author"), pinned.author + " \u00b7 " + sidebarTabIsoTime(pinned.authorTime)), detailLine("refs", t("sidebar.references"), pinned.refs.length === 0 ? "\u2014" : pinned.refs.join(", ")), detailLine("parents", t("sidebar.parentsLabel"), pinned.parents.length === 0 ? "\u2014" : pinned.parents.map((parent) => String(parent).slice(0, 7)).join(", "), {
 				fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 			})]);
+			/**
+			 * The Git-conventions strip. It always states which document the
+			 * repository should carry, and when none exists it opens the picker
+			 * with the proven frameworks (or writes just the empty scaffold).
+			 */
+			const conventionsBar = selected === void 0 ? null : (() => {
+				const state = selected.conventions !== void 0 && selected.conventions !== null ? selected.conventions : null;
+				const exists = state !== null && state.exists === true;
+				const draft = state !== null && state.draft === true;
+				const docName = state !== null && typeof state.doc === "string" ? state.doc : scan.docName !== void 0 ? scan.docName : "GIT_CONVENTIONS.md";
+				const zh = sidebarTabIsZh();
+				const head = h("div", {
+					key: "head",
+					style: SIDEBAR_TAB_CONVENTIONS_HEAD
+				}, [h("span", {
+					key: "title",
+					style: SIDEBAR_TAB_CONVENTIONS_TITLE
+				}, t("sidebar.conventions")), h("span", {
+					key: "doc",
+					style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_NOTE, {
+						flex: "0 1 auto",
+						minWidth: 0,
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap"
+					}),
+					title: state !== null && typeof state.docPath === "string" ? state.docPath : docName
+				}, docName), h("span", {
+					key: "state",
+					"data-gitgraph-conventions-state": exists ? draft ? "draft" : "settled" : "none",
+					style: SIDEBAR_TAB_CONVENTIONS_CHIP
+				}, exists ? draft ? t("sidebar.conventionsDraft") : t("sidebar.conventionsSettled") : t("sidebar.conventionsNone")), exists && typeof props.onOpenFile === "function" && state !== null && typeof state.docPath === "string" ? h("button", {
+					key: "open",
+					type: "button",
+					"data-gitgraph-action": "open-conventions",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: () => props.onOpenFile(state.docPath),
+					title: t("sidebar.conventionsOpen"),
+					"aria-label": t("sidebar.conventionsOpen")
+				}, t("sidebar.conventionsOpen")) : null, exists ? null : h("button", {
+					key: "setup",
+					type: "button",
+					"data-gitgraph-action": "setup-conventions",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: () => setPickerOpen((current) => !current),
+					title: t("sidebar.conventionsSetup"),
+					"aria-label": t("sidebar.conventionsSetup")
+				}, t("sidebar.conventionsSetup"))]);
+				const children = [head];
+				if (conventionError !== null) children.push(h("span", {
+					key: "error",
+					"data-gitgraph-conventions-error": true,
+					style: SIDEBAR_TAB_ERROR
+				}, conventionError));
+				else if (conventionNotice === "auto") children.push(h("span", {
+					key: "notice",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.conventionsAuto")));
+				else if (conventionNotice === "applied") children.push(h("span", {
+					key: "notice",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.conventionsApplied")));
+				else if (!exists) children.push(h("span", {
+					key: "missing",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.conventionsMissing")));
+				if (pickerOpen) {
+					const cards = (catalog !== null ? catalog : []).map((framework) => h("button", {
+						key: "framework-" + framework.id,
+						type: "button",
+						"data-gitgraph-framework": framework.id,
+						style: SIDEBAR_TAB_FRAMEWORK,
+						disabled: conventionBusy,
+						onClick: () => writeConvention(selected.path, framework.id),
+						title: framework.url
+					}, [h("span", {
+						key: "name",
+						style: SIDEBAR_TAB_FRAMEWORK_NAME
+					}, zh && typeof framework.nameZh === "string" ? framework.nameZh : framework.name), h("span", {
+						key: "tag",
+						style: SIDEBAR_TAB_FRAMEWORK_TAG
+					}, zh && typeof framework.taglineZh === "string" ? framework.taglineZh : framework.tagline), h("span", {
+						key: "meta",
+						style: SIDEBAR_TAB_FRAMEWORK_META
+					}, t("sidebar.conventionsBestFor") + (zh && typeof framework.bestForZh === "string" ? framework.bestForZh : framework.bestFor))]));
+					children.push(h("div", {
+						key: "picker",
+						"data-gitgraph-conventions-picker": true,
+						style: SIDEBAR_TAB_PICKER
+					}, [h("span", {
+						key: "hint",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, conventionBusy ? t("sidebar.conventionsWriting") : t("sidebar.conventionsPick"))].concat(cards).concat([h("button", {
+						key: "scaffold",
+						type: "button",
+						"data-gitgraph-action": "conventions-scaffold",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						disabled: conventionBusy,
+						onClick: () => writeConvention(selected.path, null)
+					}, t("sidebar.conventionsScaffold")), h("button", {
+						key: "cancel",
+						type: "button",
+						"data-gitgraph-action": "conventions-cancel",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						disabled: conventionBusy,
+						onClick: () => {
+							setPickerOpen(false);
+							setConventionError(null);
+						}
+					}, t("sidebar.conventionsCancel"))])));
+				}
+				return h("div", {
+					key: "conventions",
+					"data-gitgraph-conventions": true,
+					style: SIDEBAR_TAB_CONVENTIONS
+				}, children);
+			})();
 			let body;
 			if (scan.phase === "idle" || scan.phase === "scanning") body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("sidebar.loading"));
 			else if (scan.phase === "error") body = h("div", { style: SIDEBAR_TAB_ERROR }, scan.error !== void 0 && scan.error !== null ? scan.error : t("sidebar.error.repos"));
@@ -1418,7 +1693,7 @@
 			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, selected !== void 0 ? h("div", {
 				key: "status",
 				style: SIDEBAR_TAB_STATUS
-			}, statusChildren) : null, h("div", {
+			}, statusChildren) : null, conventionsBar, h("div", {
 				key: "body-wrap",
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true
