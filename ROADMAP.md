@@ -13,6 +13,8 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | Live / 实时 | SSE plus 20 s polling, silent refresh, no blanking, tab reopens from cache. SSE + 20 秒轮询，静默刷新不清空，重开走缓存。 |
 | Conventions / 规范 | Scaffold, six frameworks, status strip, `systemPrompt` injection with inheritance from enclosing repositories. 空壳、六套框架、状态带、按继承链注入系统提示。 |
 | Init / 初始化 | One-click `git init` for a workspace that is not a repository yet. 非仓库目录一键 `git init`。 |
+| Overview / 总览 | One row per repository: branch, changes, conflicts, upstream distance, last activity, sorted by what needs attention. 每个仓库一行：分支、改动、冲突、上游距离、最近活动，按需要处理的程度排序。 |
+| Cleanup and health / 清理与体检 | Merged/unmerged counts per local branch plus a read-only health report. 本地分支已合并/未合并计数与只读体检报告。 |
 | AI hand-off / 交接 | Copy commit info and SHA, formatted for a model; copy an actionable rollback prompt. 复制提交信息与 SHA（面向模型排版）；复制可执行的回滚提示。 |
 
 ## Delivery status / 交付进度
@@ -21,7 +23,8 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | --- | --- | --- |
 | 1.3.0 | **released and installed** / 已发布并已装 | Conventions inheritance + repository index injection. |
 | 1.4.0 | **released and installed** / 已发布并已装 | Tier 1 complete: rollback prompt, commit search + ref filters, standalone SVG export. |
-| 1.5.0 / 1.6.0 | planned / 计划中 | Tier 2 and Tier 3 below. |
+| 1.5.0 | **code complete, unreleased** / 代码完成待发版 | Tier 2: workspace overview, branch cleanup hints, repository health. |
+| 1.6.0 | planned / 计划中 | Tier 3 below. |
 
 1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
 
@@ -29,7 +32,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 
 Three items, all front end; no new host routes, no migration.
 
-### 1. Copy an actionable rollback prompt / 复制可执行的回滚提示 — **done, unreleased**
+### 1. Copy an actionable rollback prompt / 复制可执行的回滚提示 — **shipped in 1.4.0** / 已随 1.4.0 发布
 
 **Why.** The origin of this feature was "让我能跟 AI 说回滚到某一个提交". The old copy button produced a neutral commit description; the model still had to invent the commands. / 需求起点就是「让用户能和 AI 交流，要求回滚」。旧的复制只给中性描述，命令还得模型自己拼。
 
@@ -56,7 +59,7 @@ Builder: `sidebarTabRollbackText(commit, repo, branch, commitsAbove, t)` in `src
 
 **Acceptance (met).** `preview-tab.mjs` clicks `copy-rollback`, captures the clipboard text through a fake `navigator.clipboard`, and asserts it contains `git revert `, `git reset --hard `, `git cherry-pick ` and `Path: ` (417 chars against the demo repository).
 
-### 2. Search and ref filtering / 搜索与引用筛选 — **done, unreleased**
+### 2. Search and ref filtering / 搜索与引用筛选 — **shipped in 1.4.0** / 已随 1.4.0 发布
 
 **Why.** Beyond a few dozen commits the graph cannot be navigated. / 提交一多就翻不动。
 
@@ -81,19 +84,28 @@ Filtering is purely local — no network call. / 过滤全在本地，不发请�
 
 **Implemented / 实现。** The toolbar's *Export image* serialises the current view — filtered rows, lanes, ref chips and the highlight on the pinned row — into one standalone SVG: the theme palette is written out as literal fills (no CSS variables, no classes), the size is explicit, the row pitch is taken from the live lane geometry so zoomed panels stay aligned, and a long subject is truncated instead of overflowing. Browsers get a real download named `git-graph-<repo>.svg`; where object URLs are unavailable (webviews, the preview harness) the markup is copied to the clipboard instead, and the button says which happened. / 工具栏「导出图片」把当前视图（筛选后的行、泳道、ref 徽章、固定行高亮）序列化为独立 SVG：主题色写字面量、显式尺寸、行距取自实时泳道几何（缩放后仍对齐）、过长主题截断而非溢出；浏览器直接下载 `git-graph-<仓库名>.svg`，无 object URL 环境退化为复制文本，按钮会说明发生了哪一种。
 
-## Tier 2 — 1.5.0 "many repositories at a glance" / 多仓库一眼看清
+## Tier 2 — 1.5.0 "many repositories at a glance" / 多仓库一眼看清 — **code complete, unreleased** / 代码完成待发版
 
 ### 4. Workspace overview / 多仓库总览
 
 A list view besides the single-repository graph: one row per discovered repository with branch, dirty count, conflicts, last commit age and whether it trails its upstream. Sorted so the repositories that need attention come first. Read-only; extends the `/git/repos` entry with an optional `upstream` block (`ahead`, `behind`) and computes the last activity from the graph head date already present in `status`.
 
+
+**Implemented / 实现（1.5.0）**：`repoAugment()` 在每次扫描后给条目补 `activity`（秒）与 `upstream`（`{name, ahead, behind}`，无远端时保持 `null`）；工具栏的「总览」把仓库树换成清单，行内是分支、改动数（脏文件 + 未跟踪）、冲突、领先/落后、最近活动，排序依次看 `conflicts > 0` → `dirty > 0` → `behind > 0` → 是否有分支 → 路径；只读，点一行关闭清单并打开该仓库的图谱。
+
 ### 5. Branch cleanup hints / 可清理分支提示
 
 For the selected repository, one row per local branch: "merged into main" or "N commits not merged". Read-only suggestion, never deletes. Needs a new host route `/git/branches/merged` because `rev-list --count` cannot be derived from the graph page.
 
+
+**Implemented / 实现（1.5.0）**：新路由 `/git/cleanup`（不是原计划的 `/git/branches/merged`——上游插件已经占用 `/git/branches`，同名路由和方法都会被覆盖）。`branchReport()` 用 `for-each-ref` 取分支，基线依次取 `main` / `master` / `trunk` / `develop` / 当前分支 / 第一个分支，其余分支并发 4 条跑 `rev-list --count <base>..<branch>`，0 即 `merged: true`，否则带未合并计数。
+
 ### 6. Repository health check / 仓库体检
 
 A read-only report: detached HEAD, branches without upstream, untracked files above a size threshold, stash count, `.git` size, repositories deeper than the discovery depth. Pure information with reasons, no fixes.
+
+
+**Implemented / 实现（1.5.0）**：新路由 `/git/health`。`repoHealth()` 报告 `detached`、`noUpstream`（最多 20 条 + 计数）、`stale`（30 天未动）、`stash`、`untracked`（最多扫 400 个）、`bigUntracked`（超过 1 MB 的未跟踪文件，逐个 `stat`）与 `gitObjects`/`gitBytes`（`count-objects -v`；小仓库的 KB 会四舍五入成 0，对象数才可靠）。全部是信息与原因，没有任何修复动作。
 
 ## Tier 3 — 1.6.0 "the document earns its keep" / 让规范真正起作用
 

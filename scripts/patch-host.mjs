@@ -227,6 +227,54 @@ patch(
 \t\t\tcase "/git/conventions": {`
 );
 
+// 11. Every scanned repository also reports its last activity and how far it
+//     trails its upstream (best effort: a repository without a remote simply
+//     keeps `upstream: null`).
+patch(
+	"repo-scan-augment",
+	`	for (const entry of entries) entry.conventions = await repoConventionState(entry.root, docName);`,
+	`	await repoAugment(service, entries);
+	for (const entry of entries) entry.conventions = await repoConventionState(entry.root, docName);`
+);
+
+// 12. Two read-only routes: branch cleanup hints (/git/cleanup, NOT
+//     /git/branches — upstream already owns that path) and the health
+//     report. Both answer FAIL(malformed-view) for a path that is not a
+//     repository, the same verdict the other views give.
+patch(
+	"overview-routes",
+	`			case "/git/init": {`,
+	`			case "/git/cleanup": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const report = await branchReport(service, gated.canonical);
+				if (report === null) {
+					writeJson(res, 200, FAIL(MALFORMED_VIEW));
+					return;
+				}
+				writeJson(res, 200, OK(report));
+				return;
+			}
+			case "/git/health": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const report = await repoHealth(service, gated.canonical);
+				if (report === null) {
+					writeJson(res, 200, FAIL(MALFORMED_VIEW));
+					return;
+				}
+				writeJson(res, 200, OK(report));
+				return;
+			}
+			case "/git/init": {`
+);
+
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +
 	(applied.length > 0 ? " -> " + applied.join(", ") : ""));
 writeFileSync(file, source, "utf8");

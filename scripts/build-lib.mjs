@@ -28,6 +28,27 @@ const EXTRA_KEYS = [
 		// The first occurrence is the zh dictionary, the second the en one.
 		entries: [
 			['"sidebar.exportGraph"', '"导出图片"'],
+			['"sidebar.overview"', '"总览"'],
+			['"sidebar.overviewBack"', '"返回图谱"'],
+			['"sidebar.overviewHint"', '"按需要处理的程度排序：冲突、改动、落后上游的仓库在前。"'],
+			['"sidebar.overviewClean"', '"干净"'],
+			['"sidebar.overviewDirty"', '"{count} 个改动"'],
+			['"sidebar.overviewConflicts"', '"{count} 个冲突"'],
+			['"sidebar.overviewAhead"', '"领先 {count}"'],
+			['"sidebar.overviewBehind"', '"落后 {count}"'],
+			['"sidebar.overviewUpstream"', '"无上游"'],
+			['"sidebar.overviewDetached"', '"分离头指针"'],
+			['"sidebar.overviewNow"', '"刚刚"'],
+			['"sidebar.overviewMinutes"', '"{count} 分钟前"'],
+			['"sidebar.overviewHours"', '"{count} 小时前"'],
+			['"sidebar.overviewDays"', '"{count} 天前"'],
+			['"sidebar.overviewDetail"', '"分支与体检"'],
+			['"sidebar.overviewMerged"', '"已合并"'],
+			['"sidebar.overviewUnmerged"', '"{count} 个未合并"'],
+			['"sidebar.overviewMeta"', '"{branches} 个分支 · stash {stash} · 对象 {size}"'],
+			['"sidebar.overviewBase"', '"基线 {name}"'],
+			['"sidebar.overviewFailed"', '"读取失败"'],
+			['"sidebar.overviewEmpty"', '"这个工作区还没有仓库。"'],
 			['"sidebar.exported"', '"已导出"'],
 			['"sidebar.exportCopied"', '"已复制 SVG"'],
 			['"sidebar.exportNote"', '"由 dsh-git-graph-sidebar 导出"'],
@@ -93,6 +114,27 @@ const EXTRA_KEYS = [
 		anchor: '"sidebar.commitsLanes"',
 		entries: [
 			['"sidebar.exportGraph"', '"Export image"'],
+			['"sidebar.overview"', '"Overview"'],
+			['"sidebar.overviewBack"', '"Back to graph"'],
+			['"sidebar.overviewHint"', '"Sorted by what needs attention: conflicts, changes, then branches trailing their upstream."'],
+			['"sidebar.overviewClean"', '"clean"'],
+			['"sidebar.overviewDirty"', '"{count} changed"'],
+			['"sidebar.overviewConflicts"', '"{count} conflicts"'],
+			['"sidebar.overviewAhead"', '"{count} ahead"'],
+			['"sidebar.overviewBehind"', '"{count} behind"'],
+			['"sidebar.overviewUpstream"', '"no upstream"'],
+			['"sidebar.overviewDetached"', '"detached"'],
+			['"sidebar.overviewNow"', '"just now"'],
+			['"sidebar.overviewMinutes"', '"{count}m ago"'],
+			['"sidebar.overviewHours"', '"{count}h ago"'],
+			['"sidebar.overviewDays"', '"{count}d ago"'],
+			['"sidebar.overviewDetail"', '"branches"'],
+			['"sidebar.overviewMerged"', '"merged"'],
+			['"sidebar.overviewUnmerged"', '"{count} unmerged"'],
+			['"sidebar.overviewMeta"', '"{branches} branches · stash {stash} · {size} objects"'],
+			['"sidebar.overviewBase"', '"base {name}"'],
+			['"sidebar.overviewFailed"', '"could not read"'],
+			['"sidebar.overviewEmpty"', '"No repositories in this workspace yet."'],
 			['"sidebar.exported"', '"Exported"'],
 			['"sidebar.exportCopied"', '"SVG copied"'],
 			['"sidebar.exportNote"', '"Exported by dsh-git-graph-sidebar"'],
@@ -183,6 +225,17 @@ const API_METHODS = [{
 				if (typeof branch === "string" && branch.trim() !== "") payload.branch = branch.trim();
 				return post("git/init", payload);
 			}`
+}, {
+	guard: "git/cleanup",
+	code: `
+			/** Branch cleanup hints: every local branch, and what the base already has. */
+			cleanupBranches(path) {
+				return post("git/cleanup", { path });
+			}
+			/** The read-only health report: detached HEAD, branches without upstream, stash, objects. */
+			repoHealth(path) {
+				return post("git/health", { path });
+			}`
 }];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";
 
@@ -252,18 +305,43 @@ console.log("build-lib: spliced " + region.split("\n").length + " lines of tab s
 // lives in `src/host/conventions.js` and is spliced into the host bundle
 // between its own region markers. Same idea, different artifact.
 // ---------------------------------------------------------------------------
-const hostRegionFile = join(root, "src/host/conventions.js");
 const hostLibFile = join(root, "lib/index.js");
-const HOST_START = "//#region src/host/conventions.ts";
-const HOST_END = "\n//#endregion\n//#region src/host/repos.ts";
+/** A line feed, spelled without escapes so this file survives any transport. */
+const LF = String.fromCharCode(10);
+/** Text that closes a spliced host region (the marker line itself is kept). */
+const HOST_REGION_END = LF + "//#endregion";
+/**
+ * Host modules spliced verbatim into `lib/index.js`, each into its own region.
+ * A region runs from its marker line to the next `//#endregion` after it.
+ */
+const HOST_MODULES = [
+	{
+		file: "src/host/conventions.js",
+		start: "//#region src/host/conventions.ts"
+	},
+	{
+		file: "src/host/branches.js",
+		start: "//#region src/host/branches.ts"
+	}
+];
 
-const hostLib = await readFile(hostLibFile, "utf8");
-const hostRegion = (await readFile(hostRegionFile, "utf8")).replace(/\s+$/, "");
-const hostStart = hostLib.indexOf(HOST_START);
-if (hostStart < 0) throw new Error("host region start marker not found in lib/index.js (run scripts/patch-host.mjs first)");
-const hostLineEnd = hostLib.indexOf("\n", hostStart);
-const hostEnd = hostLib.indexOf(HOST_END, hostLineEnd);
-if (hostEnd < 0) throw new Error("host region end marker not found in lib/index.js");
-const nextHost = hostLib.slice(0, hostLineEnd + 1) + hostRegion + hostLib.slice(hostEnd);
-await writeFile(hostLibFile, nextHost, "utf8");
-console.log("build-lib: spliced " + hostRegion.split("\n").length + " lines of conventions source into lib/index.js");
+let hostLib = await readFile(hostLibFile, "utf8");
+// `conventions` ships a region header of its own; the `branches` module gets
+// one from here, so a fresh checkout never needs a hand edit before building.
+if (hostLib.indexOf("//#region src/host/branches.ts") < 0) {
+	const anchor = "function registerGitRoutes(ctx, service, config = defaultFeatureConfig) {";
+	const at = hostLib.indexOf(anchor);
+	if (at < 0) throw new Error("registerGitRoutes anchor not found in lib/index.js");
+	hostLib = hostLib.slice(0, at) + "//#region src/host/branches.ts" + LF + "//#endregion" + LF + hostLib.slice(at);
+}
+for (const module of HOST_MODULES) {
+	const source = (await readFile(join(root, module.file), "utf8")).replace(/\s+$/, "");
+	const startIndex = hostLib.indexOf(module.start);
+	if (startIndex < 0) throw new Error(module.start + " not found in lib/index.js");
+	const lineEnd = hostLib.indexOf(LF, startIndex);
+	const endIndex = hostLib.indexOf(HOST_REGION_END, lineEnd);
+	if (endIndex < 0) throw new Error("end marker for " + module.file + " not found in lib/index.js");
+	hostLib = hostLib.slice(0, lineEnd + 1) + source + hostLib.slice(endIndex);
+	console.log("build-lib: spliced " + source.split(LF).length + " lines of " + module.file + " into lib/index.js");
+}
+await writeFile(hostLibFile, hostLib, "utf8");

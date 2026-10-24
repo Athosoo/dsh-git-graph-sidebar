@@ -2,11 +2,11 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-24 18:35 (+08)。
+> 最后更新：2026-10-24 19:10 (+08)。
 
 ## 0. 一句话状态
 
-插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.3.0 已发布并装好**；**1.4.0 的代码已全部完成、构建与离线测试全绿**（Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG），**待发版换装**。市场收录 PR 已备好，**今晚 22:07 (+08) 之后**跑一条脚本即可提交。
+插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）的代码已完成，构建与离线测试全绿**（host 95/95、客户端预览全过），只差发版换装。市场收录 PR 仍等 **今晚 22:07 (+08)** 之后跑一条脚本。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -44,29 +44,30 @@
 ## 3. 代码地图（只改这几个文件）
 
 ```
-src/client/graph/SidebarTab.js   ← tab 的唯一真源（约 2150 行）。所有 UI/交互都改这里
+src/client/graph/SidebarTab.js   ← tab 的唯一真源（约 2660 行）。所有 UI/交互都改这里
 src/host/conventions.js          ← host 规范体系 + prompt 注入 + repoInit（约 879 行）
-scripts/build-lib.mjs            ← 把上面两个文件拼进 lib/*.js，并幂等插入 GitApi 方法与 locale 键
-scripts/patch-host.mjs           ← 19 处幂等 host 补丁（imports/Config/路由/prompt 挂载）
+src/host/branches.js             ← 总览/分支清理/体检的 host 模块（约 310 行，build-lib 拼进 lib/index.js）
+scripts/build-lib.mjs            ← 把上面三个模块拼进 lib/*.js，补 branches 的 region 头，并幂等插入 GitApi 方法与 locale 键
+scripts/patch-host.mjs           ← 21 处幂等 host 补丁（imports/Config/路由/prompt/扫描挂载）
 scripts/validate-lib.mjs         ← 校验 t("key") 都能解析 + 分叉标识符都有定义
-scripts/test-host.mjs            ← 离线 host 端到端（71 项断言，假 ctx + 真 git）
+scripts/test-host.mjs            ← 离线 host 端到端（95 项断言，假 ctx + 真 git）
 scripts/preview-tab.mjs          ← 离线客户端端到端（假 React/DOM/fetch，跑真实 apply）
 scripts/prepend-shared.mjs       ← 从干净副本抽 tab 共享脚手架（很少用）
 lib/client.js / lib/index.js     ← **构建产物**：`//#region` 之间的内容由 build-lib 生成，永不手改
 README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.yml / icon.svg / assets/
 ```
 
-关键标识符（grep 用）：`SIDEBAR_TAB_*`（样式与常量）、`sidebarTab*`（函数）、`GitGraphSidebarTab`（组件）、`git-conventions`（prompt section 名）、`CONVENTION_FRAMEWORKS`、`repoScan*`、`gatePathKey`。
+关键标识符（grep 用）：`SIDEBAR_TAB_*`（样式与常量）、`sidebarTab*`（函数）、`GitGraphSidebarTab`（组件）、`git-conventions`（prompt section 名）、`CONVENTION_FRAMEWORKS`、`repoScan*`、`gatePathKey`、`branchReport`、`repoHealth`、`repoAugment`、`sidebarTabOverview*`。
 
 ## 4. 构建与测试（改完必须全过）
 
 ```bash
 cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → spliced N lines of tab source / conventions source
-node scripts/patch-host.mjs     # → applied 0, already present 19（幂等）
+node scripts/build-lib.mjs      # → spliced 2660 / 879 / 329 lines（tab / conventions / branches）
+node scripts/patch-host.mjs     # → applied 0, already present 21（幂等）
 node --check lib/client.js && node --check lib/index.js
-node scripts/validate-lib.mjs   # → OK — 130 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 71/71 checks passed
+node scripts/validate-lib.mjs   # → OK — 155 locale keys resolve, all fork identifiers defined
+node scripts/test-host.mjs      # → 95/95 checks passed
 node scripts/preview-tab.mjs \
   --repos ../.demo/data/repos.json \
   --graph ../.demo/data/graph-graph-demo.json \
@@ -74,7 +75,7 @@ node scripts/preview-tab.mjs \
   --focus graph-demo
 ```
 
-`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero}.html`，可截图：
+`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero,overview,overview-light}.html`，可截图：
 
 ```bash
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --hide-scrollbars \
@@ -125,9 +126,10 @@ node scripts/preview-tab.mjs \
 | 1.1.3 | 关闭重开走缓存不空白；仓库选中改淡青蓝；**规范经 `systemPrompt` 每步注入** |
 | 1.2.0 | 一键 `git init`（`/git/init`，可选初始分支） |
 | 1.3.0 | 规范**就近继承** + 容器仓库缺文档时回退为指针清单（有界 BFS，三层） |
-| 1.4.0 | **[代码已完成，待发布]** Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`） |
+| 1.4.0 | Tier 1 三项：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG（`git-graph-<repo>.svg`）；已发布并已装 |
+| 1.5.0 | **[代码已完成，待发布]** Tier 2 三项：多仓库总览（`activity`/`upstream`）、`/git/cleanup` + `/git/health`、分支清理提示与仓库体检 |
 
-## 7. 1.4.0 的三项改动（代码已完成，见 §8 发布）
+## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
 `git status` 应为：`M lib/client.js`、`M scripts/build-lib.mjs`、`M scripts/preview-tab.mjs`、`M src/client/graph/SidebarTab.js`、`M preview/*.html`、`?? ROADMAP.md`（+ 本次新增的 `HANDOVER.md`）。
 
@@ -151,16 +153,35 @@ node scripts/preview-tab.mjs \
 - 预览断言：以 `<svg` 开头、含 `xmlns`/`viewBox`/`<title>`/仓库名、无 `var(--`、`data-gitgraph-export-row` 数 = 面板行数、`data-gitgraph-export-pinned` 存在、相邻圆 `cy` 差 = 面板行高、浅/深背景色正确。
 - 调试开关：`EXPORT_SVG_PATH=<path>` 把导出结果落盘（`node scripts/preview-tab.mjs …`）；`EXPORT_DARK=1` 让假 `document.body.hasAttribute("data-ds-dark-theme")` 返回真，可离线检查深色导出。
 
+## 7.1 1.5.0 的三项改动（Tier 2，代码完成待发版）
+
+**host 新模块 `src/host/branches.js`**（由 build-lib 拼进 `//#region src/host/branches.ts`，位置紧跟 repos region、在 `registerGitRoutes` 之前）
+- 常量：`BRANCH_REPORT_LIMIT=120`、`BRANCH_REPORT_CONCURRENCY=4`、`BRANCH_STALE_DAYS=30`、`REPO_AUGMENT_CONCURRENCY=4`、`HEALTH_UNTRACKED_LIMIT=400`、`HEALTH_BIG_BYTES=1048576`、`HEALTH_UPSTREAM_LIMIT=20`、`BRANCH_BASE_CANDIDATES=["main","master","trunk","develop"]`。
+- `repoGit(service, root, argv)`：跑一条 git，任何失败一律 `null`——单个仓库异常绝不拖垮整次扫描。
+- `repoAugment(service, entries)`：给扫描条目就地补 `activity`（秒）与 `upstream`（`{name, ahead, behind}`；无远端保持 `null`）。
+- `branchReport(service, path)` → `{root, branch, base, truncated, branches:[{name,current,upstream,lastCommit,stale,base,merged,unmerged}]}`；基线取 `BRANCH_BASE_CANDIDATES` 里第一个存在的分支，否则当前分支、再否则第一个分支；非基线分支并发 4 跑 `rev-list --count <base>..<branch>`，0 即 `merged: true`。
+- `repoHealth(service, path)` → `{root, branch, detached, dirtyFiles, conflicts, operationInProgress, stash, branches, noUpstream[], noUpstreamCount, stale[], untracked, untrackedScanned, bigUntracked[], gitObjects, gitBytes, checkedAt}`。
+- 两个只读路由：`/git/cleanup`、`/git/health`（gate 与其它视图一致，非仓库返回 `FAIL(MALFORMED_VIEW)`）；GitApi 方法 `cleanupBranches(path)`、`repoHealth(path)`。
+- **命名注意**：别用 `/git/branches` 或 `branches()`——上游已有同名路由与方法，`switch` 会让前一个 case 胜出、`API_METHODS` 的 guard 也会误判「已存在」而跳过注入。
+
+**客户端 `src/client/graph/SidebarTab.js`**
+- 状态：`overviewOpen`（经 `sidebarTabCached(sessionCwd, "overviewOpen")` 记住，重开 tab 保住状态）、`overviewDetail`、`overviewDetailRef`、`overviewInflight`。
+- 纯函数：`sidebarTabOverviewRank/Compare`（排序键依次 conflicts → dirty → behind → 有无分支 → relPath）、`sidebarTabOverviewAgo`、`sidebarTabOverviewBytes`、`sidebarTabOverviewDetailRows`。
+- 工具栏按钮 `data-gitgraph-action="overview"`：打开时工具栏只留「刷新」+「返回图谱」（`toolbarItems` 过滤），文案在 `sidebar.overview` / `sidebar.overviewBack` 间切换。
+- `overviewPanel`：打开时替换 `treeHeader`/`treeList`/`status`/`conventionsBar`/`initBar`/`filterBar`/`body`/`detail`/`moreChild`（全是 `overviewPanel === null ? X : null`，否则会留下空壳元素）。行 `data-gitgraph-overview=<relPath>`，点行（或 Enter/Space）关闭总览并 `choose(path)`；「分支与体检」按钮 `data-gitgraph-overview-detail=<path>` 懒加载两个路由，详情块 `data-gitgraph-overview-detail-body`。
+- 21 个新 locale 键（zh/en）：`sidebar.overview`、`overviewBack`、`overviewHint`、`overviewClean`、`overviewDirty`、`overviewConflicts`、`overviewAhead`、`overviewBehind`、`overviewUpstream`、`overviewDetached`、`overviewNow`、`overviewMinutes`、`overviewHours`、`overviewDays`、`overviewDetail`、`overviewMerged`、`overviewUnmerged`、`overviewMeta`、`overviewBase`、`overviewFailed`、`overviewEmpty`；`validate-lib` 现在报 155 键。
+- 预览：`preview-tab.mjs` 新增 `git/cleanup` + `git/health` stub、给 `--repos` 条目装饰确定性的 `activity`/`upstream`、总览测试块（默认不显示 → 点开 → 行数 = 仓库数 → 排序与测试内独立重算一致 → 工具栏只剩 refresh+overview → 详情加载出 merged/unmerged/health → 点行回到图谱），并写出 `preview/graph-tab-overview.html`（+ `-light`）。
+
 ## 8. 待办清单（按优先级）
 
-1. **发 1.4.0**（代码已全绿，只差发布）：`package.json` 升 1.4.0 → 跑 §10 的全链路测试 → `npm pack` 到 `dsh-git-graph-dist/1.4.0/` → commit/push（`git gpush`）→ GitHub Release（资产名**不带版本**）→ `plugin_manager remove_bundle` + `install_bundle` → 让用户重启 DSH。
+1. **发 1.5.0**（代码已全绿，只差发布）：`package.json` 升 1.5.0 → 跑 §10 的全链路测试 → `npm pack` 到 `dsh-git-graph-dist/1.5.0/` → commit/push（`git gpush`）→ GitHub Release（资产名**不带版本**）→ 用 pnpm 在 `desktop` profile 换装（见 §5 的绕法）→ 让用户重启 DSH。
 2. **市场收录 PR**：门槛 = 仓库满 1 天 = `2026-10-24T22:07:00+08:00`。之后：
    ```bash
    bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
-3. **Tier 2（1.5.0）**：多仓库总览（`/git/repos` 加 `upstream` ahead/behind）、可清理分支（新路由 `/git/branches/merged`）、仓库体检。
-4. **Tier 3（1.6.0）**：提交合规提示、工作区总纲一键创建（`.dsh/GIT_CONVENTIONS.md`）、规范升级差异预览。
+3. **Tier 3（1.6.0）**：提交合规提示、工作区总纲一键创建（`.dsh/GIT_CONVENTIONS.md`）、规范升级差异预览。
+4. 可选打磨：仓库很多时总览改虚拟滚动；总览里标出「比发现深度更深」的仓库；`activity` 改用 `status.head` 的提交时间以省掉一次 `log -1`。
 
 ## 9. 坑与教训（每条都真踩过）
 
@@ -181,6 +202,11 @@ node scripts/preview-tab.mjs \
 15. **长命令会被截断**：`ops_bash` 一次塞太长的 `cat > x <<'PY' … PY` 会被砍掉尾部（heredoc 未闭合，写出的脚本只剩前若干行）。长脚本要分块 `python - <<'PY'` 追加写。
 16. **多层引号里的反斜杠会掉一层**：Python 三引号里的 `\\n` 生成出来是真换行（`out.join("` + 换行 → `SyntaxError: Invalid or unexpected token`），正则 `[\\/]` 也会退化成 `[\/]`（匹配不到反斜杠）。写这类字符用 `chr(92)`/`chr(10)` 拼，别依赖转义层数。
 
+17. **新路由/新方法先 grep 上游有没有同名**：`/git/branches` 和 `GitApi.branches()` 都是上游已有的，同名会让 `switch` 只命中前一个 case、`API_METHODS` 的 guard 误判「已存在」而跳过注入。最终用 `/git/cleanup` + `/git/health`、`cleanupBranches()` + `repoHealth()`。
+18. **region 头归 build-lib 所有**：patch-host 若也插 `//#region src/host/branches.ts`，第二次 build 会留下一个空 region（实测重复出现两次）。现在 build-lib 发现缺头时自己插 `region + //#endregion` 再 splice，patch-host 只负责路由与扫描挂载（21 处）。
+19. **按锚点切文件后立刻 `node --check`**：一次用 `s.index(...)` 切 patch-host 的新增段，把相邻两个 `patch(` 调用一起吞掉，`node --check` 报 `missing ) after argument list`——切完先查语法再往下做。
+20. **`git count-objects -v` 的 KB 会四舍五入成 0**：小仓库 `size: 0`，别断言 `gitBytes > 0`，用对象数（`count` + `in-pack`）判断 `.git` 是否读到。
+
 ## 10. 下一步照做即可（最短路径）
 
 ```bash
@@ -190,8 +216,8 @@ node scripts/build-lib.mjs && node scripts/patch-host.mjs
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
-# 2) 升 1.4.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.4.0"
+# 2) 升 1.5.0 后打包
+npm pack --pack-destination "../dsh-git-graph-dist/1.5.0"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GIT-graph sidebar tab — preview</title>
+<style>
+	:root {
+		--dsw-alias-bg-base: #ffffff;
+		--dsw-alias-bg-layer-1: #fafafa;
+		--dsw-alias-bg-layer-2: #f1f3f5;
+		--dsw-alias-label-primary: #1f2329;
+		--dsw-alias-label-secondary: #5c6370;
+		--dsw-alias-label-tertiary: #9aa1ab;
+		--dsw-alias-border-l1: #e6e8eb;
+		--dsw-alias-border-l2: #d5d8dd;
+		--dsw-alias-button-tool-bar-fill: #f1f3f5;
+		--dsw-alias-state-warn-primary: #c26a00;
+		--dsw-alias-state-error-primary: #c62828;
+		--dsw-alias-state-business-primary: #4c8dff;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--dsw-alias-bg-base: #1b1d21;
+			--dsw-alias-bg-layer-1: #22252a;
+			--dsw-alias-bg-layer-2: #2b2f36;
+			--dsw-alias-label-primary: #e8eaed;
+			--dsw-alias-label-secondary: #a8aeb8;
+			--dsw-alias-label-tertiary: #767d88;
+			--dsw-alias-border-l1: #33383f;
+			--dsw-alias-border-l2: #41474f;
+			--dsw-alias-button-tool-bar-fill: #2b2f36;
+		}
+	}
+	body[data-theme="light"] {
+		--dsw-alias-bg-base: #ffffff;
+		--dsw-alias-bg-layer-1: #fafafa;
+		--dsw-alias-bg-layer-2: #f1f3f5;
+		--dsw-alias-label-primary: #1f2329;
+		--dsw-alias-label-secondary: #5c6370;
+		--dsw-alias-label-tertiary: #9aa1ab;
+		--dsw-alias-border-l1: #e6e8eb;
+		--dsw-alias-border-l2: #d5d8dd;
+		--dsw-alias-button-tool-bar-fill: #f1f3f5;
+		background: #eef0f3;
+		color: #1f2329;
+	}
+	body[data-theme="light"] .panel { box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); }
+	body[data-theme="light"] h1 { color: #1f2329; }
+	body[data-theme="light"] p.note, body[data-theme="light"] .legend { color: #5c6370; }
+	body[data-theme="light"] code { background: #e6e8eb; }
+	body {
+		margin: 0;
+		padding: 24px;
+		background: #131417;
+		color: #e8eaed;
+		font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+	}
+	h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+	p.note { margin: 0 0 18px; color: #9aa1ab; font-size: 12px; }
+	.stage { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+	.panel { width: 380px; height: 560px; border-radius: 12px; overflow: hidden;
+		background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1);
+		color: var(--dsw-alias-label-primary); display: flex; flex-direction: column; }
+	.panel > header { flex: none; padding: 8px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary);
+		border-bottom: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
+	.panel > div { flex: 1 1 auto; min-height: 0; }
+	.legend { margin-top: 18px; color: #9aa1ab; font-size: 12px; line-height: 1.8; }
+	code { background: #24262b; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body data-theme="light">
+	<h1>GIT-graph · better-sidebar 仓库图谱 tab — 离线预览</h1>
+	<p class="note">此文件由 <code>scripts/preview-tab.mjs</code> 直接执行已构建的 <code>lib/client.js</code> 生成：假 React 运行时跑真实 <code>apply()</code> → 取出注册给 better-sidebar 的组件 → 注入真实 <code>/git/repos</code> 与 <code>/git/graph</code> 响应渲染。② 为嵌套仓库（选中状态由 <code>tab.meta.repoPath</code> 恢复），③ 是脚本真的触发了一次行点击与一次「缩小」后的结果（单行紧凑模式）。</p>
+	<div class="stage">
+		<div class="panel">
+			<header>工作区总览 · 每个仓库一行（需要处理在前）</header>
+			<div><div style="display:flex;flex-direction:column;height:100%;min-height:0;box-sizing:border-box;gap:6px;padding:8px 8px 6px" data-gitgraph-sidebar-tab="true"><div key="toolbar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:none"><button key="refresh" type="button" data-gitgraph-action="refresh" style="flex:none;height:26px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary);border-radius:8px;font-size:12px;padding:0 10px;cursor:pointer" title="刷新" aria-label="刷新">刷新</button><button key="overview" type="button" data-gitgraph-action="overview" style="flex:none;height:26px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-tool-bar-fill);color:var(--dsw-alias-label-primary);border-radius:8px;font-size:12px;padding:0 10px;cursor:pointer;border-color:var(--dsw-alias-label-tertiary)" title="返回图谱" aria-label="返回图谱">返回图谱</button></div><div key="overview" data-gitgraph-overview-list="true" style="display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 2px 6px"><div key="hint" style="font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary);padding:0 2px 2px">按需要处理的程度排序：冲突、改动、落后上游的仓库在前。</div><div key="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-src" data-gitgraph-overview="dsh-git-graph-src" style="display:flex;flex-direction:column;gap:5px;padding:7px 9px;border:1px solid var(--dsw-alias-border-1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;text-align:left;color:inherit;flex:none" role="button" tab-index="0"><div key="head" style="display:flex;align-items:center;gap:6px;min-width:0"><span key="name" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)">dsh-git-graph-src</span><span key="rel" style="flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)">dsh-git-graph-src</span><button key="detail" type="button" data-gitgraph-overview-detail="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-src" style="flex:none;padding:1px 6px;border:1px solid var(--dsw-alias-border-1);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:14px;cursor:pointer" title="分支与体检" aria-label="分支与体检">分支与体检</button></div><div key="meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><span key="branch" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">main</span><span key="dirty" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-warning, #b45309)">1 个改动</span><span key="ahead" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">领先 3</span><span key="activity" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">6 小时前</span></div><div key="detail" data-gitgraph-overview-detail-body="true" style="display:flex;flex-direction:column;gap:3px;padding-top:5px;border-top:1px dashed var(--dsw-alias-border-1);font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><div key="base" style="display:flex;align-items:baseline;gap:5px;min-width:0"><span style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">基线 main</span></div><div key="m-feature/merged-old" style="display:flex;align-items:baseline;gap:5px;min-width:0"><span key="name" style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)">feature/merged-old</span><span key="state" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">已合并</span></div><div key="p-feature/c" style="display:flex;align-items:baseline;gap:5px;min-width:0"><span key="name" style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)">feature/c</span><span key="state" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-warning, #b45309)">3 个未合并</span></div><div key="health" style="display:flex;align-items:baseline;gap:5px;min-width:0">3 个分支 · stash 1 · 对象 3.5 MB</div></div></div><div key="C:\Users\18316\Documents\deepseek-harness\default-workspace\awesome-dsh-plugin" data-gitgraph-overview="awesome-dsh-plugin" style="display:flex;flex-direction:column;gap:5px;padding:7px 9px;border:1px solid var(--dsw-alias-border-1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;text-align:left;color:inherit;flex:none" role="button" tab-index="0"><div key="head" style="display:flex;align-items:center;gap:6px;min-width:0"><span key="name" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)">awesome-dsh-plugin</span><span key="rel" style="flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)">awesome-dsh-plugin</span><button key="detail" type="button" data-gitgraph-overview-detail="C:\Users\18316\Documents\deepseek-harness\default-workspace\awesome-dsh-plugin" style="flex:none;padding:1px 6px;border:1px solid var(--dsw-alias-border-1);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:14px;cursor:pointer" title="分支与体检" aria-label="分支与体检">分支与体检</button></div><div key="meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><span key="branch" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">add/athosoo-dsh-git-graph-sidebar</span><span key="clean" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">干净</span><span key="behind" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-warning, #b45309)">落后 3</span><span key="activity" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">1 小时前</span></div></div><div key="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-smoke\alpha" data-gitgraph-overview="dsh-git-graph-smoke/alpha" style="display:flex;flex-direction:column;gap:5px;padding:7px 9px;border:1px solid var(--dsw-alias-border-1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;text-align:left;color:inherit;flex:none" role="button" tab-index="0"><div key="head" style="display:flex;align-items:center;gap:6px;min-width:0"><span key="name" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)">alpha</span><span key="rel" style="flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)">dsh-git-graph-smoke/alpha</span><button key="detail" type="button" data-gitgraph-overview-detail="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-smoke\alpha" style="flex:none;padding:1px 6px;border:1px solid var(--dsw-alias-border-1);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:14px;cursor:pointer" title="分支与体检" aria-label="分支与体检">分支与体检</button></div><div key="meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><span key="branch" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">main</span><span key="clean" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">干净</span><span key="no-upstream" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">无上游</span><span key="activity" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">3 小时前</span></div></div><div key="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-smoke\nest\beta" data-gitgraph-overview="dsh-git-graph-smoke/nest/beta" style="display:flex;flex-direction:column;gap:5px;padding:7px 9px;border:1px solid var(--dsw-alias-border-1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;text-align:left;color:inherit;flex:none" role="button" tab-index="0"><div key="head" style="display:flex;align-items:center;gap:6px;min-width:0"><span key="name" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)">beta</span><span key="rel" style="flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)">dsh-git-graph-smoke/nest/beta</span><button key="detail" type="button" data-gitgraph-overview-detail="C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-smoke\nest\beta" style="flex:none;padding:1px 6px;border:1px solid var(--dsw-alias-border-1);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:14px;cursor:pointer" title="分支与体检" aria-label="分支与体检">分支与体检</button></div><div key="meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><span key="branch" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">main</span><span key="clean" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">干净</span><span key="ahead" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">领先 2</span><span key="activity" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">4 小时前</span></div></div><div key="C:\Users\18316\Documents\deepseek-harness\default-workspace\graph-demo" data-gitgraph-overview="graph-demo" style="display:flex;flex-direction:column;gap:5px;padding:7px 9px;border:1px solid var(--dsw-alias-border-1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;text-align:left;color:inherit;flex:none;border-color:var(--dsw-alias-label-tertiary)" role="button" tab-index="0"><div key="head" style="display:flex;align-items:center;gap:6px;min-width:0"><span key="name" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)">graph-demo</span><span key="rel" style="flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)">graph-demo</span><button key="detail" type="button" data-gitgraph-overview-detail="C:\Users\18316\Documents\deepseek-harness\default-workspace\graph-demo" style="flex:none;padding:1px 6px;border:1px solid var(--dsw-alias-border-1);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10px;line-height:14px;cursor:pointer" title="分支与体检" aria-label="分支与体检">分支与体检</button></div><div key="meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;line-height:15px;color:var(--dsw-alias-label-secondary)"><span key="branch" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">main</span><span key="clean" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">干净</span><span key="ahead" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">领先 4</span><span key="activity" style="flex:none;padding:0 5px;border-radius:4px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)">7 小时前</span></div></div></div></div></div>
+		</div>
+	</div>
+	<div class="legend">
+		泳道颜色按 lane 编号循环 8 色；merge 提交画成菱形；父边为贝塞尔曲线（第一父不透明、其余半透明）；工具栏 <b>−</b>/<b>+</b> 调整行高；点击提交固定详情卡。<br>
+		深色变量随 <code>prefers-color-scheme</code> 切换。真实 GUI 里这些颜色来自 DSH 主题 token（<code>--dsw-alias-*</code>）。
+	</div>
+</body>
+</html>

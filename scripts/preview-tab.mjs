@@ -449,6 +449,24 @@ if (usingRealData) {
 	}
 }
 
+// The overview fields a live scan entry carries (`activity`, `upstream`) are
+// added by the host; canned `--repos` files predate them, so decorate every
+// entry with deterministic values: the first repository trails its upstream,
+// the second tracks nothing, and all of them were active recently.
+{
+	const entries = Array.isArray(REPOS.repos) ? REPOS.repos : [];
+	const now = Math.floor(Date.now() / 1000);
+	for (let index = 0; index < entries.length; index += 1) {
+		const entry = entries[index];
+		if (typeof entry.activity !== "number") entry.activity = now - (index + 1) * 5400;
+		if (entry.upstream === undefined) {
+			entry.upstream = index === 0
+				? { name: "origin/" + (entry.status !== null && entry.status !== undefined && typeof entry.status.branch === "string" && entry.status.branch !== "" ? entry.status.branch : "main"), ahead: 0, behind: 3 }
+				: index === 1 ? null : { name: "origin/main", ahead: index, behind: 0 };
+		}
+	}
+}
+
 // ------------------------------------------------------------------- stubs
 const styles = [];
 function fakeElement(tag) {
@@ -503,6 +521,41 @@ const fakeFetch = async (path, init) => {
 		value = GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.has(key)
 			? GRAPH_BY_ROOT.get(key)
 			: String(payload.path).indexOf("dsh-git-graph-src") >= 0 ? NESTED_GRAPH : ROOT_GRAPH;
+	} else if (path === "git/cleanup") {
+		const repo = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path)) || {};
+		const status = repo.status !== undefined && repo.status !== null ? repo.status : {};
+		const branch = typeof status.branch === "string" && status.branch !== "" ? status.branch : "main";
+		const now = Math.floor(Date.now() / 1000);
+		value = {
+			root: repo.root !== undefined ? repo.root : payload.path,
+			branch,
+			base: "main",
+			truncated: false,
+			branches: [
+				{ name: "main", current: branch === "main", upstream: "origin/main", lastCommit: now - 7200, stale: false, base: true, merged: true, unmerged: null },
+				{ name: "feature/merged-old", current: false, upstream: "", lastCommit: now - 864000, stale: true, base: false, merged: true, unmerged: 0 },
+				{ name: "feature/c", current: branch === "feature/c", upstream: "", lastCommit: now - 1800, stale: false, base: false, merged: false, unmerged: 3 }
+			]
+		};
+	} else if (path === "git/health") {
+		value = {
+			root: payload.path,
+			branch: "main",
+			detached: false,
+			dirtyFiles: 2,
+			conflicts: 0,
+			operationInProgress: null,
+			stash: 1,
+			branches: 3,
+			noUpstream: ["feature/c"],
+			noUpstreamCount: 1,
+			stale: ["feature/merged-old"],
+			untracked: 4,
+			untrackedScanned: 4,
+			bigUntracked: [{ path: "tmp/archive.zip", bytes: 5242880 }],
+			gitBytes: 3670016,
+			checkedAt: Date.now()
+		};
 	} else if (path === "git/conventions") {
 		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
 		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null
@@ -840,6 +893,67 @@ if (switchedHtml.indexOf("data-gitgraph-repo-active") < 0) throw new Error("the 
 console.log("preview-tab: repository switch ok (" + repoRows.length + " tree rows, " +
 	(usingRealData ? "real repository graph loaded" : "nested graph loaded") + ")");
 
+
+/** The overview render, kept for the static page written at the end. */
+let overviewSnapshot = "";
+
+// The workspace overview: one row per repository, attention first, a read-only
+// detail per row (branch cleanup hints plus the health report) and a drill-in
+// back to that repository's graph.
+{
+	const overviewMount = await mountComponent(descriptor.component, tabProps(focusPath));
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	let overviewHtml = (await overviewMount.render()).html;
+	if (overviewHtml.indexOf("data-gitgraph-overview-list") >= 0) throw new Error("the overview was open before it was asked for");
+	const overviewToggle = findAll(overviewMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "overview")[0];
+	if (overviewToggle === undefined) throw new Error("the overview toggle is missing from the toolbar");
+	click(overviewToggle, "overview");
+	overviewHtml = (await overviewMount.render()).html;
+	if (overviewHtml.indexOf("data-gitgraph-overview-list") < 0) throw new Error("the overview did not open");
+	if (overviewHtml.indexOf("data-gitgraph-sidebar-body") >= 0) throw new Error("the graph body is still painted under the overview");
+	const overviewActions = findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-action"] === "string").map((node) => node.props["data-gitgraph-action"]);
+	if (overviewActions.join(",") !== "refresh,overview") throw new Error("the overview toolbar should only offer rescan and back, got " + overviewActions.join(","));
+	const overviewRows = findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview"] === "string");
+	if (overviewRows.length !== REPOS.repos.length) throw new Error("overview rows " + overviewRows.length + " != repositories " + REPOS.repos.length);
+	const rankOf = (entry) => {
+		const status = entry.status !== undefined && entry.status !== null ? entry.status : null;
+		const conflicts = status !== null && typeof status.conflicts === "number" ? status.conflicts : 0;
+		const dirty = status === null ? 0 : (typeof status.dirtyFiles === "number" ? status.dirtyFiles : 0) + (typeof status.untrackedFiles === "number" ? status.untrackedFiles : 0);
+		const upstream = entry.upstream !== undefined && entry.upstream !== null ? entry.upstream : null;
+		const behind = upstream !== null && typeof upstream.behind === "number" ? upstream.behind : 0;
+		const branch = status !== null && typeof status.branch === "string" ? status.branch : "";
+		return [conflicts > 0 ? 0 : 1, dirty > 0 ? 0 : 1, behind > 0 ? 0 : 1, branch === "" ? 0 : 1, typeof entry.relPath === "string" ? entry.relPath : ""];
+	};
+	const expectedOrder = REPOS.repos.slice().sort((left, right) => {
+		const a = rankOf(left);
+		const b = rankOf(right);
+		for (let index = 0; index < a.length; index += 1) {
+			if (a[index] === b[index]) continue;
+			if (typeof a[index] === "number") return a[index] - b[index];
+			return a[index] < b[index] ? -1 : 1;
+		}
+		return 0;
+	}).map((entry) => entry.relPath);
+	const actualOrder = overviewRows.map((node) => node.props["data-gitgraph-overview"]);
+	if (actualOrder.join("|") !== expectedOrder.join("|")) throw new Error("overview order " + actualOrder.join("|") + " != " + expectedOrder.join("|"));
+	const overviewDetailToggle = findAll(overviewRows[0], (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview-detail"] === "string")[0];
+	if (overviewDetailToggle === undefined) throw new Error("the overview row has no detail toggle");
+	click(overviewDetailToggle, "overview detail");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	overviewHtml = (await overviewMount.render()).html;
+	if (overviewHtml.indexOf("data-gitgraph-overview-detail-body") < 0) throw new Error("the overview detail did not load");
+	if (overviewHtml.indexOf("feature/merged-old") < 0) throw new Error("the overview detail lost the merged branch");
+	if (overviewHtml.indexOf("feature/c") < 0) throw new Error("the overview detail lost the unmerged branch");
+	if (overviewHtml.indexOf("stash") < 0) throw new Error("the overview detail lost the health line");
+	overviewSnapshot = overviewHtml;
+	click(findAll(overviewMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-overview"] === "string")[0], "overview row");
+	await new Promise((resolve) => setTimeout(resolve, 80));
+	overviewHtml = (await overviewMount.render()).html;
+	if (overviewHtml.indexOf("data-gitgraph-overview-list") >= 0) throw new Error("the overview stayed open after a repository was opened");
+	if (overviewHtml.indexOf("data-gitgraph-sidebar-body") < 0) throw new Error("the graph body did not come back after the drill-in");
+	console.log("preview-tab: workspace overview ok (" + overviewRows.length + " repositories, attention first, detail and drill-in wired)");
+}
+
 // The conventions strip: an unborn repository without a document must make the
 // tab write the empty scaffold by itself and open the framework picker.
 let conventionsHtml = "";
@@ -1147,3 +1261,17 @@ await writeFile(heroFile, heroHtml, "utf8");
 await writeFile(heroFile.replace(/\.html$/, "-light.html"), heroHtml.replace("<body>", '<body data-theme="light">'), "utf8");
 console.log("preview-tab: wrote " + heroFile);
 
+
+// The overview replaces the tree and the graph, so it gets a page of its own:
+// the same shell as the panel sheet, with one panel holding that render.
+if (overviewSnapshot !== "") {
+	const overviewFile = join(dirname(outFile), "graph-tab-overview.html");
+	const stageStart = html.indexOf('<div class="stage">');
+	const legendStart = html.indexOf('<div class="legend">');
+	if (stageStart < 0 || legendStart < 0) throw new Error("preview shell changed: cannot place the overview page");
+	const stage = '<div class="stage">\n\t\t<div class="panel">\n\t\t\t<header>工作区总览 · 每个仓库一行（需要处理在前）</header>\n\t\t\t<div>' + overviewSnapshot + '</div>\n\t\t</div>\n\t</div>\n\t';
+	const overviewPage = html.slice(0, stageStart) + stage + html.slice(legendStart);
+	await writeFile(overviewFile, overviewPage, "utf8");
+	await writeFile(overviewFile.replace(/\.html$/, "-light.html"), overviewPage.replace("<body>", '<body data-theme="light">'), "utf8");
+	console.log("preview-tab: wrote " + overviewFile);
+}

@@ -27,6 +27,10 @@ The tab works from the session's working directory and treats that directory as 
 - **Git conventions** — a strip above the graph states which convention document the selected repository carries (`draft` / `settled` / missing), opens it in the editor, and offers six proven frameworks to bootstrap a brand-new repository.
 - **One-click repository init** — a workspace directory that is not a repository yet gets an *Initialize Git repository* button. It asks once (target path and initial branch: `main` / `master` / `trunk` / `develop`), runs `git init -b <branch>` there, and then the conventions scaffold and framework picker open by themselves. It refuses when the directory already sits inside a repository, so it can never re-root an existing checkout.
 
+- **Workspace overview** — *Overview* on the toolbar swaps the repository tree for a list: one row per repository with its branch, change count, conflicts, how far it is ahead of or behind its upstream, and how long ago it last moved. Repositories with conflicts, changes or a trailing upstream sort first. The list is read-only; a click goes back to that repository's graph.
+- **Branch cleanup hints** — *Branches & health* inside the overview lists each local branch against a base (`main`, else `master` / `trunk` / `develop` / the current branch) as `merged` or `N unmerged`. Suggestions only: the plugin never deletes a branch.
+- **Repository health** — the same place reports a detached HEAD, branches without an upstream, the stash count, untracked files above 1 MB and the `.git` size. Information and reasons, no *fix all* button.
+
 ### Branch chip (composer)
 
 The chip that ships with the upstream plugin is unchanged: on a blank conversation it lets you switch or create a branch, and it opens the interactive commit-graph dialog and the worktree manager. Branch operations run in the host process; the chip hides itself on active sessions.
@@ -117,6 +121,8 @@ Registered by the host half under `/git`; all of them answer JSON (`{ok:true,val
 | `/git/conventions` | convention document state for a repository plus the framework catalog (`{path}`) |
 | `/git/convention` | write the document (`{path, framework?, force?}`) |
 | `/git/init` | initialize a repository in a directory that has none (`{path, branch?}`) |
+| `/git/cleanup` | branch cleanup hints: merged/unmerged counts per local branch (`{path}`) |
+| `/git/health` | repository health: detached HEAD, branches without upstream, stash, large untracked files, `.git` size (`{path}`) |
 | `/git/events` | change notifications (polled by the UI) |
 
 Every route resolves the requested path with `realpath` and rejects it unless it lands inside a registered workspace. Nested repository directories are accepted; anything outside a workspace gets `workspace-unknown`.
