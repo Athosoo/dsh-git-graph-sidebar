@@ -1,7 +1,7 @@
 {
 	"name": "dsh-git-graph-sidebar",
-	"version": "1.2.0",
-	"description": "Git commit graph chip plus a better-sidebar repository tab (SVG lane canvas, zoom, pinned commit card) that discovers every repository below the workspace directory and bootstraps a Git conventions document for each one.",
+	"version": "1.3.0",
+	"description": "Git commit graph chip plus a better-sidebar repository tab (SVG lane canvas, zoom, pinned commit card) that discovers every repository below the workspace directory and bootstraps a Git conventions document for each one; a conventions document is inherited by the repositories nested in it.",
 	"icon": "icon.svg",
 	"type": "module",
 	"license": "Apache-2.0",

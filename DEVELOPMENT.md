@@ -114,9 +114,17 @@ root.inject(["systemPrompt"], (scope) => {
 });
 ```
 
-`interpolate: false` keeps the document text literal (no `$`-substitution), and `order: 2400` places the section ahead of the tooling policy that `dsh-ops` adds at 3250. The text function walks up from the session `cwd` to the repository root (`conventionsRepoRoot`), reads the document (capped at `CONVENTION_PROMPT_MAX_CHARS` = 3000 characters), and frames it as repository policy rather than a user instruction. When the session `cwd` is a container, it lists the documented repositories below it instead. Nothing is injected for a path without a document, and results are cached by `mtimeMs:size` so a step never re-reads an unchanged file.
+`interpolate: false` keeps the document text literal (no `$`-substitution), and `order: 2400` places the section ahead of the tooling policy that `dsh-ops` adds at 3250.
 
-`test-host.mjs` covers this with a fake `systemPrompt` service: it captures the descriptor, then calls `section.text({ agent: { session: { header: { cwd } } } })` for a documented repository, an undocumented one, an edited document (cache invalidation) and a container directory.
+`conventionsPromptText` resolves the document in three steps (`conventionsDocumentFor`):
+
+1. the repository the session `cwd` is in (`conventionsRepoRoot` walks up to the first `.git`),
+2. the nearest enclosing repository (`conventionsAncestorRoots` collects every `.git` above it), which is how a monorepo container's document reaches the packages inside it — such a block is titled `inherited Git conventions` and carries `Inherited from: <container>`,
+3. otherwise `conventionsContainerBlock`, a bounded breadth-first index of the documented repositories below the `cwd` (`CONVENTION_PROMPT_DEPTH` = 3, `CONVENTION_PROMPT_CHILDREN` = 40 directories inspected, `CONVENTION_PROMPT_LIST` = 6 entries, dot directories and `node_modules` skipped, a found repository is not descended into).
+
+The document body is capped at `CONVENTION_PROMPT_MAX_CHARS` = 3000 characters and framed as repository policy rather than a user instruction. Results are cached by owner + `mtimeMs:size`; the index path uses a 10-second time bucket instead, so a document that appears later shows up without a restart.
+
+`test-host.mjs` covers this with a fake `systemPrompt` service: it captures the descriptor, then calls `section.text({ agent: { session: { header: { cwd } } } })` for a documented repository, an undocumented one, an edited document (cache invalidation), a container directory, and a full inheritance fixture (own document, inherited document with its label, a deeper document overriding the inherited one, a plain subdirectory, and an index that reaches two levels down).
 
 ### One-click init
 

@@ -324,6 +324,62 @@ async function main() {
 	check("rescan sees the new repository", freshEntry !== undefined);
 	check("new repository is empty", freshEntry !== undefined && freshEntry.status !== null && freshEntry.status.head === "", JSON.stringify(freshEntry?.status ?? null));
 
+	console.log("\n[11] conventions are inherited by repositories in an enclosing repository");
+	const gitInit = (dir, branch) => new Promise((resolve, reject) => {
+		const child = spawn("git", ["init", "-b", branch ?? "main"], {
+			cwd: dir,
+			windowsHide: true,
+			stdio: ["ignore", "pipe", "pipe"]
+		});
+		let failure = "";
+		child.stderr.on("data", (chunk) => {
+			failure += String(chunk);
+		});
+		child.on("error", reject);
+		child.on("close", (code) => (code === 0 ? resolve() : reject(new Error("git init failed: " + failure))));
+	});
+	const mono = join(workspace, "mono");
+	const api = join(mono, "packages", "api");
+	const web = join(mono, "packages", "web");
+	const vendored = join(web, "vendor-lib");
+	await mkdir(api, { recursive: true });
+	await mkdir(web, { recursive: true });
+	await mkdir(vendored, { recursive: true });
+	await gitInit(mono);
+	await gitInit(api);
+	await gitInit(web);
+	await gitInit(vendored);
+	await writeFile(join(api, "GIT_CONVENTIONS.md"), ["# API rules", "status: settled", "", "- api-own-marker", ""].join(NL), "utf8");
+	await writeFile(join(mono, "GIT_CONVENTIONS.md"), ["# Mono rules", "status: settled", "", "- mono-marker", ""].join(NL), "utf8");
+	await writeFile(join(vendored, "GIT_CONVENTIONS.md"), ["# Vendor rules", "status: settled", "", "- vendor-marker", ""].join(NL), "utf8");
+	const apiText = section.text(cwdOf(api));
+	check2("nested repository uses its own document", apiText.includes("api-own-marker"));
+	check2("own document is not labelled inherited", !apiText.includes("Inherited from:"));
+	const monoText = section.text(cwdOf(mono));
+	check2("container repository uses its own document", monoText.includes("mono-marker"));
+	check2("container document is not labelled inherited", !monoText.includes("Inherited from:"));
+	const webText = section.text(cwdOf(web));
+	check2("nested repository without a document inherits the enclosing one", webText.includes("mono-marker"));
+	check2("inherited document is labelled", webText.includes("inherited Git conventions") && webText.includes("Inherited from: " + mono));
+	check2("inherited block names the asking repository", webText.includes("Repository: " + web));
+	const vendorText = section.text(cwdOf(vendored));
+	check2("a deeper document overrides the inherited one", vendorText.includes("vendor-marker") && !vendorText.includes("mono-marker"));
+	const plainText = section.text(cwdOf(join(mono, "packages")));
+	check2("a plain subdirectory shows the enclosing repository document", plainText.includes("mono-marker") && plainText.includes("Repository: " + mono));
+	const mono2 = join(workspace, "mono2");
+	await mkdir(join(mono2, "lib"), { recursive: true });
+	await gitInit(mono2);
+	await gitInit(join(mono2, "lib"));
+	await writeFile(join(mono2, "lib", "GIT_CONVENTIONS.md"), ["# Lib rules", "status: draft", "", "- lib-marker", ""].join(NL), "utf8");
+	const deeper = join(mono2, "deep", "inner");
+	await mkdir(deeper, { recursive: true });
+	await gitInit(deeper);
+	await writeFile(join(deeper, "GIT_CONVENTIONS.md"), ["# Inner rules", "status: settled", "", "- inner-marker", ""].join(NL), "utf8");
+	const mono2Text = section.text(cwdOf(mono2));
+	check2("a repository without a document still indexes the repositories below it", mono2Text.includes("Repositories below this directory") && mono2Text.includes("lib - "));
+	check2("the container index reaches repositories two levels down", mono2Text.includes("deep/inner - "));
+	check2("a repository with no document anywhere injects nothing", section.text(cwdOf(join(workspace, "repos", "fresh"))).includes("Git conventions") === false);
+
 	await rm(workspace, { recursive: true, force: true });
 
 	const failed = checks.filter((entry) => !entry.ok);

@@ -86,7 +86,8 @@ A commit graph shows what happened; a conventions document records what the team
   | GitLab Flow | explicit environment branches between `main` and production |
 
 - **Never overwrites** — an existing document is only replaced when the request carries `force`, which the UI does not offer for settled documents. The document is plain Markdown in the repository root, so it is reviewed and revised like any other source file.
-- **The assistant actually reads it** — the host registers a `systemPrompt` section that is assembled before *every* model step, so the running agent is always told where the document is for the session's repository and gets its rules (up to 3 000 characters) inline. Nothing is injected for a workspace without a document, and the text is cached per file mtime, so a step never re-reads an unchanged file. When the session's directory is a container, the section lists the documented repositories below it instead.
+- **The assistant actually reads it** — the host registers a `systemPrompt` section that is assembled before *every* model step, so the running agent is always told where the document is for the session's repository and gets its rules (up to 3 000 characters) inline. Nothing is injected for a workspace where no repository documents anything, and the text is cached per file mtime, so a step never re-reads an unchanged file.
+- **The nearest document wins** — the section resolves the document in three steps: the repository the session directory is in, then the nearest enclosing repository (a monorepo container), then an index of the documented repositories below it. An inherited document is labelled `inherited Git conventions` and names the repository it came from, so an agent inside `packages/api` follows the container's rules until `packages/api` writes its own. The index walks up to three levels down, skipping dot directories and `node_modules`.
 
 ## Initializing a repository
 
