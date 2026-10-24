@@ -159,6 +159,12 @@ Tier 2 adds two read-only host routes and one client panel; nothing here mutates
 
 `test-host.mjs` builds a real `repos/branchy` fixture (a merged branch, an unmerged branch, an untracked big file) and asserts both reports plus the gate rejections; `preview-tab.mjs` stubs the two routes and asserts the overview ordering, the toolbar collapse, the detail block and the drill-in.
 
+## UI cleanup in 1.6.1
+
+- 工具栏回到五项：refresh、zoom-out、zoom-in、export、init-repo。`data-gitgraph-action="overview"` 与 `"expand"` 不再存在，`data-gitgraph-overlay` / `data-gitgraph-overview-list` 也不再渲染（`preview-tab.mjs` 有断言守着）。
+- 删掉的实现：`overviewOpen`/`overviewDetail`/`overviewInflight`/`expanded` 状态、`toggleOverviewDetail()`、`sidebarTabOverview*()` 六个纯函数、`SIDEBAR_TAB_OVERVIEW*`/`SIDEBAR_TAB_OVERLAY*`/`SIDEBAR_TAB_EXPAND` 样式常量、21 条 `sidebar.overview*` locale 键。host 侧 `/git/cleanup` 与 `/git/health` 保留（只读，仍在 `test-host` 里断言）。
+- 字号：`src/client/graph/SidebarTab.js` 里所有 `fontSize: 10/11/12/13` 各自 +1（10→11、11→12、12→13、13→14）；`SIDEBAR_TAB_ROW_H = 34` 与泳道几何未动，导出 SVG 的行距仍取自面板行高。
+
 ## Commit compliance, workspace document and upgrade preview (1.6.0)
 
 Tier 3 makes the written document do something. All three additions are read-only except the explicit "write" actions, which already existed in shape and still only touch the conventions file.
