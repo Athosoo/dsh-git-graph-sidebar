@@ -63,6 +63,14 @@ const EXTRA_KEYS = [
 			['"sidebar.conventionsWriting"', '"写入中…"'],
 			['"sidebar.conventionsBestFor"', '"适合："'],
 			['"sidebar.error.conventions"', '"读取或写入 Git 规范失败"'],
+			['"sidebar.initRepo"', '"初始化 Git 仓库"'],
+			['"sidebar.initRepoHint"', '"这个文件夹还不是 Git 仓库。可以直接在这里初始化，工作区里的其它仓库不受影响。"'],
+			['"sidebar.initBranch"', '"初始分支"'],
+			['"sidebar.initConfirm"', '"初始化"'],
+			['"sidebar.initCancel"', '"取消"'],
+			['"sidebar.initRunning"', '"正在初始化…"'],
+			['"sidebar.initAfter"', '"初始化后会自动建立 Git 规范文档，并提示选择框架。"'],
+			['"sidebar.error.init"', '"初始化 Git 仓库失败"'],
 		]
 	},
 	{
@@ -104,6 +112,14 @@ const EXTRA_KEYS = [
 			['"sidebar.conventionsWriting"', '"Writing…"'],
 			['"sidebar.conventionsBestFor"', '"Best for: "'],
 			['"sidebar.error.conventions"', '"Reading or writing the Git convention document failed"'],
+			['"sidebar.initRepo"', '"Initialize Git repository"'],
+			['"sidebar.initRepoHint"', '"This folder is not a Git repository yet. Initialize it here; other repositories in the workspace are untouched."'],
+			['"sidebar.initBranch"', '"Initial branch"'],
+			['"sidebar.initConfirm"', '"Initialize"'],
+			['"sidebar.initCancel"', '"Cancel"'],
+			['"sidebar.initRunning"', '"Initializing…"'],
+			['"sidebar.initAfter"', '"A Git convention document is created automatically afterwards, and the framework picker opens."'],
+			['"sidebar.error.init"', '"Failed to initialize the Git repository"'],
 		]
 	}
 ];
@@ -112,7 +128,9 @@ const EXTRA_KEYS = [
  * GitApi methods the tab needs that the upstream API class does not carry.
  * Inserted after `repos()`; the marker comment keeps this idempotent.
  */
-const API_METHODS = `
+const API_METHODS = [{
+	guard: "git/conventions",
+	code: `
 			/** The repository's Git-convention state plus the framework catalogue. */
 			conventions(path) {
 				return post("git/conventions", { path });
@@ -123,7 +141,17 @@ const API_METHODS = `
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
 				if (force === true) payload.force = true;
 				return post("git/convention", payload);
-			}`;
+			}`
+}, {
+	guard: "git/init",
+	code: `
+			/** Initialize a repository in a directory that has none yet. */
+			initRepo(path, branch) {
+				const payload = { path };
+				if (typeof branch === "string" && branch.trim() !== "") payload.branch = branch.trim();
+				return post("git/init", payload);
+			}`
+}];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";
 
 const lib = await readFile(libFile, "utf8");
@@ -139,9 +167,10 @@ let next = lib.slice(0, startLineEnd + 1) + region + lib.slice(endIndex);
 
 // GitApi additions (conventions/convention). Guarded by the marker so re-runs
 // neither duplicate the methods nor depend on their exact formatting.
-if (!next.includes("git/conventions")) {
+for (const method of API_METHODS) {
+	if (next.includes(method.guard)) continue;
 	if (!next.includes(API_ANCHOR)) throw new Error("build-lib: GitApi.repos() anchor not found in lib/client.js");
-	next = next.replace(API_ANCHOR, API_ANCHOR + API_METHODS);
+	next = next.replace(API_ANCHOR, API_ANCHOR + method.code);
 }
 
 /** Absolute `[open, close]` brace positions of one `const <name> = { ... }` literal. */

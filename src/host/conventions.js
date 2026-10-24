@@ -764,3 +764,55 @@ function conventionsPromptMount(root, readConfig) {
 		}, "dsh-git-graph: git conventions prompt");
 	});
 }
+
+/**
+ * One-click `git init` for a directory that is not a repository yet. It refuses
+ * to run inside an existing repository so the workspace cannot accidentally get
+ * a second root, and it only ever writes the `.git` directory.
+ */
+async function repoInit(service, path, branch) {
+	const info = await stat(path).catch(() => null);
+	if (info === null || info.isDirectory() !== true) return {
+		ok: false,
+		error: {
+			code: "internal",
+			message: "path is not a directory"
+		}
+	};
+	const existing = await service.repoRoot(path).catch(() => null);
+	if (existing !== null && existing !== void 0 && existing !== "") return {
+		ok: false,
+		error: {
+			code: "already-repository",
+			message: "path is already inside a git repository",
+			root: existing
+		}
+	};
+	const name = typeof branch === "string" && branch.trim() !== "" ? branch.trim() : "main";
+	let result;
+	try {
+		result = await service.runner.run(["init", "-b", name], path);
+	} catch (error) {
+		return {
+			ok: false,
+			error: {
+				code: "internal",
+				message: error instanceof Error ? error.message : "git init failed"
+			}
+		};
+	}
+	if (result === null || result === void 0 || result.exitCode !== 0) return {
+		ok: false,
+		error: {
+			code: "internal",
+			message: result !== null && result !== void 0 && typeof result.stderr === "string" && result.stderr.trim() !== "" ? result.stderr.trim().split("\n")[0] : "git init failed"
+		}
+	};
+	return {
+		ok: true,
+		value: {
+			root: path,
+			branch: name
+		}
+	};
+}

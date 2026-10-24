@@ -24,6 +24,7 @@ The tab works from the session's working directory and treats that directory as 
 - **Reopens instantly** — closing and reopening the tab used to start from an empty panel. The tab now keeps the last painted list, selection and graph in memory, so a reopen draws that on its first frame and refreshes behind it.
 - **Selected repository is obvious** — the active row in the repository tree is highlighted with a cyan tint and ring, so the repository whose graph is on screen is never ambiguous.
 - **Git conventions** — a strip above the graph states which convention document the selected repository carries (`draft` / `settled` / missing), opens it in the editor, and offers six proven frameworks to bootstrap a brand-new repository.
+- **One-click repository init** — a workspace directory that is not a repository yet gets an *Initialize Git repository* button. It asks once (target path and initial branch: `main` / `master` / `trunk` / `develop`), runs `git init -b <branch>` there, and then the conventions scaffold and framework picker open by themselves. It refuses when the directory already sits inside a repository, so it can never re-root an existing checkout.
 
 ### Branch chip (composer)
 
@@ -87,6 +88,15 @@ A commit graph shows what happened; a conventions document records what the team
 - **Never overwrites** — an existing document is only replaced when the request carries `force`, which the UI does not offer for settled documents. The document is plain Markdown in the repository root, so it is reviewed and revised like any other source file.
 - **The assistant actually reads it** — the host registers a `systemPrompt` section that is assembled before *every* model step, so the running agent is always told where the document is for the session's repository and gets its rules (up to 3 000 characters) inline. Nothing is injected for a workspace without a document, and the text is cached per file mtime, so a step never re-reads an unchanged file. When the session's directory is a container, the section lists the documented repositories below it instead.
 
+## Initializing a repository
+
+A workspace does not have to start as a repository. When the root of the workspace is not one, the tab's toolbar offers **Initialize Git repository** (and a workspace with no repositories at all shows the same button in the empty panel).
+
+- **Two steps, never one click** — the button opens a bar that names the target directory and the initial branch before anything is written.
+- **Only `.git` is written** — `git init` creates the metadata directory; no file in the workspace is touched, and existing repositories below the workspace are unaffected.
+- **It refuses to nest** — if the directory already sits inside a repository (including a parent outside the workspace), the host answers `already-repository` instead of creating a second root inside it.
+- **It hands over to the conventions flow** — because the new repository has no commits yet, the empty conventions document is scaffolded and the framework picker opens immediately, so the first commit already follows an agreed rule set.
+
 ## HTTP routes
 
 Registered by the host half under `/git`; all of them answer JSON (`{ok:true,value}` / `{ok:false,error}`), except `/git/events`, which is a server-sent event stream.
@@ -104,13 +114,14 @@ Registered by the host half under `/git`; all of them answer JSON (`{ok:true,val
 | `/git/worktree-remove` | remove a worktree |
 | `/git/conventions` | convention document state for a repository plus the framework catalog (`{path}`) |
 | `/git/convention` | write the document (`{path, framework?, force?}`) |
+| `/git/init` | initialize a repository in a directory that has none (`{path, branch?}`) |
 | `/git/events` | change notifications (polled by the UI) |
 
 Every route resolves the requested path with `realpath` and rejects it unless it lands inside a registered workspace. Nested repository directories are accepted; anything outside a workspace gets `workspace-unknown`.
 
 ## Known limitations
 
-- **The tab never touches Git state.** It writes exactly one thing: the conventions document, and only when asked (or automatically for a repository created without commits). Branch switching and worktree operations stay in the chip's dialog.
+- **The tab never changes an existing repository's Git state.** It writes the conventions document, and it can run `git init` for a directory that is not a repository yet — nothing else. No commits, no branch switching, no worktrees: those stay in the chip's dialog.
 - **Do not install this alongside `@linxin666/dsh-client-ui-git-graph`.** Both halves own the `/git` route prefix, and two registrations of the same prefix conflict. Install one or the other.
 - **Repositories deeper than 3 levels are not listed**, and a repository inside a skipped directory name (`node_modules`, `dist`, …) is not listed either, by design.
 - **The host half is a build output.** `lib/index.js` is edited directly (the added parts sit in marked `//#region` blocks); `lib/client.js` is generated by splicing `src/client/graph/SidebarTab.js` into it. See [DEVELOPMENT.md](DEVELOPMENT.md).

@@ -104,13 +104,14 @@
 | `/git/worktree-remove` | 删除 worktree |
 | `/git/conventions` | 某仓库的规范文档状态 + 框架目录（`{path}`） |
 | `/git/convention` | 写入规范文档（`{path, framework?, force?}`） |
+| `/git/init` | 为还没有仓库的目录初始化仓库（`{path, branch?}`） |
 | `/git/events` | 变更通知（界面轮询） |
 
 每个路由都会先 `realpath` 解析请求路径，只有在某个已注册工作区**内部**时才放行；嵌套仓库目录会被接受，工作区之外的路径返回 `workspace-unknown`。
 
 ## 已知限制
 
-- **图谱页不碰 Git 状态。** 它只写一样东西：规范文档，而且只在被要求时写（或对一个还没有提交的新仓库自动写）。切换分支、worktree 操作仍在徽章的对话框里。
+- **图谱页不改动已有仓库的 Git 状态。** 它写规范文档，并且可以对「还不是仓库」的目录执行 `git init`——除此之外什么都不做。不做提交、不切分支、不动 worktree，那些仍在徽章的对话框里。
 - **不要和 `@linxin666/dsh-client-ui-git-graph` 同时安装。** 两者都占用 `/git` 这个路由前缀，重复注册会冲突，二选一。
 - **超过 3 层的仓库不会被列出**；位于被跳过目录名（`node_modules`、`dist` 等）里的仓库同样不会列出，这是设计如此。
 - **宿主半边是构建产物。** `lib/index.js` 是直接改的（新增部分在带标记的 `//#region` 块里）；`lib/client.js` 由 `src/client/graph/SidebarTab.js` 拼接生成。细节见 [DEVELOPMENT.md](DEVELOPMENT.md)。

@@ -480,10 +480,15 @@ const fakeDocument = {
 	removeEventListener() {}
 };
 
+const INIT_CALLS = [];
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
 	let value;
 	if (path === "git/repos") value = REPOS;
+	else if (path === "git/init") {
+		INIT_CALLS.push(Object.assign({}, payload));
+		value = { root: payload.path, branch: payload.branch === undefined ? "main" : payload.branch };
+	}
 	else if (path === "git/graph") {
 		const key = viewKey(payload.path);
 		value = GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.has(key)
@@ -744,6 +749,65 @@ if (!usingRealData) {
 	if (blankHtml.indexOf('data-gitgraph-conventions-state="settled"') < 0) throw new Error("conventions strip did not report the settled document");
 	if (draftHtml.indexOf('data-gitgraph-conventions-state="draft"') < 0) throw new Error("conventions strip did not report the draft after the auto scaffold");
 	console.log("preview-tab: conventions strip, auto scaffold and framework picker ok");
+}
+
+// The one-click init flow: a workspace whose root is not a repository offers the
+// button, the bar states the target and the branch, and confirming issues
+// exactly one `git/init` call before the silent refresh.
+let initHtml = "";
+if (!usingRealData) {
+	const scopedProps = (cwd, repoPath) => Object.assign(tabProps(repoPath), {
+		scope: { sessionId: "session", cwd }
+	});
+	const savedRepos = REPOS;
+	const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+	REPOS = Object.assign({}, savedRepos, {
+		repos: (savedRepos.repos || []).filter((entry) => entry.kind !== "root")
+	});
+	const initMount = await mountComponent(descriptor.component, scopedProps(WORKSPACE + "/fresh-workspace"));
+	await wait(60);
+	let html = (await initMount.render()).html;
+	const buttons = findAll(initMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "init-repo");
+	if (buttons.length !== 1) throw new Error("expected one init button, got " + buttons.length);
+	if (html.indexOf("data-gitgraph-init") >= 0) throw new Error("the init bar must stay closed until asked for");
+
+	click(buttons[0], "init button");
+	await wait(60);
+	html = (await initMount.render()).html;
+	if (html.indexOf('data-gitgraph-init="true"') < 0) throw new Error("the init bar did not open");
+	const branches = findAll(initMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-init-branch"] === true);
+	if (branches.length !== 1) throw new Error("expected one branch picker, got " + branches.length);
+	const options = findAll(initMount.tree, (node) => node.type === "option");
+	if (options.length !== 4) throw new Error("expected four branch options, got " + options.length);
+	const cancels = findAll(initMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "init-cancel");
+	if (cancels.length !== 1) throw new Error("expected a cancel button");
+	click(cancels[0], "init cancel");
+	await wait(60);
+	html = (await initMount.render()).html;
+	if (html.indexOf("data-gitgraph-init") >= 0) throw new Error("cancel did not close the init bar");
+
+	click(findAll(initMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "init-repo")[0], "init button again");
+	await wait(60);
+	await initMount.render();
+	const confirms = findAll(initMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "init-confirm");
+	if (confirms.length !== 1) throw new Error("expected a confirm button, got " + confirms.length);
+	click(confirms[0], "init confirm");
+	await wait(120);
+	html = (await initMount.render()).html;
+	if (INIT_CALLS.length !== 1) throw new Error("expected one git/init call, got " + INIT_CALLS.length);
+	if (INIT_CALLS[0].path !== WORKSPACE + "/fresh-workspace") throw new Error("git/init went to " + INIT_CALLS[0].path);
+	if (INIT_CALLS[0].branch !== "main") throw new Error("git/init asked for branch " + INIT_CALLS[0].branch);
+	if (html.indexOf("data-gitgraph-init") >= 0) throw new Error("the init bar stayed open after the call");
+	initHtml = html;
+
+	REPOS = Object.assign({}, savedRepos, { repos: [] });
+	const emptyMount = await mountComponent(descriptor.component, scopedProps(WORKSPACE + "/empty-workspace"));
+	await wait(60);
+	const emptyButtons = findAll(emptyMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "init-repo-empty");
+	if (emptyButtons.length !== 1) throw new Error("an empty workspace must offer the init button, got " + emptyButtons.length);
+	REPOS = savedRepos;
+	console.log("preview-tab: one-click init button, confirm bar and empty state ok");
 }
 
 const rootPanel = rootMount.html;

@@ -2,6 +2,28 @@
 		const h = react.createElement;
 		/** Tab id registered into better-sidebar (also its SidebarTab.type). */
 		const SIDEBAR_TAB_ID = "git-graph-repos";
+	/** Branch names offered by the one-click "initialize repository" bar. */
+	const SIDEBAR_TAB_INIT_BRANCHES = ["main", "master", "trunk", "develop"];
+	const SIDEBAR_TAB_INIT = {
+		display: "flex",
+		flexDirection: "column",
+		gap: 6,
+		padding: "8px 10px",
+		borderRadius: 8,
+		background: "var(--dsw-alias-bg-layer-2)",
+		border: "1px solid var(--dsw-alias-border-l2)"
+	};
+	const SIDEBAR_TAB_INIT_ROW = { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" };
+	const SIDEBAR_TAB_INIT_PATH = {
+		flex: "1 1 100%",
+		minWidth: 0,
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
+		fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+		fontSize: 11,
+		color: "var(--dsw-alias-text-secondary)"
+	};
 		/** Repositories reported by one scan at most (mirrors the host limit). */
 		const SIDEBAR_TAB_REPO_LIMIT = 200;
 		/** Lazily created /git client for the tab (the chip keeps its own). */
@@ -968,6 +990,11 @@
 			const graphLimitRef = react.useRef(INITIAL_LIMIT);
 			/** A scan is in flight (the refresh button says so; nothing else moves). */
 			const [refreshing, setRefreshing] = react.useState(false);
+			/** One-click repository initialization for a folder that is not one yet. */
+			const [initOpen, setInitOpen] = react.useState(false);
+			const [initBranch, setInitBranch] = react.useState(() => SIDEBAR_TAB_INIT_BRANCHES[0]);
+			const [initBusy, setInitBusy] = react.useState(false);
+			const [initError, setInitError] = react.useState(null);
 			/** Keep the last painted state for the next mount (see SIDEBAR_TAB_CACHE). */
 			react.useEffect(() => {
 				if (sessionCwd === void 0) return;
@@ -1118,6 +1145,31 @@
 					sidebar.updateTab(tab.id, { meta: Object.assign({}, meta, { repoPath: path }) }, scope.sessionId);
 				} catch {}
 			};
+			/**
+			 * One-click `git init` for the session directory. The host refuses when
+			 * the directory already sits inside a repository, so this cannot re-root
+			 * an existing checkout. Afterwards the scan is refreshed and the new
+			 * repository is selected, which also triggers the scaffold and picker.
+			 */
+			const runInit = react.useCallback(() => {
+				if (initBusy === true || sessionCwd === void 0) return;
+				setInitBusy(true);
+				setInitError(null);
+				sidebarTabGit().initRepo(sessionCwd, initBranch).then((result) => {
+					setInitBusy(false);
+					if (!result.ok) {
+						setInitError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.init"));
+						return;
+					}
+					setInitOpen(false);
+					const created = result.value !== void 0 && result.value !== null && typeof result.value.root === "string" ? result.value.root : sessionCwd;
+					setSelectedPath(created);
+					runScan(true, true);
+				}).catch(() => {
+					setInitBusy(false);
+					setInitError(t("sidebar.error.init"));
+				});
+			}, [initBranch, initBusy, runScan, sessionCwd, t]);
 			/**
 			 * Write a convention document into one repository: a framework
 			 * template, or the empty scaffold when `frameworkId` is null.
@@ -1310,6 +1362,16 @@
 				title: t("sidebar.expandGraph"),
 				"aria-label": t("sidebar.expandGraph")
 			}, t("sidebar.expandGraph")));
+			/** One-click init is offered only while the workspace root is not a repository. */
+			if (scan.phase === "ready" && !scan.repos.some((entry) => entry.kind === "root")) toolbarChildren.push(h("button", {
+				key: "init",
+				type: "button",
+				"data-gitgraph-action": "init-repo",
+				style: SIDEBAR_TAB_BUTTON,
+				onClick: () => setInitOpen((current) => !current),
+				title: t("sidebar.initRepo"),
+				"aria-label": t("sidebar.initRepo")
+			}, t("sidebar.initRepo")));
 			/** Where the selected repository sits: roots get "workspace", nested ones a ↑ when above. */
 			const repoIndexOf = new Map();
 			if (scan.phase === "ready") scan.repos.forEach((entry, index) => repoIndexOf.set(entry.path, index));
@@ -1757,10 +1819,77 @@
 					style: SIDEBAR_TAB_CONVENTIONS
 				}, children);
 			})();
+			/**
+			 * The initialize bar: a two-step confirm so a stray click cannot write
+			 * into the workspace. It states the target path and the branch.
+			 */
+			const initBar = initOpen !== true ? null : h("div", {
+				key: "init",
+				"data-gitgraph-init": true,
+				style: SIDEBAR_TAB_INIT
+			}, [h("div", {
+				key: "head",
+				style: SIDEBAR_TAB_INIT_ROW
+			}, [h("span", {
+				key: "title",
+				style: { flex: "0 0 auto", fontWeight: 600 }
+			}, t("sidebar.initRepo")), h("span", {
+				key: "path",
+				style: SIDEBAR_TAB_INIT_PATH,
+				title: sessionCwd
+			}, sessionCwd === void 0 ? "" : sessionCwd)]), h("div", {
+				key: "row",
+				style: SIDEBAR_TAB_INIT_ROW
+			}, [h("span", {
+				key: "branch",
+				style: Object.assign({}, SIDEBAR_TAB_MUTED, { flex: "0 0 auto" })
+			}, t("sidebar.initBranch")), h("select", {
+				key: "select",
+				"data-gitgraph-init-branch": true,
+				style: SIDEBAR_TAB_SELECT,
+				value: initBranch,
+				onChange: (event) => setInitBranch(String(event.target.value)),
+				disabled: initBusy === true
+			}, SIDEBAR_TAB_INIT_BRANCHES.map((name) => h("option", {
+				key: name,
+				value: name
+			}, name))), h("button", {
+				key: "confirm",
+				type: "button",
+				"data-gitgraph-action": "init-confirm",
+				style: SIDEBAR_TAB_DETAIL_BUTTON,
+				onClick: () => runInit(),
+				disabled: initBusy === true
+			}, initBusy === true ? t("sidebar.initRunning") : t("sidebar.initConfirm")), h("button", {
+				key: "cancel",
+				type: "button",
+				"data-gitgraph-action": "init-cancel",
+				style: SIDEBAR_TAB_DETAIL_BUTTON,
+				onClick: () => setInitOpen(false),
+				disabled: initBusy === true
+			}, t("sidebar.initCancel"))]), h("span", {
+				key: "hint",
+				style: SIDEBAR_TAB_CONVENTIONS_NOTE
+			}, t("sidebar.initAfter")), initError === null ? null : h("span", {
+				key: "error",
+				"data-gitgraph-init-error": true,
+				style: SIDEBAR_TAB_ERROR
+			}, initError)]);
 			let body;
 			if (scan.phase === "idle" || scan.phase === "scanning") body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("sidebar.loading"));
 			else if (scan.phase === "error") body = h("div", { style: SIDEBAR_TAB_ERROR }, scan.error !== void 0 && scan.error !== null ? scan.error : t("sidebar.error.repos"));
-			else if (scan.repos.length === 0) body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("sidebar.noRepos"));
+			else if (scan.repos.length === 0) body = h("div", {
+				style: Object.assign({}, SIDEBAR_TAB_EMPTY, { display: "flex", flexDirection: "column", alignItems: "center", gap: 8 })
+			}, [h("span", {
+				key: "hint",
+				style: { textAlign: "center" }
+			}, t("sidebar.initRepoHint")), h("button", {
+				key: "init",
+				type: "button",
+				"data-gitgraph-action": "init-repo-empty",
+				style: SIDEBAR_TAB_BUTTON,
+				onClick: () => setInitOpen(true)
+			}, t("sidebar.initRepo"))]);
 			else if (graphError !== null) body = h("div", { style: SIDEBAR_TAB_ERROR }, graphError);
 			else if (view === null) body = h("div", { style: SIDEBAR_TAB_EMPTY }, graphLoading ? t("graph.loading") : t("graph.empty"));
 			else if (view.commits.length === 0) body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("graph.empty"));
@@ -1827,7 +1956,7 @@
 			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, selected !== void 0 ? h("div", {
 				key: "status",
 				style: SIDEBAR_TAB_STATUS
-			}, statusChildren) : null, conventionsBar, h("div", {
+			}, statusChildren) : null, conventionsBar, initBar, h("div", {
 				key: "body-wrap",
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true

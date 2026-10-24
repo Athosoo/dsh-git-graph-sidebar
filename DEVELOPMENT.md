@@ -95,7 +95,7 @@ The host half is not generated from `src/index.ts`; edits go into `lib/index.js`
 
 Both are marked with `//#region` comments so they stay findable in the bundle.
 
-A third region, `src/host/conventions.ts` (source: `src/host/conventions.js`), holds the convention scaffold, the framework catalog and `repoConventionState` / `repoWriteConvention`. `scripts/patch-host.mjs` wires it into the config schema (`conventionsDoc`, `conventionsAuto`), attaches a `conventions` state to every scanned repository, and adds the `/git/conventions` and `/git/convention` routes.
+A third region, `src/host/conventions.ts` (source: `src/host/conventions.js`), holds the convention scaffold, the framework catalog, `repoConventionState` / `repoWriteConvention`, and `repoInit` (the `git init` used by the one-click button). `scripts/patch-host.mjs` wires it into the config schema (`conventionsDoc`, `conventionsAuto`), attaches a `conventions` state to every scanned repository, and adds the `/git/conventions`, `/git/convention` and `/git/init` routes.
 
 `scripts/test-host.mjs` is the cheapest way to check host changes: it needs no DSH process, no browser and no restart.
 
@@ -117,6 +117,12 @@ root.inject(["systemPrompt"], (scope) => {
 `interpolate: false` keeps the document text literal (no `$`-substitution), and `order: 2400` places the section ahead of the tooling policy that `dsh-ops` adds at 3250. The text function walks up from the session `cwd` to the repository root (`conventionsRepoRoot`), reads the document (capped at `CONVENTION_PROMPT_MAX_CHARS` = 3000 characters), and frames it as repository policy rather than a user instruction. When the session `cwd` is a container, it lists the documented repositories below it instead. Nothing is injected for a path without a document, and results are cached by `mtimeMs:size` so a step never re-reads an unchanged file.
 
 `test-host.mjs` covers this with a fake `systemPrompt` service: it captures the descriptor, then calls `section.text({ agent: { session: { header: { cwd } } } })` for a documented repository, an undocumented one, an edited document (cache invalidation) and a container directory.
+
+### One-click init
+
+`case "/git/init"` runs `repoInit(service, gated.canonical, branch)`, which refuses (`already-repository`) when `service.repoRoot(path)` reports a root, then runs `service.runner.run(["init", "-b", branch], path)` and clears `repoScanCache` so the next `/git/repos` sees the new repository. The tab offers the button only while the workspace root is not itself a repository, and the `git init` result deliberately feeds the conventions flow: the new repository has an unborn `HEAD`, so the existing auto-scaffold creates the empty document and opens the framework picker.
+
+`test-host.mjs` drives it end to end (init with a chosen branch, `.git` exists, second call refused, a subdirectory of an existing repository refused, a path outside the workspace rejected by the gate, and the following `/git/repos?refresh=true` listing the new empty repository). In `preview-tab.mjs` the fake `/git/init` records the call, so the UI flow is asserted too: the button, the confirm bar with its four branch options, cancel, confirm, and the empty-workspace button.
 
 ## Known debt
 

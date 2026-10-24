@@ -203,6 +203,30 @@ patch(
 	"\tconventionsPromptMount(ctx, featureConfig);\n\tctx.effect(() => {\n\t\tsyncTool();\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);"
 );
 
+// 9. One-click repository init (used by the tab for folders without a repo).
+patch(
+	"route-init",
+	'\t\t\tcase "/git/conventions": {',
+	`\t\t\tcase "/git/init": {
+\t\t\t\tconst gated = await createWorkspaceGate(ctx)(path);
+\t\t\t\tif (!gated.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(gated.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tconst requested = payload !== null && typeof payload === "object" && typeof payload.branch === "string" ? payload.branch : void 0;
+\t\t\t\tconst created = await repoInit(service, gated.canonical, requested);
+\t\t\t\tif (!created.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(created.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\trepoScanCache.clear();
+\t\t\t\tctx.logger.info("dsh-git-graph: initialized repository at " + created.value.root);
+\t\t\t\twriteJson(res, 200, OK(created.value));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tcase "/git/conventions": {`
+);
+
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +
 	(applied.length > 0 ? " -> " + applied.join(", ") : ""));
 writeFileSync(file, source, "utf8");

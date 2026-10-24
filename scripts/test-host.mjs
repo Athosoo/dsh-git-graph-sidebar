@@ -12,7 +12,7 @@
  *   node scripts/test-host.mjs
  */
 import { spawn } from "node:child_process";
-import { appendFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -285,6 +285,44 @@ async function main() {
 	check2("prompt reloads an edited document", section.text(cwdOf(join(commitRepo, "src", "nested"))).includes("feature/<topic>"));
 	const container = section.text(cwdOf(join(workspace, "repos")));
 	check2("container lists documented repositories", container.includes("commit") && container.includes("GIT_CONVENTIONS.md"));
+
+	console.log("\n[10] /git/init creates a repository, and only where it may");
+	const freshDir = join(workspace, "repos", "fresh");
+	await mkdir(freshDir, { recursive: true });
+	const initOk = await call("/git/init", { path: freshDir, branch: "trunk" });
+	equal("init ok", initOk.json?.ok, true);
+	check("init reports the root", String(initOk.json?.value?.root ?? "").replace(/\\/g, "/").endsWith("/repos/fresh"), initOk.json?.value?.root);
+	equal("init reports the branch", initOk.json?.value?.branch, "trunk");
+	const dotGit = await stat(join(freshDir, ".git")).catch(() => null);
+	check("init created .git", dotGit !== null && dotGit.isDirectory() === true);
+	let head = "";
+	await new Promise((resolve) => {
+		const child = spawn("git", ["symbolic-ref", "--short", "HEAD"], {
+			cwd: freshDir,
+			windowsHide: true
+		});
+		child.stdout.on("data", (chunk) => {
+			head += String(chunk);
+		});
+		child.on("close", (code) => resolve(code === 0 ? head.trim() : ""));
+		child.on("error", () => resolve(""));
+	});
+	head = head.trim();
+	equal("init used the requested branch", head, "trunk");
+	const initAgain = await call("/git/init", { path: freshDir });
+	equal("second init refused", initAgain.json?.ok, false);
+	equal("second init code", initAgain.json?.error?.code, "already-repository");
+	await mkdir(join(commitRepo, "src"), { recursive: true });
+	const initInside = await call("/git/init", { path: join(commitRepo, "src") });
+	equal("init inside a repository refused", initInside.json?.ok, false);
+	equal("init inside a repository code", initInside.json?.error?.code, "already-repository");
+	const initOutside = await call("/git/init", { path: tmpdir() });
+	equal("init outside the workspace refused", initOutside.json?.ok, false);
+	equal("init outside the workspace code", initOutside.json?.error?.code, "workspace-unknown");
+	const rescan = await call("/git/repos", { path: workspace, refresh: true });
+	const freshEntry = (rescan.json?.value?.repos ?? []).find((entry) => String(entry.root ?? "").replace(/\\/g, "/").endsWith("/repos/fresh"));
+	check("rescan sees the new repository", freshEntry !== undefined);
+	check("new repository is empty", freshEntry !== undefined && freshEntry.status !== null && freshEntry.status.head === "", JSON.stringify(freshEntry?.status ?? null));
 
 	await rm(workspace, { recursive: true, force: true });
 
