@@ -9,14 +9,14 @@ This repository ships a prebuilt plugin. Running DSH loads `lib/index.js` (host 
 | `lib/index.js` | Host half: git service, `/git/*` HTTP routes, workspace gate, multi-repository discovery. Edited directly; the added sections sit in marked `//#region` blocks. |
 | `lib/client.js` | Browser half, in DSH's `__ModuleLoader__` wrapper format. The better-sidebar tab lives in one spliced `//#region` block. |
 | `src/client/graph/SidebarTab.js` | **Single source of truth for the tab.** Plain JS (no JSX, it uses `react.createElement`), spliced into `lib/client.js`. |
-| `src/host/conventions.js` | **Single source of truth for Git conventions.** The scaffold document, the six framework templates and the read/write helpers, spliced into `lib/index.js`. |
+| `src/host/conventions.js` | **Single source of truth for Git conventions.** The scaffold document, the six framework templates, the read/write helpers, commit compliance (`commitCompliance`), the upgrade preview (`conventionPreview`) and the workspace document (`workspaceConvention`), spliced into `lib/index.js`. |
 | `src/host/branches.js` | Overview fields (`repoAugment`), branch cleanup reports (`branchReport`) and repository health (`repoHealth`), spliced into `lib/index.js`. |
 | `src/**/*.ts` | The upstream TypeScript sources, kept for reference. They are not compiled here. |
 | `scripts/build-lib.mjs` | Splices `SidebarTab.js` into `lib/client.js`, inserts the tab's locale keys into both dictionaries, adds the fork's `GitApi` methods, and splices `conventions.js` and `branches.js` into `lib/index.js` (writing the `branches` region header itself). Idempotent. |
-| `scripts/patch-host.mjs` | Idempotent patch of the upstream host bundle in 21 places: config fields, repository scan entries and decoration, and the `/git/conventions` + `/git/convention` + `/git/init` + `/git/cleanup` + `/git/health` routes. |
-| `scripts/test-host.mjs` | Offline end-to-end test of the host half (95 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, gate rejections and error codes. |
+| `scripts/patch-host.mjs` | Idempotent patch of the upstream host bundle in 22 places: config fields, repository scan entries and decoration, and the `/git/conventions` + `/git/convention` + `/git/convention/preview` + `/git/compliance` + `/git/workspace-convention` + `/git/init` + `/git/cleanup` + `/git/health` routes. |
+| `scripts/test-host.mjs` | Offline end-to-end test of the host half (132 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance, upgrade previews, the workspace document, gate rejections and error codes. |
 | `scripts/validate-lib.mjs` | Checks that every `t("…")` key used in the tab exists in both the `zh` and `en` dictionaries, and that every `sidebarTab*` / `SIDEBAR_TAB_*` identifier is defined. |
-| `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html`. |
+| `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html` (`-preview`, `-states`, `-hero`, `-overview`, `-tier3`). |
 | `scripts/prepend-shared.mjs` | One-off helper: extracts the shared prelude (helpers and style constants) of the tab region from a pristine `lib/client.js`. |
 
 ## Building the tab
@@ -159,6 +159,26 @@ Tier 2 adds two read-only host routes and one client panel; nothing here mutates
 
 `test-host.mjs` builds a real `repos/branchy` fixture (a merged branch, an unmerged branch, an untracked big file) and asserts both reports plus the gate rejections; `preview-tab.mjs` stubs the two routes and asserts the overview ordering, the toolbar collapse, the detail block and the drill-in.
 
+## Commit compliance, workspace document and upgrade preview (1.6.0)
+
+Tier 3 makes the written document do something. All three additions are read-only except the explicit "write" actions, which already existed in shape and still only touch the conventions file.
+
+**Rules come from the document, never from the plugin.** `parseConventionRules(text)` (in `src/host/conventions.js`) scans the text for the few rules a document tends to state in prose: a subject-length cap (`/(\d{2,3})\s*(?:个)?\s*(?:字符|characters|chars)/gi`, the smallest match, clamped to 20–200), a type vocabulary (at least three known `CONVENTION_TYPE_VOCAB` words in backticks, returned in vocabulary order), a lowercase start, "no trailing period" and "imperative mood". Anything the document does not say is `null` in `CONVENTION_NO_RULES` and is not checked.
+
+- `conventionSubjectReasons(subject, rules)` returns which rules a subject breaks (`length`, `type`, `case`, `period`, `mood`). The type is matched with `/^([a-z]+)(?:\([^)]*\))?!?:\s+/` and stripped before the remaining subject is checked, so `feat(parser): add the loop` is judged on `add the loop`.
+- `commitCompliance(service, root, docName)` reads the document (capped at 64 KB) and runs `log -20 --format=%H%x00%s`, returning `{ root, doc, docPath, exists, enforced, checked, failing, rules, offenders }` with at most six offenders.
+- The tab renders one line — `failing` of `checked` — and up to three offenders as `oid  subject  [reasons]`, with the reason codes translated by `sidebarTabReasonLabel`.
+
+**The upgrade preview never writes.** `conventionSectionsOf(text)` splits on `^##\s+` so the leading prose counts as its own section, and `conventionDiff(current, next)` compares titles to classify each section `added` / `changed` / `removed` / `same`, carrying the dropped and fresh paragraphs. A blank current document reports every section as `added` instead of `changed`. `conventionPreview(root, docName, frameworkId)` returns that diff plus `currentBytes` / `nextBytes` and touches nothing; a framework id it does not know answers `{ ok: false, error: { code: "convention-unknown-framework" } }`.
+
+On the client, `pickFramework(path, framework, exists)` writes straight away only when no document exists; otherwise it fetches the preview into `upgrade` and the framework cards are replaced by a *what would change* panel with counts, the first six non-`same` sections, and **Write it** / **Cancel**. Only `confirmUpgrade()` calls `/git/convention`. A repository that already has a document also gets a *Switch framework* button — without it the preview was unreachable, because the picker only opened when the document was missing.
+
+**The workspace document is one level above the repositories.** `conventionWorkspaceDocPath(root, docName)` is `<root>/.dsh/<doc>`; `conventionsWorkspaceDocFor(start, docName)` walks up at most eight levels looking for it, and `conventionsDocumentFor(cwd, docName)` now falls back to it after the repository candidates fail. When the owner is not the repository root, the injected prompt block says `- inherited Git conventions` and names the directory under `Inherited from:`. `/git/workspace-convention` takes an `action` of `state`, `preview` or `write` and deliberately does not require a repository — it is the one route that works in a workspace with no root repository at all.
+
+**Routes and methods.** `case "/git/compliance"`, `case "/git/convention/preview"` and `case "/git/workspace-convention"` are inserted by `patch-host.mjs` (`compliance-routes`), the `GitApi` methods are `commitCompliance(path)`, `conventionPreview(path, framework)` and `workspaceConvention(path, payload)`. None of them collide with an upstream path or method — check that before adding a route, because a duplicate `switch` case silently loses and a duplicate `GitApi` method is skipped as "already present".
+
+`test-host.mjs` adds a `repos/ruled` fixture (a document spelling out a 40-character cap and three types, four commits of which three break a rule), a `repos/docless` fixture proving an absent document yields `enforced: false`, and a container/child pair proving the workspace document is created, reported and inherited. `preview-tab.mjs` stubs the three routes, injects a synthetic `repos-tier3/ruled` entry, and asserts that the compliance line and offenders render, that opening the picker fetches a preview **without** calling `/git/convention` (the counter must stay at zero), that confirming calls it exactly once, and that the workspace button writes once.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.
@@ -166,3 +186,4 @@ Tier 2 adds two read-only host routes and one client panel; nothing here mutates
 - The export is SVG only. A PNG would need a canvas rasteriser or a headless renderer; the SVG is what a browser, GitHub and most editors accept anyway.
 - The overview renders every repository at once. Dozens of repositories are fine; hundreds would want a virtualised list.
 - Overview detail requests are not cached: reopening a detail block asks the host twice again (branches + health).
+- The upgrade preview diffs section titles only, not paragraph content, and rebuilds the whole document on write. Compliance looks at the last 20 commits and parses rules with regexes, so a document that phrases a rule unusually simply yields no rule.

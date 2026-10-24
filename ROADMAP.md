@@ -24,7 +24,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | 1.3.0 | **released and installed** / 已发布并已装 | Conventions inheritance + repository index injection. |
 | 1.4.0 | **released and installed** / 已发布并已装 | Tier 1 complete: rollback prompt, commit search + ref filters, standalone SVG export. |
 | 1.5.0 | **released and installed** / 已发布并已装 | Tier 2: workspace overview, branch cleanup hints, repository health. |
-| 1.6.0 | planned / 计划中 | Tier 3 below. |
+| 1.6.0 | **code complete, unreleased** / 代码完成待发版 | Tier 3: commit compliance, workspace document, upgrade preview. |
 
 1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
 
@@ -109,17 +109,25 @@ A read-only report: detached HEAD, branches without upstream, untracked files ab
 
 ## Tier 3 — 1.6.0 "the document earns its keep" / 让规范真正起作用
 
+**Code complete, unreleased / 代码完成待发版**
+
 ### 7. Commit compliance hint / 提交合规提示
 
 Read the selected repository's conventions document, extract the rules that can be checked mechanically (subject length, imperative mood prefix, Conventional Commits type list) and report "6 of the last 20 commits do not match". Local, no model, no network. This is what turns a written document into something visible.
+
+**Implemented / 实现（1.6.0）**：新路由 `/git/compliance` + `commitCompliance(service, root, docName)`。`parseConventionRules(text)` 只认文档自己写明的规则——长度上限取 `/(\d{2,3})\s*(?:个)?\s*(?:字符|characters|chars)/` 的最小值（限定 20–200）、type 词表要求反引号里出现至少 3 个已知 type、小写开头 / 不加句号 / 祈使句靠短语匹配；没写就不检查。`conventionSubjectReasons(subject, rules)` 返回 `length`/`type`/`case`/`period`/`mood` 子集，报告里带 `checked`、`failing`、前 6 个 `offenders`。客户端在规范条下方渲染一句话 + 最多 3 行「短 SHA 主题 [原因]」，原因码在界面上翻成「超长 / 类型 / 大小写 / 句号 / 语气」。
 
 ### 8. Workspace-wide document / 工作区总纲
 
 1.3.0 already lets a container document reach the repositories inside it; what is missing is the entry point. Add the conventions strip at the container level with a "create workspace document" action writing `.dsh/GIT_CONVENTIONS.md` (or the root one) from the same six frameworks.
 
+**Implemented / 实现（1.6.0）**：新路由 `/git/workspace-convention`（`state` / `preview` / `write`）。`conventionWorkspaceDocPath(root, docName)` 固定写 `<root>/.dsh/<doc>`；`conventionsWorkspaceDocFor(start, docName)` 向上最多 8 层找总纲，`conventionsDocumentFor()` 在仓库自己的文档都落空后回退到它，注入块写 `- inherited Git conventions` 与 `Inherited from: <dir>`。客户端在工作区里有两个以上仓库时显示「工作区规范」一条：状态 chip、一键「创建工作区规范」、已存在时「打开」。
+
 ### 9. Conventions upgrade preview / 规范升级预览
 
 Choosing a framework while a document exists currently overwrites it with `force`. Show a diff preview first (missing sections, paragraphs that would be replaced) and only write after confirmation.
+
+**Implemented / 实现（1.6.0）**：新路由 `/git/convention/preview` + `conventionPreview(root, docName, frameworkId)`，**只读**。`conventionSectionsOf(text)` 按 `^##\s+` 切节，`conventionDiff(current, next)` 返回 `added`/`changed`/`removed`/`same` 与逐节 `{title, status, dropped, fresh}`；空文档时全部算 `added`。客户端在文档已存在时把框架卡片改成先预览：`pickFramework()` 拿 diff 渲染「写入前的差异」面板（计数 + 前 6 个非 `same` 小节，徽章「新增/改写」带颜色），按「确认写入」才调 `/git/convention`，按「取消」清空预览。已经写过的仓库还多了一个「更换框架」入口，否则预览在界面上不可达。
 
 ## Not planned / 不做
 
@@ -133,7 +141,7 @@ Choosing a framework while a document exists currently overwrites it with `force
 2. `node scripts/patch-host.mjs` — idempotent host patches.
 3. `node --check lib/client.js && node --check lib/index.js`.
 4. `node scripts/validate-lib.mjs` — locale keys and fork identifiers.
-5. `node scripts/test-host.mjs` — offline host end-to-end (71 checks).
+5. `node scripts/test-host.mjs` — offline host end-to-end (132 checks).
 6. `node scripts/preview-tab.mjs --repos ../.demo/data/repos.json --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo` — offline client end-to-end.
 7. Bump `package.json`, update `README.md` / `README.zh.md` / `DEVELOPMENT.md`, `npm pack --pack-destination ../dsh-git-graph-dist/<version>`, copy to a version-less `dsh-git-graph-sidebar.tgz`.
 8. Commit, push, create the GitHub release, upload the asset, verify the mirror checksum, `remove_bundle` + `install_bundle`, restart DSH.

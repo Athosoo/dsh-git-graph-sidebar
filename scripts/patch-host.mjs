@@ -20,8 +20,12 @@ let source = readFileSync(file, "utf8");
 const applied = [];
 const skipped = [];
 
-function patch(label, anchor, replacement) {
-	if (source.includes(replacement)) {
+// `guard` is what to look for when the inserted text cannot be matched
+// verbatim: patches 9, 12 and 13 all insert into the same `switch`, so a
+// replacement stops being contiguous as soon as a later patch slips another
+// case between the inserted block and its own anchor line.
+function patch(label, anchor, replacement, guard) {
+	if (source.includes(guard === undefined ? replacement : guard)) {
 		skipped.push(label);
 		return;
 	}
@@ -224,7 +228,8 @@ patch(
 \t\t\t\twriteJson(res, 200, OK(created.value));
 \t\t\t\treturn;
 \t\t\t}
-\t\t\tcase "/git/conventions": {`
+\t\t\tcase "/git/conventions": {`,
+	'\t\t\tcase "/git/init": {'
 );
 
 // 11. Every scanned repository also reports its last activity and how far it
@@ -273,6 +278,73 @@ patch(
 				return;
 			}
 			case "/git/init": {`
+);
+
+// 13. 1.6.0 routes: a compliance hint for the commits already made, an upgrade
+//     preview for the document (never writes), and the workspace-wide document
+//     at a container root. The preview route is added, never substituted: the
+//     existing /git/convention stays the only writer.
+patch(
+	"compliance-routes",
+	`			case "/git/conventions": {`,
+	`			case "/git/compliance": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const feature = featureOf(config);
+				const snapshot = await service.rootAndHead(gated.canonical).catch(() => null);
+				if (snapshot === null || typeof snapshot.root !== "string") {
+					writeJson(res, 200, FAIL(MALFORMED_VIEW));
+					return;
+				}
+				const report = await commitCompliance(service, snapshot.root, feature.docName);
+				writeJson(res, 200, OK(report));
+				return;
+			}
+			case "/git/convention/preview": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const feature = featureOf(config);
+				const snapshot = await service.rootAndHead(gated.canonical).catch(() => null);
+				if (snapshot === null || typeof snapshot.root !== "string") {
+					writeJson(res, 200, FAIL(MALFORMED_VIEW));
+					return;
+				}
+				const framework = payload !== null && typeof payload === "object" && typeof payload.framework === "string" ? payload.framework : null;
+				const preview = await conventionPreview(snapshot.root, feature.docName, framework);
+				if (!preview.ok) {
+					writeJson(res, 200, FAIL(preview.error));
+					return;
+				}
+				writeJson(res, 200, OK(preview.value));
+				return;
+			}
+			case "/git/workspace-convention": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const feature = featureOf(config);
+				const action = payload !== null && typeof payload === "object" && typeof payload.action === "string" ? payload.action : "state";
+				const framework = payload !== null && typeof payload === "object" && typeof payload.framework === "string" ? payload.framework : null;
+				const force = payload !== null && typeof payload === "object" && payload.force === true;
+				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force);
+				if (!result.ok) {
+					writeJson(res, 200, FAIL(result.error));
+					return;
+				}
+				if (action === "write") ctx.logger.info("dsh-git-graph: wrote workspace document " + result.value.docPath);
+				writeJson(res, 200, OK(result.value));
+				return;
+			}
+			case "/git/conventions": {`,
+	'\t\t\tcase "/git/compliance": {'
 );
 
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +

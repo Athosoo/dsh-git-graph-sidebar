@@ -30,6 +30,9 @@ The tab works from the session's working directory and treats that directory as 
 - **Workspace overview** — *Overview* on the toolbar swaps the repository tree for a list: one row per repository with its branch, change count, conflicts, how far it is ahead of or behind its upstream, and how long ago it last moved. Repositories with conflicts, changes or a trailing upstream sort first. The list is read-only; a click goes back to that repository's graph.
 - **Branch cleanup hints** — *Branches & health* inside the overview lists each local branch against a base (`main`, else `master` / `trunk` / `develop` / the current branch) as `merged` or `N unmerged`. Suggestions only: the plugin never deletes a branch.
 - **Repository health** — the same place reports a detached HEAD, branches without an upstream, the stash count, untracked files above 1 MB and the `.git` size. Information and reasons, no *fix all* button.
+- **Commit compliance** — below the conventions strip the last 20 commits are checked against the rules the document itself states (subject length cap, the type vocabulary, lowercase start, no trailing period, imperative mood); it reports *2 of the last 5 commits do not match* and lists the first few offenders with their reasons. A document with no checkable rule says so instead of guessing.
+- **Upgrade preview** — on a repository that already carries a document, *Switch framework* no longer overwrites it: the tab first shows *What would change* — how many sections are added, rewritten or removed, with the titles — and nothing is written until *Write it* is pressed. *Cancel* leaves the file untouched.
+- **Workspace document** — once the workspace holds more than one repository a *Workspace conventions* strip appears under the toolbar and writes `<workspace>/.dsh/GIT_CONVENTIONS.md` in one click; a repository without its own document inherits it and the injected block names the directory it came from.
 
 ### Branch chip (composer)
 
@@ -123,6 +126,9 @@ Registered by the host half under `/git`; all of them answer JSON (`{ok:true,val
 | `/git/init` | initialize a repository in a directory that has none (`{path, branch?}`) |
 | `/git/cleanup` | branch cleanup hints: merged/unmerged counts per local branch (`{path}`) |
 | `/git/health` | repository health: detached HEAD, branches without upstream, stash, large untracked files, `.git` size (`{path}`) |
+| `/git/compliance` | commit compliance: offenders and reasons against the document's own rules, last 20 commits (`{path}`) |
+| `/git/convention/preview` | upgrade preview: added/rewritten/removed section counts and titles, read-only (`{path}`, `framework`) |
+| `/git/workspace-convention` | workspace document: `state`, `preview` or `write` `.dsh/GIT_CONVENTIONS.md` (`{path}`, `action`, `framework`, `force`) |
 | `/git/events` | change notifications (polled by the UI) |
 
 Every route resolves the requested path with `realpath` and rejects it unless it lands inside a registered workspace. Nested repository directories are accepted; anything outside a workspace gets `workspace-unknown`.

@@ -437,6 +437,99 @@ async function main() {
 	check("rescan reports the branchy repository", branchyEntry !== undefined);
 	check("rescan reports its activity", typeof branchyEntry?.activity === "number" && branchyEntry.activity > 0, JSON.stringify(branchyEntry?.activity));
 
+	console.log("\n[13] compliance hints, upgrade preview and the workspace document");
+	const ruled = join(workspace, "repos", "ruled");
+	await mkdir(ruled, { recursive: true });
+	await git(ruled, "init", "-b", "main");
+	await writeFile(join(ruled, "GIT_CONVENTIONS.md"), [
+		"# Git 规范 / Git conventions",
+		"",
+		"```yaml",
+		"status: settled",
+		"framework: conventional-commits",
+		"```",
+		"",
+		"## 1. 提交信息 / Commit messages",
+		"",
+		"- type 取值：`feat` / `fix` / `docs`",
+		"- 标题祈使句、小写开头、不加句号，≤ 40 字符",
+		""
+	].join("\n"), "utf8");
+	await writeFile(join(ruled, "a.txt"), "a\n", "utf8");
+	await git(ruled, "add", ".");
+	await git(ruled, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: add the parser");
+	await writeFile(join(ruled, "b.txt"), "b\n", "utf8");
+	await git(ruled, "add", ".");
+	await git(ruled, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "Fix parser crash.");
+	await writeFile(join(ruled, "c.txt"), "c\n", "utf8");
+	await git(ruled, "add", ".");
+	await git(ruled, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "chore: tidy the tree");
+	await writeFile(join(ruled, "d.txt"), "d\n", "utf8");
+	await git(ruled, "add", ".");
+	await git(ruled, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: a very long subject that keeps going past the cap");
+	const compliance = await call("/git/compliance", { path: ruled });
+	check("/git/compliance ok", compliance.json?.ok === true, compliance.raw.slice(0, 200));
+	equal("compliance reads the stated subject cap", compliance.json?.value?.rules?.maxSubject, 40);
+	equal("compliance reads the stated type list", (compliance.json?.value?.rules?.types ?? []).join(","), "feat,fix,docs");
+	equal("compliance counts the commits it checked", compliance.json?.value?.checked, 4);
+	equal("compliance counts the offenders", compliance.json?.value?.failing, 3);
+	check("compliance says it is enforcing", compliance.json?.value?.enforced === true);
+	const reasons = (compliance.json?.value?.offenders ?? []).map((entry) => (entry.reasons ?? []).join("+"));
+	check("a mixed-case subject breaks type, case and period", reasons.includes("type+case+period"), JSON.stringify(reasons));
+	check("an unknown type breaks the type rule", reasons.includes("type"), JSON.stringify(reasons));
+	check("an over-long subject breaks only the length rule", reasons.includes("length") && !reasons.includes("type+length"), JSON.stringify(reasons));
+		const docless = join(workspace, "repos", "docless");
+	await mkdir(docless, { recursive: true });
+	await git(docless, "init", "-b", "main");
+	await writeFile(join(docless, "README.md"), "# docless", "utf8");
+	await git(docless, "add", ".");
+	await git(docless, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "chore: initial");
+const noRules = await call("/git/compliance", { path: docless });
+	check("/git/compliance on a repository without a document", noRules.json?.ok === true, noRules.raw.slice(0, 200));
+	equal("no document means nothing is enforced", noRules.json?.value?.enforced, false);
+	equal("no document means no offenders", noRules.json?.value?.failing, 0);
+	const previewBlank = await call("/git/convention/preview", { path: docless, framework: "conventional-commits" });
+	check("preview ok for a repository without a document", previewBlank.json?.ok === true, previewBlank.raw.slice(0, 200));
+	equal("preview reports no existing document", previewBlank.json?.value?.exists, false);
+	check("preview lists the sections it would add", (previewBlank.json?.value?.added ?? 0) >= 5, JSON.stringify(previewBlank.json?.value?.added));
+	equal("preview changes nothing when there is nothing", previewBlank.json?.value?.changed, 0);
+	check("preview does not write the document", (await stat(join(docless, "GIT_CONVENTIONS.md")).catch(() => null)) === null);
+	const wrote = await call("/git/convention", { path: docless, framework: "conventional-commits", force: true });
+	check("the framework document is written", wrote.json?.ok === true, wrote.raw.slice(0, 200));
+	const beforeDocument = await readFile(join(docless, "GIT_CONVENTIONS.md"), "utf8");
+	const previewSwitch = await call("/git/convention/preview", { path: docless, framework: "github-flow" });
+	check("preview ok for an existing document", previewSwitch.json?.ok === true, previewSwitch.raw.slice(0, 200));
+	equal("preview reports the existing document", previewSwitch.json?.value?.exists, true);
+	check("preview names the sections that change", (previewSwitch.json?.value?.changed ?? 0) + (previewSwitch.json?.value?.added ?? 0) + (previewSwitch.json?.value?.removed ?? 0) > 0, JSON.stringify(previewSwitch.json?.value?.sections ?? []).slice(0, 300));
+	check("preview sizes both documents", previewSwitch.json?.value?.currentBytes > 0 && previewSwitch.json?.value?.nextBytes > 0, JSON.stringify([previewSwitch.json?.value?.currentBytes, previewSwitch.json?.value?.nextBytes]));
+	check("preview never rewrites the document", (await readFile(join(docless, "GIT_CONVENTIONS.md"), "utf8")) === beforeDocument);
+	const wsContainer = join(workspace, "wsdoc");
+	const inner = join(wsContainer, "repos", "one");
+	await mkdir(inner, { recursive: true });
+	await git(inner, "init", "-b", "main");
+	await writeFile(join(inner, "README.md"), "# one\n", "utf8");
+	await git(inner, "add", ".");
+	await git(inner, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+	const wsState = await call("/git/workspace-convention", { path: wsContainer, action: "state" });
+	check("/git/workspace-convention ok", wsState.json?.ok === true, wsState.raw.slice(0, 200));
+	equal("the workspace document lives in .dsh", wsState.json?.value?.doc, ".dsh/GIT_CONVENTIONS.md");
+	equal("the container has no workspace document yet", wsState.json?.value?.exists, false);
+	equal("the container gets the whole catalogue", (wsState.json?.value?.catalog ?? []).length, 6);
+	const wsPreview = await call("/git/workspace-convention", { path: wsContainer, action: "preview", framework: "conventional-commits" });
+	check("workspace preview ok", wsPreview.json?.ok === true, wsPreview.raw.slice(0, 200));
+	check("workspace preview lists additions", (wsPreview.json?.value?.added ?? 0) >= 5, JSON.stringify(wsPreview.json?.value?.added));
+	check("workspace preview writes nothing", (await stat(join(wsContainer, ".dsh", "GIT_CONVENTIONS.md")).catch(() => null)) === null);
+	const wsWrite = await call("/git/workspace-convention", { path: wsContainer, action: "write", framework: "conventional-commits" });
+	check("workspace document is written", wsWrite.json?.ok === true, wsWrite.raw.slice(0, 200));
+	equal("workspace write reports creation", wsWrite.json?.value?.created, true);
+	const wsAfter = await call("/git/workspace-convention", { path: wsContainer, action: "state" });
+	equal("the workspace document now exists", wsAfter.json?.value?.exists, true);
+	equal("the workspace document is settled", wsAfter.json?.value?.draft, false);
+	const inherited = section.text(cwdOf(join(inner, "nested")));
+	check("the workspace document reaches a repository below it", inherited.includes("inherited Git conventions"), inherited.slice(0, 240));
+	check("the inherited block names the document", inherited.includes(".dsh") && inherited.includes("GIT_CONVENTIONS.md"), inherited.slice(0, 240));
+	check("the inherited block names the container", inherited.includes(wsContainer), inherited.slice(0, 240));
+
 	await rm(workspace, { recursive: true, force: true });
 
 	const failed = checks.filter((entry) => !entry.ok);

@@ -88,6 +88,32 @@ const EXTRA_KEYS = [
 			['"sidebar.conventionsWriting"', '"写入中…"'],
 			['"sidebar.conventionsBestFor"', '"适合："'],
 			['"sidebar.error.conventions"', '"读取或写入 Git 规范失败"'],
+			['"sidebar.compliance"', '"提交合规"'],
+			['"sidebar.complianceOk"', '"最近 {count} 个提交都符合文档"'],
+			['"sidebar.complianceMiss"', '"最近 {count} 个提交里有 {failing} 个不符合"'],
+			['"sidebar.complianceOff"', '"文档没有写明可机检的规则"'],
+			['"sidebar.reasonLength"', '"超长"'],
+			['"sidebar.reasonType"', '"类型"'],
+			['"sidebar.reasonCase"', '"大小写"'],
+			['"sidebar.reasonPeriod"', '"句号"'],
+			['"sidebar.reasonMood"', '"语气"'],
+			['"sidebar.previewTitle"', '"写入前的差异"'],
+			['"sidebar.previewAdded"', '"{count} 节新增"'],
+			['"sidebar.previewChanged"', '"{count} 节改写"'],
+			['"sidebar.previewRemoved"', '"{count} 节移除"'],
+			['"sidebar.previewSame"', '"{count} 节不变"'],
+			['"sidebar.previewNoChange"', '"内容一致，无需改写。"'],
+			['"sidebar.previewConfirm"', '"确认写入"'],
+			['"sidebar.previewCancel"', '"取消"'],
+			['"sidebar.previewBadgeAdded"', '"新增"'],
+			['"sidebar.previewBadgeChanged"', '"改写"'],
+			['"sidebar.previewBadgeRemoved"', '"移除"'],
+			['"sidebar.workspaceDoc"', '"工作区规范"'],
+			['"sidebar.workspaceDocCreate"', '"创建工作区规范"'],
+			['"sidebar.workspaceDocMissing"', '"这个工作区还没有总纲。写一份，子仓库没有自己的规范时会继承它。"'],
+			['"sidebar.workspaceDocExists"', '"子仓库没有自己的规范时继承这份总纲。"'],
+			['"sidebar.workspaceDocWritten"', '"工作区规范已写入。"'],
+			['"sidebar.conventionsSwitch"', '"更换框架"'],
 			['"sidebar.initRepo"', '"初始化 Git 仓库"'],
 			['"sidebar.initRepoHint"', '"这个文件夹还不是 Git 仓库。可以直接在这里初始化，工作区里的其它仓库不受影响。"'],
 			['"sidebar.initBranch"', '"初始分支"'],
@@ -174,6 +200,32 @@ const EXTRA_KEYS = [
 			['"sidebar.conventionsWriting"', '"Writing…"'],
 			['"sidebar.conventionsBestFor"', '"Best for: "'],
 			['"sidebar.error.conventions"', '"Reading or writing the Git convention document failed"'],
+			['"sidebar.compliance"', '"Commit compliance"'],
+			['"sidebar.complianceOk"', '"All of the last {count} commits match the document"'],
+			['"sidebar.complianceMiss"', '"{failing} of the last {count} commits do not match"'],
+			['"sidebar.complianceOff"', '"The document states no checkable rule"'],
+			['"sidebar.reasonLength"', '"length"'],
+			['"sidebar.reasonType"', '"type"'],
+			['"sidebar.reasonCase"', '"case"'],
+			['"sidebar.reasonPeriod"', '"period"'],
+			['"sidebar.reasonMood"', '"mood"'],
+			['"sidebar.previewTitle"', '"What would change"'],
+			['"sidebar.previewAdded"', '"{count} sections added"'],
+			['"sidebar.previewChanged"', '"{count} sections rewritten"'],
+			['"sidebar.previewRemoved"', '"{count} sections removed"'],
+			['"sidebar.previewSame"', '"{count} sections unchanged"'],
+			['"sidebar.previewNoChange"', '"Identical - nothing to rewrite."'],
+			['"sidebar.previewConfirm"', '"Write it"'],
+			['"sidebar.previewCancel"', '"Cancel"'],
+			['"sidebar.previewBadgeAdded"', '"added"'],
+			['"sidebar.previewBadgeChanged"', '"rewritten"'],
+			['"sidebar.previewBadgeRemoved"', '"removed"'],
+			['"sidebar.workspaceDoc"', '"Workspace conventions"'],
+			['"sidebar.workspaceDocCreate"', '"Create workspace document"'],
+			['"sidebar.workspaceDocMissing"', '"This workspace has no shared document yet. Write one and the repositories below inherit it unless they carry their own."'],
+			['"sidebar.workspaceDocExists"', '"Repositories below inherit this unless they carry their own document."'],
+			['"sidebar.workspaceDocWritten"', '"Workspace document written."'],
+			['"sidebar.conventionsSwitch"', '"Switch framework"'],
 			['"sidebar.initRepo"', '"Initialize Git repository"'],
 			['"sidebar.initRepoHint"', '"This folder is not a Git repository yet. Initialize it here; other repositories in the workspace are untouched."'],
 			['"sidebar.initBranch"', '"Initial branch"'],
@@ -224,6 +276,29 @@ const API_METHODS = [{
 				const payload = { path };
 				if (typeof branch === "string" && branch.trim() !== "") payload.branch = branch.trim();
 				return post("git/init", payload);
+			}`
+}, {
+	guard: "git/compliance",
+	code: `
+			/** Check the last commits against the rules the document states. */
+			commitCompliance(path) {
+				return post("git/compliance", { path });
+			}
+			/** What choosing a framework would change in the existing document. */
+			conventionPreview(path, framework) {
+				const payload = { path };
+				if (typeof framework === "string" && framework !== "") payload.framework = framework;
+				return post("git/convention/preview", payload);
+			}
+			/** Workspace-wide document at a container root: state, preview or write. */
+			workspaceConvention(path, payload) {
+				const body = payload !== null && typeof payload === "object" ? payload : {};
+				return post("git/workspace-convention", {
+					path,
+					action: typeof body.action === "string" ? body.action : "state",
+					framework: typeof body.framework === "string" ? body.framework : void 0,
+					force: body.force === true ? true : void 0
+				});
 			}`
 }, {
 	guard: "git/cleanup",

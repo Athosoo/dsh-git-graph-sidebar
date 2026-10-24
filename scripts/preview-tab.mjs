@@ -508,6 +508,11 @@ const fakeDocument = {
 const INIT_CALLS = [];
 /** Every string the tab asked the clipboard to hold. */
 const COPIED = [];
+/** Every `git/convention` write the tab asked for. */
+const CONVENTION_CALLS = [];
+/** Every workspace document write, and the shared document's fake state. */
+const WORKSPACE_CALLS = [];
+const WORKSPACE_DOC = { exists: false, draft: false, size: 0 };
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
 	let value;
@@ -567,10 +572,63 @@ const fakeFetch = async (path, init) => {
 		// the repository entry so the following /git/repos refresh sees it.
 		const framework = typeof payload.framework === "string" ? payload.framework : "none";
 		const docPath = String(payload.path) + "/GIT_CONVENTIONS.md";
+		CONVENTION_CALLS.push(Object.assign({}, payload));
 		const bytes = framework === "none" ? 820 : 2400;
 		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
 		if (entry !== undefined) entry.conventions = { doc: "GIT_CONVENTIONS.md", docPath, exists: true, size: bytes, draft: framework === "none" };
 		value = { root: payload.path, docPath, bytes, created: true, framework, doc: "GIT_CONVENTIONS.md" };
+	} else if (path === "git/compliance") {
+		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
+		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null ? entry.conventions : null;
+		const exists = state !== null && state.exists === true;
+		value = {
+			root: payload.path,
+			doc: "GIT_CONVENTIONS.md",
+			docPath: String(payload.path) + "/GIT_CONVENTIONS.md",
+			exists,
+			enforced: exists,
+			checked: 5,
+			failing: exists ? 2 : 0,
+			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true },
+			offenders: exists ? [
+				{ oid: "aaaaaaa", subject: "Fixed the parser crash.", reasons: ["case", "period"] },
+				{ oid: "bbbbbbb", subject: "chore: tidy the tree", reasons: ["type"] }
+			] : []
+		};
+	} else if (path === "git/convention/preview") {
+		const framework = typeof payload.framework === "string" ? payload.framework : "none";
+		value = {
+			root: payload.path,
+			doc: "GIT_CONVENTIONS.md",
+			docPath: String(payload.path) + "/GIT_CONVENTIONS.md",
+			exists: true,
+			size: 900,
+			draft: false,
+			framework,
+			currentBytes: 900,
+			nextBytes: 2400,
+			added: 3,
+			changed: 1,
+			removed: 0,
+			same: 2,
+			removedTitles: [],
+			sections: [
+				{ title: "Header", status: "same", dropped: [], fresh: [] },
+				{ title: "Commit types", status: "changed", dropped: ["old line"], fresh: ["new line"] },
+				{ title: "Review", status: "added", dropped: [], fresh: ["review line"] },
+				{ title: "Release", status: "added", dropped: [], fresh: [] }
+			]
+		};
+	} else if (path === "git/workspace-convention") {
+		const action = typeof payload.action === "string" ? payload.action : "state";
+		const docPath = WORKSPACE + "/.dsh/GIT_CONVENTIONS.md";
+		if (action === "write") {
+			WORKSPACE_DOC.exists = true;
+			WORKSPACE_DOC.draft = true;
+			WORKSPACE_DOC.size = 900;
+			WORKSPACE_CALLS.push(Object.assign({}, payload));
+			value = { root: WORKSPACE, doc: ".dsh/GIT_CONVENTIONS.md", docPath, bytes: 900, created: true, framework: "none" };
+		} else value = Object.assign({ root: WORKSPACE, doc: ".dsh/GIT_CONVENTIONS.md", docPath, catalog: CONVENTION_CATALOG }, WORKSPACE_DOC);
 	} else value = { ok: false, error: { code: "not-found", message: "stub" } };
 	return { ok: true, json: async () => ({ ok: true, value }) };
 };
@@ -754,7 +812,8 @@ if (!/已导出|已复制|Exported|SVG copied/.test(detailHtml)) throw new Error
 if (COPIED.length !== copiedBeforeExport + 1) throw new Error("export produced neither a download nor copied markup");
 const exportedSvg = COPIED[COPIED.length - 1] ?? "";
 if (exportedSvg.slice(0, 4) !== "<svg") throw new Error("exported markup does not start with <svg: " + exportedSvg.slice(0, 60));
-for (const expected of ["xmlns=\"http://www.w3.org/2000/svg\"", "viewBox=\"0 0 ", "<title>", "graph-demo", "data-gitgraph-export-row="]) {
+const exportRepoName = usingRealData ? "graph-demo" : focusEntry !== undefined ? focusEntry.name : "default-workspace";
+for (const expected of ["xmlns=\"http://www.w3.org/2000/svg\"", "viewBox=\"0 0 ", "<title>", exportRepoName, "data-gitgraph-export-row="]) {
 	if (exportedSvg.indexOf(expected) < 0) throw new Error("exported SVG is missing " + JSON.stringify(expected));
 }
 if (exportedSvg.indexOf("var(--") >= 0) throw new Error("exported SVG still relies on CSS variables");
@@ -982,6 +1041,87 @@ if (!usingRealData) {
 	console.log("preview-tab: conventions strip, auto scaffold and framework picker ok");
 }
 
+// Tier 3: the compliance line, the upgrade preview before a framework replaces
+// an existing document, and the shared workspace strip. The synthetic entry is
+// injected into whichever repository list this mode uses and removed again, so
+// the later sections still see the original scan.
+const TIER3_PATH = WORKSPACE + "/repos-tier3/ruled";
+let tier3Html = "";
+let tier3PreviewHtml = "";
+{
+	const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+	const savedRepos = REPOS;
+	const injected = {
+		path: TIER3_PATH,
+		root: TIER3_PATH,
+		name: "ruled",
+		relPath: "repos-tier3/ruled",
+		kind: "nested",
+		outside: false,
+		conventions: {
+			doc: "GIT_CONVENTIONS.md",
+			docPath: TIER3_PATH + "/GIT_CONVENTIONS.md",
+			exists: true,
+			size: 900,
+			draft: false
+		},
+		status: {
+			root: TIER3_PATH,
+			branch: "main",
+			head: "abc1234",
+			dirtyFiles: 0,
+			untrackedFiles: 0,
+			conflicts: 0,
+			operationInProgress: false
+		}
+	};
+	REPOS = Object.assign({}, savedRepos, { repos: (savedRepos.repos || []).concat([injected]) });
+	const tierMount = await mountComponent(descriptor.component, tabProps(TIER3_PATH));
+	await wait(60);
+	let tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-compliance="failing"') < 0) throw new Error("the compliance line did not report the failing commits");
+	if (tierHtml.indexOf("aaaaaaa") < 0) throw new Error("the compliance line lost the offending subject");
+	if (tierHtml.indexOf("不符合") < 0 && tierHtml.indexOf("do not match") < 0) throw new Error("the compliance line lost its sentence");
+	if (tierHtml.indexOf("data-gitgraph-workspace-bar") < 0) throw new Error("the workspace document strip is missing");
+	if (tierHtml.indexOf('data-gitgraph-action="workspace-doc-create"') < 0) throw new Error("the workspace document strip has no create button");
+	if (tierHtml.indexOf('data-gitgraph-workspace-doc="none"') < 0) throw new Error("the workspace document strip did not report the missing document");
+	tier3Html = tierHtml;
+	const switchButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "switch-conventions")[0];
+	if (switchButton === undefined) throw new Error("a settled document offers no switch-framework button");
+	click(switchButton, "switch framework");
+	await wait(40);
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("the switch button did not open the framework picker");
+	const tierCard = findAll(tierMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string")[0];
+	if (tierCard === undefined) throw new Error("no framework card to preview");
+	const tierFramework = tierCard.props["data-gitgraph-framework"];
+	click(tierCard, "framework card on a settled document");
+	await wait(60);
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-upgrade="ready"') < 0) throw new Error("the upgrade preview did not render");
+	if (tierHtml.indexOf("data-gitgraph-upgrade-counts") < 0) throw new Error("the upgrade preview lost its counts");
+	if (tierHtml.indexOf("Commit types") < 0) throw new Error("the upgrade preview lost the rewritten section");
+	tier3PreviewHtml = tierHtml;
+	if (CONVENTION_CALLS.length !== 0) throw new Error("the upgrade preview wrote the document before the confirmation");
+	const confirmButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-confirm")[0];
+	if (confirmButton === undefined) throw new Error("the upgrade preview has no confirmation button");
+	click(confirmButton, "confirm upgrade");
+	await wait(60);
+	if (CONVENTION_CALLS.length !== 1) throw new Error("confirming the preview must write the document exactly once, got " + CONVENTION_CALLS.length);
+	if (CONVENTION_CALLS[0].framework !== tierFramework) throw new Error("the confirmation wrote " + CONVENTION_CALLS[0].framework + " instead of " + tierFramework);
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf("data-gitgraph-upgrade") >= 0) throw new Error("the upgrade preview stayed open after the write");
+	const createButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "workspace-doc-create")[0];
+	if (createButton === undefined) throw new Error("the workspace create button disappeared");
+	click(createButton, "create workspace document");
+	await wait(60);
+	if (WORKSPACE_CALLS.length !== 1) throw new Error("creating the workspace document must call the host once, got " + WORKSPACE_CALLS.length);
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-workspace-doc="draft"') < 0) throw new Error("the workspace strip did not report the new document");
+	REPOS = savedRepos;
+	console.log("preview-tab: compliance, upgrade preview and workspace document ok");
+}
+
 // The one-click init flow: a workspace whose root is not a repository offers the
 // button, the bar states the target and the branch, and confirming issues
 // exactly one `git/init` call before the silent refresh.
@@ -1167,6 +1307,10 @@ console.log("preview-tab: wrote " + lightFile);
 // page can show it.
 const statesFile = join(dirname(outFile), "graph-tab-states.html");
 /** Fourth states section: the conventions picker, only when the fixture ran. */
+const tier3Section = tier3Html === ""
+	? ""
+	: "<h2>Tier 3 - compliance, upgrade preview, workspace document</h2>" +
+		'<div class="panel">' + tier3Html + "</div>";
 const conventionsSection = conventionsHtml === ""
 	? ""
 	: "<h2>Git conventions — empty scaffold written, framework picker open</h2>" +
@@ -1202,7 +1346,7 @@ const statesHtml = `<!doctype html>
 <div class="panel">${detailHtml}</div>
 <h2>Full-window view</h2>
 <div class="overlay-box">${overlayHtml}</div>
-${conventionsSection}</body>
+${conventionsSection}${tier3Section}</body>
 </html>`;
 await writeFile(statesFile, statesHtml, "utf8");
 console.log("preview-tab: wrote " + statesFile);
@@ -1274,4 +1418,21 @@ if (overviewSnapshot !== "") {
 	await writeFile(overviewFile, overviewPage, "utf8");
 	await writeFile(overviewFile.replace(/\.html$/, "-light.html"), overviewPage.replace("<body>", '<body data-theme="light">'), "utf8");
 	console.log("preview-tab: wrote " + overviewFile);
+}
+
+// A page with just the Tier 3 states, for a quick visual check of the
+// compliance line, the upgrade preview and the workspace strip.
+if (tier3Html !== "") {
+	const tier3File = join(dirname(outFile), "graph-tab-tier3.html");
+	const shellEnd = statesHtml.indexOf("</head>") + "</head>".length;
+	const shell = statesHtml.slice(0, shellEnd);
+	const panels = "<body>" +
+		"<h2>Compliance and the workspace document</h2>" +
+		'<div class="panel">' + tier3Html + "</div>" +
+		"<h2>Upgrade preview - nothing written yet</h2>" +
+		'<div class="panel">' + tier3PreviewHtml + "</div>" +
+		"</body>\n</html>\n";
+	const tier3Page = shell + panels;
+	await writeFile(tier3File, tier3Page, "utf8");
+	console.log("preview-tab: wrote " + tier3File);
 }

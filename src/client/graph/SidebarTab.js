@@ -627,6 +627,40 @@
 			wordBreak: "break-word"
 		};
 		/** The workspace overview: one row per repository, attention first. */
+		/** The compliance line: one sentence plus the offending subjects. */
+		const SIDEBAR_TAB_COMPLIANCE = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 1,
+			padding: "2px 2px 0",
+			fontSize: 11,
+			lineHeight: "16px"
+		};
+		/** The upgrade preview: what a write would add, rewrite or drop. */
+		const SIDEBAR_TAB_PREVIEW = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 4,
+			marginTop: 6,
+			padding: 8,
+			borderRadius: 8,
+			border: "1px dashed var(--dsw-alias-border-2)",
+			background: "var(--dsw-alias-bg-layer-1)"
+		};
+		/** One section of the preview. */
+		const SIDEBAR_TAB_PREVIEW_ROW = {
+			display: "flex",
+			alignItems: "baseline",
+			gap: 6,
+			fontSize: 11,
+			lineHeight: "16px"
+		};
+		const SIDEBAR_TAB_PREVIEW_SNIPPET = {
+			color: "var(--dsw-alias-label-tertiary)",
+			fontSize: 10,
+			lineHeight: "15px",
+			wordBreak: "break-word"
+		};
 		const SIDEBAR_TAB_OVERVIEW = {
 			display: "flex",
 			flexDirection: "column",
@@ -1262,6 +1296,15 @@
 			})));
 			return h("div", { key: "detail", "data-gitgraph-overview-detail-body": true, style: SIDEBAR_TAB_OVERVIEW_DETAIL }, lines);
 		}
+		/** The localized name of one compliance reason code. */
+		function sidebarTabReasonLabel(t, reason) {
+			if (reason === "length") return t("sidebar.reasonLength");
+			if (reason === "type") return t("sidebar.reasonType");
+			if (reason === "case") return t("sidebar.reasonCase");
+			if (reason === "period") return t("sidebar.reasonPeriod");
+			if (reason === "mood") return t("sidebar.reasonMood");
+			return reason;
+		}
 		/**
 		 * The better-sidebar tab body: scan the workspace for its repositories
 		 * (the root repository first, then nested ones), let the user pick one,
@@ -1413,6 +1456,14 @@
 			const [conventionNotice, setConventionNotice] = react.useState(null);
 			/** The last failed read/write, shown instead of the hint. */
 			const [conventionError, setConventionError] = react.useState(null);
+			/** The last compliance read for the selected repository, if any. */
+			const [compliance, setCompliance] = react.useState(null);
+			/** The pending framework upgrade: a read-only diff, written on confirm. */
+			const [upgrade, setUpgrade] = react.useState(null);
+			/** The workspace document write in flight. */
+			const [workspaceBusy, setWorkspaceBusy] = react.useState(false);
+			/** The workspace-level document, read once per workspace. */
+			const [workspaceDoc, setWorkspaceDoc] = react.useState(null);
 			/** Repositories the auto-scaffold already ran for (once per session). */
 			const autoScaffolded = react.useRef(new Set());
 			/** Escape closes the full-window view, like any dialog. */
@@ -1667,6 +1718,105 @@
 			}, [runScan, t]);
 			/** The selected repository's path, as an effect dependency. */
 			const selectedKey = selected !== void 0 ? selected.path : void 0;
+			/** The workspace whose shared document strip is shown, as a dependency. */
+			const workspaceKey = sessionCwd;
+			/**
+			 * Choose a framework. With no document yet the template is written
+			 * straight away, exactly like before; when one exists the host is asked
+			 * for a read-only diff first, and nothing is written until the user
+			 * confirms it. This is the Tier 3 upgrade preview.
+			 */
+			const pickFramework = react.useCallback((repoPath, frameworkId, exists) => {
+				if (exists !== true) return writeConvention(repoPath, frameworkId);
+				setUpgrade({
+					phase: "loading",
+					path: repoPath,
+					framework: frameworkId
+				});
+				return sidebarTabGit().conventionPreview(repoPath, frameworkId).then((result) => {
+					if (!result.ok || result.value === null || result.value === void 0) {
+						setUpgrade(null);
+						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						return false;
+					}
+					setUpgrade({
+						phase: "ready",
+						path: repoPath,
+						framework: frameworkId,
+						value: result.value
+					});
+					return true;
+				}).catch(() => {
+					setUpgrade(null);
+					setConventionError(t("sidebar.error.conventions"));
+					return false;
+				});
+			}, [t, writeConvention]);
+			/** Write the previewed framework, replacing the document on purpose. */
+			const confirmUpgrade = react.useCallback(() => {
+				if (upgrade === null || upgrade.phase !== "ready") return;
+				const target = upgrade.framework;
+				const repoPath = upgrade.path;
+				setUpgrade(null);
+				writeConvention(repoPath, target).then((ok) => {
+					if (ok) setPickerOpen(false);
+				});
+			}, [upgrade, writeConvention]);
+			/** Read the workspace document once per scan, so the strip stays honest. */
+			react.useEffect(() => {
+				if (workspaceKey === void 0) return void 0;
+				let alive = true;
+				sidebarTabGit().workspaceConvention(workspaceKey, {
+					action: "state"
+				}).then((result) => {
+					if (!alive || !result.ok || result.value === null || result.value === void 0) return;
+					setWorkspaceDoc(result.value);
+				}).catch(() => void 0);
+				return () => {
+					alive = false;
+				};
+			}, [workspaceKey, scan]);
+			/** Write the shared document of the workspace the session lives in. */
+			const writeWorkspaceDoc = react.useCallback(() => {
+				if (workspaceBusy === true || workspaceKey === void 0) return;
+				setWorkspaceBusy(true);
+				setConventionError(null);
+				sidebarTabGit().workspaceConvention(workspaceKey, {
+					action: "write"
+				}).then((result) => {
+					setWorkspaceBusy(false);
+					if (!result.ok || result.value === null || result.value === void 0) {
+						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						return;
+					}
+					setWorkspaceDoc(Object.assign({}, workspaceDoc, {
+						root: result.value.root,
+						docPath: result.value.docPath,
+						exists: true,
+						size: result.value.bytes,
+						draft: true
+					}));
+					runScan(true);
+				}).catch(() => {
+					setWorkspaceBusy(false);
+					setConventionError(t("sidebar.error.conventions"));
+				});
+			}, [runScan, t, workspaceBusy, workspaceDoc, workspaceKey]);
+			/** Read the selected repository's compliance against its own document. */
+			react.useEffect(() => {
+				if (selectedKey === void 0) return void 0;
+				let alive = true;
+				sidebarTabGit().commitCompliance(selectedKey).then((result) => {
+					if (!alive || !result.ok || result.value === null || result.value === void 0) return;
+					setCompliance(result.value);
+				}).catch(() => void 0);
+				return () => {
+					alive = false;
+				};
+			}, [selectedKey, scan]);
+			react.useEffect(() => {
+				setUpgrade(null);
+			}, [selectedKey]);
 			/** Load the framework catalogue for the selected repository. */
 			react.useEffect(() => {
 				if (selectedKey === void 0) return void 0;
@@ -2325,7 +2475,16 @@
 					onClick: () => props.onOpenFile(state.docPath),
 					title: t("sidebar.conventionsOpen"),
 					"aria-label": t("sidebar.conventionsOpen")
-				}, t("sidebar.conventionsOpen")) : null, exists ? null : h("button", {
+				}, t("sidebar.conventionsOpen")) : null, exists ? h("button", {
+					key: "switch",
+					type: "button",
+					"data-gitgraph-action": "switch-conventions",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					disabled: conventionBusy,
+					onClick: () => setPickerOpen((current) => !current),
+					title: t("sidebar.conventionsSwitch"),
+					"aria-label": t("sidebar.conventionsSwitch")
+				}, t("sidebar.conventionsSwitch")) : exists ? null : h("button", {
 					key: "setup",
 					type: "button",
 					"data-gitgraph-action": "setup-conventions",
@@ -2334,7 +2493,41 @@
 					title: t("sidebar.conventionsSetup"),
 					"aria-label": t("sidebar.conventionsSetup")
 				}, t("sidebar.conventionsSetup"))]);
+				/**
+				 * Compliance against the document's own checkable rules. It is a
+				 * read, so a repository without a document says so instead of
+				 * pretending everything is fine.
+				 */
+				const complianceLine = compliance === null ? null : (() => {
+					const enforced = compliance.enforced === true;
+					const failing = typeof compliance.failing === "number" ? compliance.failing : 0;
+					const checked = typeof compliance.checked === "number" ? compliance.checked : 0;
+					const parts = [h("span", {
+						key: "text",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, enforced !== true ? t("sidebar.complianceOff") : failing === 0 ? t("sidebar.complianceOk", {
+						count: checked
+					}) : t("sidebar.complianceMiss", {
+						count: checked,
+						failing
+					}))];
+					const offenders = compliance.offenders !== void 0 && compliance.offenders !== null ? compliance.offenders : [];
+					offenders.slice(0, 3).forEach((offender) => {
+						const reasons = offender.reasons !== void 0 && offender.reasons !== null ? offender.reasons.map((reason) => sidebarTabReasonLabel(t, reason)).join(", ") : "";
+						parts.push(h("span", {
+							key: "offender-" + offender.oid,
+							"data-gitgraph-offender": offender.oid,
+							style: SIDEBAR_TAB_PREVIEW_SNIPPET
+						}, offender.oid + "  " + offender.subject + (reasons === "" ? "" : "  [" + reasons + "]")));
+					});
+					return h("div", {
+						key: "compliance",
+						"data-gitgraph-compliance": enforced !== true ? "none" : failing > 0 ? "failing" : "clean",
+						style: SIDEBAR_TAB_COMPLIANCE
+					}, parts);
+				})();
 				const children = [head];
+				if (complianceLine !== null) children.push(complianceLine);
 				if (conventionError !== null) children.push(h("span", {
 					key: "error",
 					"data-gitgraph-conventions-error": true,
@@ -2352,6 +2545,80 @@
 					key: "missing",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, t("sidebar.conventionsMissing")));
+				/**
+				 * The upgrade preview: what choosing a framework would do to the
+				 * document that is already there. Nothing is written until the
+				 * confirmation button is pressed.
+				 */
+				const upgradePanel = (() => {
+					if (upgrade === null || upgrade.path !== selected.path) return null;
+					const value = upgrade.phase === "ready" ? upgrade.value : null;
+					const parts = [h("span", {
+						key: "title",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.previewTitle"))];
+					if (value === null) parts.push(h("span", {
+						key: "wait",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.loading")));
+					else {
+						const counts = [t("sidebar.previewAdded", {
+							count: value.added
+						}), t("sidebar.previewChanged", {
+							count: value.changed
+						}), t("sidebar.previewRemoved", {
+							count: value.removed
+						}), t("sidebar.previewSame", {
+							count: value.same
+						})].join("  /  ");
+						parts.push(h("span", {
+							key: "counts",
+							"data-gitgraph-upgrade-counts": true,
+							style: SIDEBAR_TAB_CONVENTIONS_NOTE
+						}, counts));
+						const sections = (value.sections !== void 0 && value.sections !== null ? value.sections : []).filter((section) => section.status !== "same").slice(0, 6);
+						sections.forEach((section) => {
+							parts.push(h("div", {
+								key: "section-" + section.title,
+								style: SIDEBAR_TAB_PREVIEW_ROW
+							}, [h("span", {
+								key: "badge",
+								style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_CHIP, {
+									color: section.status === "added" ? "var(--dsw-alias-state-business-primary, #4c8dff)" : "var(--dsw-alias-state-warn-primary, #b45309)"
+								})
+							}, section.status === "added" ? t("sidebar.previewBadgeAdded") : t("sidebar.previewBadgeChanged")), h("span", {
+								key: "name",
+								style: SIDEBAR_TAB_PREVIEW_SNIPPET
+							}, section.title)]));
+						});
+						if ((value.added ?? 0) + (value.changed ?? 0) + (value.removed ?? 0) === 0) parts.push(h("span", {
+							key: "same",
+							style: SIDEBAR_TAB_CONVENTIONS_NOTE
+						}, t("sidebar.previewNoChange")));
+						parts.push(h("div", {
+							key: "actions",
+							style: SIDEBAR_TAB_PREVIEW_ROW
+						}, [h("button", {
+							key: "confirm",
+							type: "button",
+							"data-gitgraph-action": "conventions-confirm",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							onClick: confirmUpgrade
+						}, t("sidebar.previewConfirm")), h("button", {
+							key: "dismiss",
+							type: "button",
+							"data-gitgraph-action": "conventions-dismiss",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							onClick: () => setUpgrade(null)
+						}, t("sidebar.previewCancel"))]));
+					}
+					return h("div", {
+						key: "upgrade",
+						"data-gitgraph-upgrade": upgrade.phase,
+						style: SIDEBAR_TAB_PREVIEW
+					}, parts);
+				})();
+				if (upgradePanel !== null) children.push(upgradePanel);
 				if (pickerOpen) {
 					const cards = (catalog !== null ? catalog : []).map((framework) => h("button", {
 						key: "framework-" + framework.id,
@@ -2359,7 +2626,7 @@
 						"data-gitgraph-framework": framework.id,
 						style: SIDEBAR_TAB_FRAMEWORK,
 						disabled: conventionBusy,
-						onClick: () => writeConvention(selected.path, framework.id),
+						onClick: () => pickFramework(selected.path, framework.id, exists),
 						title: framework.url
 					}, [h("span", {
 						key: "name",
@@ -2640,13 +2907,77 @@
 					style: SIDEBAR_TAB_OVERVIEW
 				}, children);
 			})();
+			/**
+			 * The shared workspace document: one `.dsh/<doc>` at the session
+			 * directory that every nested repository inherits unless it carries
+			 * its own. Only shown when the workspace actually holds more than one
+			 * repository, so a single checkout keeps the plain strip.
+			 */
+			const workspaceBar = (() => {
+				if (overviewPanel !== null || scan.phase !== "ready") return null;
+				if (scan.repos.length < 2) return null;
+				if (workspaceDoc === null || sessionCwd === void 0) return null;
+				const exists = workspaceDoc.exists === true;
+				const docName = typeof workspaceDoc.doc === "string" ? workspaceDoc.doc : ".dsh/" + (scan.docName !== void 0 ? scan.docName : "GIT_CONVENTIONS.md");
+				const head = [h("span", {
+					key: "title",
+					style: SIDEBAR_TAB_CONVENTIONS_TITLE
+				}, t("sidebar.workspaceDoc")), h("span", {
+					key: "doc",
+					style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_NOTE, {
+						flex: "0 1 auto",
+						minWidth: 0,
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap"
+					}),
+					title: typeof workspaceDoc.docPath === "string" ? workspaceDoc.docPath : docName
+				}, docName), h("span", {
+					key: "state",
+					"data-gitgraph-workspace-doc": exists !== true ? "none" : workspaceDoc.draft === true ? "draft" : "settled",
+					style: SIDEBAR_TAB_CONVENTIONS_CHIP
+				}, exists !== true ? t("sidebar.conventionsNone") : workspaceDoc.draft === true ? t("sidebar.conventionsDraft") : t("sidebar.conventionsSettled"))];
+				if (workspaceBusy === true) head.push(h("span", {
+					key: "busy",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.conventionsWriting")));
+				else if (exists !== true) head.push(h("button", {
+					key: "create",
+					type: "button",
+					"data-gitgraph-action": "workspace-doc-create",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: writeWorkspaceDoc,
+					title: t("sidebar.workspaceDocCreate"),
+					"aria-label": t("sidebar.workspaceDocCreate")
+				}, t("sidebar.workspaceDocCreate")));
+				else if (typeof props.onOpenFile === "function" && typeof workspaceDoc.docPath === "string") head.push(h("button", {
+					key: "open",
+					type: "button",
+					"data-gitgraph-action": "workspace-doc-open",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: () => props.onOpenFile(workspaceDoc.docPath),
+					title: t("sidebar.conventionsOpen"),
+					"aria-label": t("sidebar.conventionsOpen")
+				}, t("sidebar.conventionsOpen")));
+				return h("div", {
+					key: "workspace-doc",
+					"data-gitgraph-workspace-bar": true,
+					style: SIDEBAR_TAB_CONVENTIONS
+				}, [h("div", {
+					key: "head",
+					style: SIDEBAR_TAB_CONVENTIONS_HEAD
+				}, head), h("span", {
+					key: "hint",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, exists !== true ? t("sidebar.workspaceDocMissing") : t("sidebar.workspaceDocExists"))]);
+			})();
 			return h("div", {
 				style: SIDEBAR_TAB_ROOT,
 				"data-gitgraph-sidebar-tab": true
 			}, [h("div", {
 				key: "toolbar",
 				style: SIDEBAR_TAB_TOOLBAR
-			}, toolbarItems), overviewPanel === null ? treeHeader : null, overviewPanel === null ? treeList : overviewPanel, overviewPanel === null && scan.phase === "ready" && scan.truncated === true ? h("div", {
+			}, toolbarItems), overviewPanel === null ? workspaceBar : null, overviewPanel === null ? treeHeader : null, overviewPanel === null ? treeList : overviewPanel, overviewPanel === null && scan.phase === "ready" && scan.truncated === true ? h("div", {
 				key: "truncated",
 				style: SIDEBAR_TAB_MUTED
 			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, overviewPanel === null && selected !== void 0 ? h("div", {
