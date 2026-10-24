@@ -4,6 +4,8 @@
 		const SIDEBAR_TAB_ID = "git-graph-repos";
 	/** Branch names offered by the one-click "initialize repository" bar. */
 	const SIDEBAR_TAB_INIT_BRANCHES = ["main", "master", "trunk", "develop"];
+	/** How many refs the filter offers as toggles before it stops listing them. */
+	const SIDEBAR_TAB_FILTER_REFS_MAX = 12;
 	const SIDEBAR_TAB_INIT = {
 		display: "flex",
 		flexDirection: "column",
@@ -367,6 +369,47 @@
 			gap: 4,
 			minWidth: 0,
 			overflow: "hidden"
+		};
+		/** Filter bar: a search field above one toggle per ref. */
+		const SIDEBAR_TAB_FILTER = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 4
+		};
+		const SIDEBAR_TAB_SEARCH = {
+			width: "100%",
+			boxSizing: "border-box",
+			padding: "3px 6px",
+			borderRadius: 6,
+			border: "1px solid var(--dsw-alias-border-default, rgba(127, 127, 127, 0.35))",
+			background: "var(--dsw-alias-bg-base)",
+			color: "var(--dsw-alias-label-primary)",
+			fontFamily: "inherit",
+			fontSize: 11
+		};
+		const SIDEBAR_TAB_FILTER_REFS = {
+			display: "flex",
+			flexWrap: "wrap",
+			gap: 4
+		};
+		/** One ref toggle: cyan while it is visible, struck through once muted. */
+		const SIDEBAR_TAB_CHIP = {
+			flex: "none",
+			padding: "1px 6px",
+			borderRadius: 999,
+			border: "1px solid rgba(56, 189, 248, 0.55)",
+			background: "rgba(56, 189, 248, 0.18)",
+			color: "var(--dsw-alias-label-primary)",
+			fontFamily: "inherit",
+			fontSize: 10,
+			lineHeight: "14px",
+			cursor: "pointer"
+		};
+		const SIDEBAR_TAB_CHIP_OFF = {
+			border: "1px solid transparent",
+			background: "transparent",
+			color: "var(--dsw-alias-label-tertiary)",
+			textDecoration: "line-through"
 		};
 		/** Elastic column holding subject (and, when zoomed in, the refs line). */
 		const SIDEBAR_TAB_ROW_COLUMN = {
@@ -749,6 +792,34 @@
 			return lines.join("\n");
 		}
 		/**
+		 * The same commit, phrased as a request an agent can act on: which
+		 * repository and branch, what to roll back to, and the three candidate
+		 * commands with the risk of each. It is a prompt, not a script - nothing
+		 * here executes anything, and the last line asks for confirmation.
+		 */
+		function sidebarTabRollbackText(commit, repo, branch, commitsAbove, t) {
+			const short = String(commit.oid).slice(0, 7);
+			const lines = [t("sidebar.rollbackIntro")];
+			if (repo !== void 0 && repo !== null) {
+				lines.push(t("sidebar.repoPath") + ": " + sidebarTabRepoLabel(repo));
+				lines.push("Path: " + repo.path);
+			}
+			lines.push(t("sidebar.branch") + ": " + (typeof branch === "string" && branch !== "" ? branch : "\u2014"));
+			lines.push(t("sidebar.commit") + ": " + short + " " + commit.subject);
+			lines.push("SHA: " + commit.oid);
+			lines.push(t("sidebar.committedAt") + ": " + sidebarTabIsoTime(commit.authorTime));
+			if (Array.isArray(commit.refs) && commit.refs.length > 0) lines.push(t("sidebar.references") + ": " + commit.refs.join(", "));
+			if (typeof commitsAbove === "number" && commitsAbove >= 0) lines.push(sidebarTabInterpolate(t("sidebar.rollbackAfter"), {
+				count: commitsAbove
+			}));
+			lines.push(t("sidebar.rollbackOptions") + ":");
+			lines.push("- git revert " + short + "  " + t("sidebar.rollbackSafe"));
+			lines.push("- git reset --hard " + short + "  " + t("sidebar.rollbackHard"));
+			lines.push("- git cherry-pick " + short + "  " + t("sidebar.rollbackPick"));
+			lines.push(t("sidebar.rollbackConfirm"));
+			return lines.join("\n");
+		}
+		/**
 		 * Path of one parent edge, drawn the way desktop git clients (gitk,
 		 * GitAhead, VS Code Git Graph, Fork) draw them: the line leaves the
 		 * child node straight down, hops sideways inside the row gap directly
@@ -950,6 +1021,10 @@
 				const cached = sidebarTabCached(sessionCwd, "treeOpen");
 				return typeof cached === "boolean" ? cached : true;
 			});
+			/** Free-text filter over the loaded commits (subject, author, sha, refs). */
+			const [query, setQuery] = react.useState("");
+			/** Refs whose commits are hidden; name -> true. */
+			const [mutedRefs, setMutedRefs] = react.useState(() => ({}));
 			/** Whether the full-window graph view is open. */
 			const [expanded, setExpanded] = react.useState(false);
 			/** Which copy action ran last, so its button can flash "copied". */
@@ -1311,13 +1386,70 @@
 			const view = graph !== null ? graph.view : null;
 			const graphError = graph !== null ? graph.error : null;
 			const graphLoading = graph !== null && graph.loading === true;
-			const lanes = react.useMemo(() => view === null ? [] : computeLanes(view.commits), [view]);
+			const allCommits = view === null ? [] : view.commits;
+			/** Refs offered as toggles; HEAD aliases are skipped, they duplicate a branch. */
+			const refNames = react.useMemo(() => {
+				const names = [];
+				for (const commit of allCommits) for (const ref of commit.refs) {
+					if (ref.indexOf("HEAD -> ") === 0) continue;
+					if (names.indexOf(ref) < 0) names.push(ref);
+				}
+				return names.slice(0, SIDEBAR_TAB_FILTER_REFS_MAX);
+			}, [allCommits]);
+			const mutedCount = react.useMemo(() => {
+				let count = 0;
+				for (const name of refNames) if (mutedRefs[name] === true) count += 1;
+				return count;
+			}, [mutedRefs, refNames]);
+			/**
+			 * The commits the lanes are drawn from. A ref toggle keeps only the
+			 * commits reachable from the refs that are still enabled; a search keeps
+			 * every hit plus its ancestors inside this page, so the lines that lead
+			 * to a match are not cut off.
+			 */
+			const visibleCommits = react.useMemo(() => {
+				const byOid = new Map();
+				for (const commit of allCommits) byOid.set(commit.oid, commit);
+				const reachable = (starts) => {
+					const seen = new Set();
+					const stack = starts.slice();
+					while (stack.length > 0) {
+						const oid = stack.pop();
+						if (seen.has(oid) || !byOid.has(oid)) continue;
+						seen.add(oid);
+						for (const parent of byOid.get(oid).parents) stack.push(parent);
+					}
+					return seen;
+				};
+				let allowed = null;
+				if (mutedCount > 0) {
+					const starts = [];
+					for (const commit of allCommits) {
+						const usable = commit.refs.some((ref) => ref.indexOf("HEAD -> ") !== 0 && mutedRefs[ref] !== true);
+						if (usable) starts.push(commit.oid);
+					}
+					allowed = reachable(starts);
+				}
+				const needle = query.trim().toLowerCase();
+				let matched = null;
+				if (needle !== "") {
+					const hits = [];
+					for (const commit of allCommits) {
+						const haystack = (commit.subject + " " + commit.author + " " + commit.oid + " " + commit.refs.join(" ")).toLowerCase();
+						if (haystack.indexOf(needle) >= 0) hits.push(commit.oid);
+					}
+					matched = reachable(hits);
+				}
+				return allCommits.filter((commit) => (allowed === null || allowed.has(commit.oid)) && (matched === null || matched.has(commit.oid)));
+			}, [allCommits, mutedRefs, mutedCount, query]);
+			const filtering = query.trim() !== "" || mutedCount > 0;
+			const lanes = react.useMemo(() => computeLanes(visibleCommits), [visibleCommits]);
 			const laneCount = react.useMemo(() => {
 				let count = 0;
 				for (const row of lanes) count = Math.max(count, row.columns.length);
 				return count;
 			}, [lanes]);
-			const geometry = react.useMemo(() => view === null ? null : sidebarTabBuildGraph(view.commits, lanes, rowHeight), [view, lanes, rowHeight]);
+			const geometry = react.useMemo(() => sidebarTabBuildGraph(visibleCommits, lanes, rowHeight), [visibleCommits, lanes, rowHeight]);
 			/** Tree rows: the workspace root, the directories between, each repository. */
 			const treeRows = react.useMemo(() => scan.phase === "ready" ? sidebarTabRepoTree(scan.repos) : [], [scan]);
 			const status = selected !== void 0 && selected.status !== void 0 && selected.status !== null ? selected.status : null;
@@ -1498,8 +1630,16 @@
 					key: "commits",
 					style: SIDEBAR_TAB_MUTED
 				}, t("sidebar.commitsLanes", {
-					count: view === null ? 0 : view.commits.length,
+					count: visibleCommits.length,
 					lanes: laneCount
+				})));
+				if (filtering === true) statusChildren.push(h("span", {
+					key: "filtered",
+					"data-gitgraph-filtered": true,
+					style: SIDEBAR_TAB_MUTED
+				}, t("sidebar.filtered", {
+					shown: visibleCommits.length,
+					total: allCommits.length
 				})));
 			}
 			const canvas = geometry === null ? null : h("svg", {
@@ -1542,7 +1682,7 @@
 				stroke: "var(--dsw-alias-bg-base, #ffffff)",
 				strokeWidth: 1.4
 			})));
-			const rows = view === null || geometry === null ? [] : view.commits.map((commit, position) => {
+			const rows = geometry === null ? [] : visibleCommits.map((commit, position) => {
 				const row = lanes[position];
 				if (row === void 0) return null;
 				const pinned = pinnedOid === commit.oid;
@@ -1629,6 +1769,7 @@
 				}, children);
 			});
 			const pinned = view === null ? void 0 : view.commits.find((commit) => commit.oid === pinnedOid);
+			const pinnedAbove = view === null || pinned === void 0 ? -1 : view.commits.findIndex((commit) => commit.oid === pinned.oid);
 			const graphBody = view === null || geometry === null ? null : h("div", {
 				key: "canvas-host",
 				"data-gitgraph-canvas": true,
@@ -1676,6 +1817,14 @@
 				title: t("sidebar.copyInfo"),
 				"aria-label": t("sidebar.copyInfo")
 			}, copiedKey === "info" ? t("sidebar.copied") : t("sidebar.copyInfo")), h("button", {
+				key: "copy-rollback",
+				type: "button",
+				"data-gitgraph-action": "copy-rollback",
+				style: SIDEBAR_TAB_DETAIL_BUTTON,
+				onClick: () => copyText("rollback", sidebarTabRollbackText(pinned, selected, view === null ? void 0 : view.branch, pinnedAbove, t)),
+				title: t("sidebar.copyRollback"),
+				"aria-label": t("sidebar.copyRollback")
+			}, copiedKey === "rollback" ? t("sidebar.copied") : t("sidebar.copyRollback")), h("button", {
 				key: "copy-sha",
 				type: "button",
 				"data-gitgraph-action": "copy-sha",
@@ -1875,6 +2024,40 @@
 				"data-gitgraph-init-error": true,
 				style: SIDEBAR_TAB_ERROR
 			}, initError)]);
+			/** Search field plus one toggle per ref; both feed visibleCommits. */
+			const filterBar = view === null || view.commits.length === 0 ? null : h("div", {
+				key: "filter",
+				"data-gitgraph-filter": true,
+				style: SIDEBAR_TAB_FILTER
+			}, [h("input", {
+				key: "query",
+				type: "search",
+				value: query,
+				"data-gitgraph-search": true,
+				placeholder: t("sidebar.search"),
+				style: SIDEBAR_TAB_SEARCH,
+				onChange: (event) => setQuery(event.target.value === void 0 ? "" : event.target.value)
+			}), refNames.length === 0 ? null : h("div", {
+				key: "refs",
+				style: SIDEBAR_TAB_FILTER_REFS
+			}, refNames.map((ref) => {
+				const muted = mutedRefs[ref] === true;
+				return h("button", {
+					key: "ref:" + ref,
+					type: "button",
+					"data-gitgraph-ref-filter": ref,
+					"data-gitgraph-ref-muted": muted ? "true" : "false",
+					style: muted ? Object.assign({}, SIDEBAR_TAB_CHIP, SIDEBAR_TAB_CHIP_OFF) : SIDEBAR_TAB_CHIP,
+					title: t("sidebar.refFilter"),
+					"aria-pressed": muted ? "false" : "true",
+					onClick: () => setMutedRefs((current) => {
+						const next = Object.assign({}, current);
+						if (next[ref] === true) delete next[ref];
+						else next[ref] = true;
+						return next;
+					})
+				}, ref);
+			}))]);
 			let body;
 			if (scan.phase === "idle" || scan.phase === "scanning") body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("sidebar.loading"));
 			else if (scan.phase === "error") body = h("div", { style: SIDEBAR_TAB_ERROR }, scan.error !== void 0 && scan.error !== null ? scan.error : t("sidebar.error.repos"));
@@ -1893,6 +2076,10 @@
 			else if (graphError !== null) body = h("div", { style: SIDEBAR_TAB_ERROR }, graphError);
 			else if (view === null) body = h("div", { style: SIDEBAR_TAB_EMPTY }, graphLoading ? t("graph.loading") : t("graph.empty"));
 			else if (view.commits.length === 0) body = h("div", { style: SIDEBAR_TAB_EMPTY }, t("graph.empty"));
+			else if (filtering === true && visibleCommits.length === 0) body = h("div", {
+				"data-gitgraph-nomatch": true,
+				style: SIDEBAR_TAB_EMPTY
+			}, t("sidebar.noMatch"));
 			else body = graphBody;
 			const moreChild = view !== null && view.hasMore === true ? h("button", {
 				key: "more",
@@ -1930,7 +2117,7 @@
 				key: "count",
 				style: Object.assign({}, SIDEBAR_TAB_MUTED, { flex: "none" })
 			}, t("sidebar.commitsLanes", {
-				count: view === null ? 0 : view.commits.length,
+				count: visibleCommits.length,
 				lanes: laneCount
 			})), h("button", {
 				key: "close",
@@ -1956,7 +2143,7 @@
 			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, selected !== void 0 ? h("div", {
 				key: "status",
 				style: SIDEBAR_TAB_STATUS
-			}, statusChildren) : null, conventionsBar, initBar, h("div", {
+			}, statusChildren) : null, conventionsBar, initBar, filterBar, h("div", {
 				key: "body-wrap",
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true

@@ -71,6 +71,18 @@ const EXTRA_KEYS = [
 			['"sidebar.initRunning"', '"正在初始化…"'],
 			['"sidebar.initAfter"', '"初始化后会自动建立 Git 规范文档，并提示选择框架。"'],
 			['"sidebar.error.init"', '"初始化 Git 仓库失败"'],
+			['"sidebar.copyRollback"', '"复制回滚提示"'],
+			['"sidebar.rollbackIntro"', '"请把我的仓库回滚到某个提交（只描述，不要直接执行）。"'],
+			['"sidebar.rollbackAfter"', '"该提交之后，当前视图里还有 {count} 个提交。"'],
+			['"sidebar.rollbackOptions"', '"候选做法"'],
+			['"sidebar.rollbackSafe"', '"安全，保留历史，适合已推送的分支"'],
+			['"sidebar.rollbackHard"', '"丢弃该提交之后的提交，已推送的分支慎用"'],
+			['"sidebar.rollbackPick"', '"只把这一条提交搬到别的分支"'],
+			['"sidebar.rollbackConfirm"', '"请先确认用哪一种，并说明会丢失哪些提交。"'],
+			['"sidebar.search"', '"搜索提交（主题 / 作者 / SHA / 引用）"'],
+			['"sidebar.refFilter"', '"点击切换该引用的提交"'],
+			['"sidebar.filtered"', '"{shown} / {total} 条匹配"'],
+			['"sidebar.noMatch"', '"没有匹配的提交"'],
 		]
 	},
 	{
@@ -120,6 +132,18 @@ const EXTRA_KEYS = [
 			['"sidebar.initRunning"', '"Initializing…"'],
 			['"sidebar.initAfter"', '"A Git convention document is created automatically afterwards, and the framework picker opens."'],
 			['"sidebar.error.init"', '"Failed to initialize the Git repository"'],
+			['"sidebar.copyRollback"', '"Copy rollback prompt"'],
+			['"sidebar.rollbackIntro"', '"Roll my repository back to a specific commit (describe only, do not execute anything)."'],
+			['"sidebar.rollbackAfter"', '"There are {count} commits after it in the current view."'],
+			['"sidebar.rollbackOptions"', '"Candidate approaches"'],
+			['"sidebar.rollbackSafe"', '"safe, keeps history, fine on a pushed branch"'],
+			['"sidebar.rollbackHard"', '"discards the commits after it, avoid on a pushed branch"'],
+			['"sidebar.rollbackPick"', '"moves only this commit onto another branch"'],
+			['"sidebar.rollbackConfirm"', '"Confirm which one to use first, and say which commits would be lost."'],
+			['"sidebar.search"', '"Filter commits (subject / author / SHA / ref)"'],
+			['"sidebar.refFilter"', '"Click to toggle the commits of this ref"'],
+			['"sidebar.filtered"', '"{shown} of {total} matched"'],
+			['"sidebar.noMatch"', '"No commits match the filter"'],
 		]
 	}
 ];

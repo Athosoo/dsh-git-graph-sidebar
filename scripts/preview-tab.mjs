@@ -481,6 +481,8 @@ const fakeDocument = {
 };
 
 const INIT_CALLS = [];
+/** Every string the tab asked the clipboard to hold. */
+const COPIED = [];
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
 	let value;
@@ -534,7 +536,16 @@ const fakeWindow = {
 	location: { href: "http://127.0.0.1:56515/", origin: "http://127.0.0.1:56515" },
 	matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 };
-const fakeNavigator = { language: "zh-CN", userAgent: "node-preview" };
+const fakeNavigator = {
+	language: "zh-CN",
+	userAgent: "node-preview",
+	clipboard: {
+		writeText(value) {
+			COPIED.push(String(value));
+			return Promise.resolve();
+		}
+	}
+};
 
 const loadBundle = new Function("window", "document", "navigator", "localStorage", "fetch", "self", "globalThis", source);
 loadBundle(fakeWindow, fakeDocument, fakeNavigator, fakeLocalStorage, fakeFetch, fakeWindow, globalThis);
@@ -654,6 +665,69 @@ if (copyButton === undefined) throw new Error("commit card has no copy action");
 click(copyButton, "copy commit info");
 detailHtml = (await detailMount.render()).html;
 if (!/已复制|Copied/.test(detailHtml)) throw new Error("copy action did not confirm");
+
+// The second copy action is the one the feature exists for: a rollback prompt
+// an agent can act on, carrying both SHAs and all three candidate commands.
+const rollbackButton = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "copy-rollback")[0];
+if (rollbackButton === undefined) throw new Error("commit card has no rollback prompt action");
+click(rollbackButton, "copy rollback prompt");
+await detailMount.render();
+const rollbackText = COPIED[COPIED.length - 1] ?? "";
+for (const expected of ["git revert ", "git reset --hard ", "git cherry-pick ", "Path: "]) {
+	if (rollbackText.indexOf(expected) < 0) throw new Error("rollback prompt is missing " + JSON.stringify(expected) + ": " + rollbackText.slice(0, 200));
+}
+if (process.env.PRINT_ROLLBACK === "1") console.log(String.fromCharCode(10) + rollbackText + String.fromCharCode(10));
+console.log("preview-tab: rollback prompt names all three commands (" + rollbackText.length + " chars)");
+
+// --- Tier 1: search and ref toggles -----------------------------------------
+const rowNodes = (mount) => findAll(mount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true);
+const searchField = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true)[0];
+if (searchField === undefined) throw new Error("filter bar has no search field");
+const rowsBeforeSearch = rowNodes(detailMount).length;
+searchField.props.onChange({ target: { value: "changelog" } });
+await detailMount.render();
+const rowsAfterSearch = rowNodes(detailMount);
+if (rowsAfterSearch.length === 0) throw new Error("search removed every row instead of narrowing");
+if (rowsAfterSearch.length >= rowsBeforeSearch) throw new Error("search did not narrow the rows: " + rowsBeforeSearch + " -> " + rowsAfterSearch.length);
+const filteredChip = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-filtered"] === true)[0];
+if (filteredChip === undefined) throw new Error("filtered counter is missing");
+
+// Clearing the query brings every row back.
+const clearField = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true)[0];
+clearField.props.onChange({ target: { value: "" } });
+await detailMount.render();
+if (rowNodes(detailMount).length !== rowsBeforeSearch) throw new Error("clearing the search did not restore the rows");
+
+// A ref toggle hides the commits that only that ref reaches.
+const refToggles = findAll(detailMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-ref-filter"] === "string");
+if (refToggles.length === 0) throw new Error("filter bar lists no refs");
+// Not every ref hides something: the commits of a merged branch are still
+// reachable from main, so that toggle correctly keeps them. Walk the toggles
+// until one actually removes rows, then undo it and check the rows come back.
+let mutedRefName = "";
+let hiddenByRef = 0;
+for (const toggle of refToggles) {
+	const name = toggle.props["data-gitgraph-ref-filter"];
+	click(toggle, "toggle ref " + name);
+	await detailMount.render();
+	const after = rowNodes(detailMount).length;
+	if (after < rowsBeforeSearch) {
+		mutedRefName = name;
+		hiddenByRef = rowsBeforeSearch - after;
+		const muted = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
+		if (muted === undefined || muted.props["data-gitgraph-ref-muted"] !== "true") throw new Error("muted ref is not marked");
+		click(muted, "unmute ref " + name);
+		await detailMount.render();
+		if (rowNodes(detailMount).length !== rowsBeforeSearch) throw new Error("unmuting the ref did not restore the rows");
+		break;
+	}
+	const restore = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
+	if (restore === undefined) throw new Error("ref toggle disappeared: " + name);
+	click(restore, "restore ref " + name);
+	await detailMount.render();
+}
+if (mutedRefName === "") throw new Error("no ref toggle hid any commit");
+console.log("preview-tab: search narrows to " + rowsAfterSearch.length + " of " + rowsBeforeSearch + " rows, muting " + mutedRefName + " hides " + hiddenByRef);
 
 // The full-window view opens, renders the same graph and closes again.
 const expandMount = await mountComponent(descriptor.component, tabProps(focusPath));
