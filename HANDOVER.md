@@ -449,6 +449,7 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
    bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
+5. ~~发 1.9.0~~ **已完成**（commit `94923c9`、tag `v1.9.0`、Release id `423280585`、资产 `dsh-git-graph-sidebar.tgz` 874347 字节、`desktop` 已装 1.9.0）；用户需重启 DSH 才看得到新的引用标签。下一版候选：图谱分页（host 已算 `hasMore`，`lib/index.js` 里 `/git/log` 支持 `limit`，tab 还没有「加载更早」入口）、真历史搜索（`--grep` / `--author` / `--since`）、状态条显示落后上游、详情卡加 `--stat`、PNG 导出（需要光栅化）。
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
