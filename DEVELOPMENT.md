@@ -212,6 +212,23 @@ Two traps worth remembering:
   run `sidebarTabEnsureStyle()`; `scripts/preview-tab.mjs` declares the same three
   variables in its own shell so the previews match.
 
+## Subject language (1.7.3)
+
+`src/host/conventions.js` stores the language policy as one more front line of the same document:
+
+```
+status: settled
+strict: true
+language: en
+```
+
+`conventionDocLanguageOf()` reads it back (`zh` / `en` / `mixed`, anything unknown counts as `mixed`), `parseConventionRules()` reports `language` plus `languageStated`, and only a stated language produces the `lang` compliance reason - a document that never mentions a language accepts either one. `conventionWithLanguage()` keeps the order `status -> strict -> language`, `conventionPromptBlockFor()` always emits one `Subject language: ...` line, and the picker passes the choice as `language` on `/git/convention` and `/git/convention/preview`, so the preview diff shows the line that will be written.
+
+Two traps worth knowing:
+
+- `conventionInsertField()` takes a key that may already carry a colon; normalise it (`replace(/:+$/, "")`) before appending one, otherwise the anchor becomes `status::` and never matches, and the new line lands at the top of the file.
+- `scripts/build-lib.mjs` strips a GitApi addition by method name before inserting it again. Never rely on `includes(guard)`: when a signature changes the guard no longer matches, the old definition stays, and in an object literal the later (older) method wins.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.

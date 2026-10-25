@@ -535,6 +535,54 @@ async function main() {
 	const looseBody = await readFile(join(cjk, "GIT_CONVENTIONS.md"), "utf8");
 	check("a loose write keeps a single flag", looseBody.split("strict:").length === 2 && looseBody.indexOf("strict: false") >= 0, looseBody.slice(0, 200));
 
+	// The language policy: written into the document, enforced on the subject,
+	// and restated in the injected block. Chinese, English or a mix only when asked.
+	const langzh = join(workspace, "repos", "langzh");
+	await mkdir(langzh, { recursive: true });
+	await git(langzh, "init", "-b", "main");
+	await writeFile(join(langzh, "GIT_CONVENTIONS.md"), [
+		"# Git 规范",
+		"",
+		"status: settled",
+		"language: zh",
+		"",
+		"## 提交信息",
+		"",
+		"- type 取值：`feat` / `fix` / `docs`",
+		"- 标题不加句号，≤ 40 字符",
+	].join(EOLX), "utf8");
+	const langSubjects = [
+		"feat: 加入解析器",
+		"fix: 修复崩溃",
+		"fix: repair the crash",
+		"docs: 更新文档"
+	];
+	for (let index = 0; index < langSubjects.length; index += 1) {
+		await writeFile(join(langzh, "row-" + index + ".txt"), String(index) + EOLX, "utf8");
+		await git(langzh, "add", ".");
+		await git(langzh, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", langSubjects[index]);
+	}
+	const langReport = await call("/git/compliance", { path: langzh });
+	check("/git/compliance ok for a Chinese-only document", langReport.json?.ok === true, langReport.raw.slice(0, 200));
+	equal("the document language is read from the front matter", langReport.json?.value?.rules?.language, "zh");
+	equal("a stated language is reported as stated", langReport.json?.value?.rules?.languageStated, true);
+	equal("only the English subject fails a Chinese document", langReport.json?.value?.failing, 1);
+	const langReasons = (langReport.json?.value?.offenders ?? []).map((entry) => (entry.reasons ?? []).join("+"));
+	check("the English subject is flagged as the wrong language", langReasons.some((entry) => entry.split("+").includes("lang")), JSON.stringify(langReasons));
+	const langSection = section.text(cwdOf(langzh));
+	check("the injected block names the subject language", /Subject language/.test(langSection), langSection.slice(0, 200));
+	check("the injected block says Chinese only", /Chinese only/.test(langSection), langSection.slice(0, 200));
+	const langWrite = await call("/git/convention", { path: langzh, framework: "conventional-commits", force: true, language: "en" });
+	check("a write with a language is accepted", langWrite.json?.ok === true, langWrite.raw.slice(0, 200));
+	const langBody = await readFile(join(langzh, "GIT_CONVENTIONS.md"), "utf8");
+	check("the language lands in the front matter", langBody.indexOf("language: en") >= 0, langBody.slice(0, 240));
+	check("the language sits under the status", langBody.indexOf(EOLX + "language: en") > langBody.indexOf("status:"), langBody.slice(0, 240));
+	const strictLang = await call("/git/convention", { path: langzh, framework: "conventional-commits", force: true, strict: true, language: "mixed" });
+	check("a write with strict and language together", strictLang.json?.ok === true, strictLang.raw.slice(0, 200));
+	const combined = await readFile(join(langzh, "GIT_CONVENTIONS.md"), "utf8");
+	check("strict and language coexist in a fixed order", combined.indexOf("strict: true") > combined.indexOf("status:") && combined.indexOf("language: mixed") > combined.indexOf("strict: true"), combined.slice(0, 260));
+	equal("only one language line survives a rewrite", combined.split("language:").length, 2);
+
 	const docless = join(workspace, "repos", "docless");
 	await mkdir(docless, { recursive: true });
 	await git(docless, "init", "-b", "main");

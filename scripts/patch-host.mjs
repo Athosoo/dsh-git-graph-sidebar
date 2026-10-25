@@ -24,8 +24,23 @@ const skipped = [];
 // verbatim: patches 9, 12 and 13 all insert into the same `switch`, so a
 // replacement stops being contiguous as soon as a later patch slips another
 // case between the inserted block and its own anchor line.
+//
+// When no guard is given, the first `case "...": {` line the replacement adds
+// becomes the guard by itself. That is the marker this script promises: a
+// route case is either there or it is not, and a later patch editing one line
+// inside it can no longer make the whole replacement look absent.
+function routeCaseOf(anchor, replacement) {
+	if (typeof replacement !== "string") return void 0;
+	for (const line of replacement.split(String.fromCharCode(10))) {
+		if (!/^	{3}case "[^"]+": \{$/.test(line)) continue;
+		if (!anchor.includes(line.trim())) return line;
+	}
+	return void 0;
+}
+
 function patch(label, anchor, replacement, guard) {
-	if (source.includes(guard === undefined ? replacement : guard)) {
+	const marker = guard !== undefined ? guard : routeCaseOf(anchor, replacement);
+	if (source.includes(marker === undefined ? replacement : marker)) {
 		skipped.push(label);
 		return;
 	}
@@ -347,21 +362,40 @@ patch(
 	'\t\t\tcase "/git/compliance": {'
 );
 
-// 14. The strict flag travels with the write: both the repository document and
-// the workspace document accept it and stamp it into the front matter.
+// 15. The language policy travels with the document too: the write stamps
+//     `language: zh|en|mixed` into the front matter, and the upgrade preview
+//     renders the same body the write would produce (strict included).
 patch(
-	"convention-strict-write",
-	'				const body = conventionBodyOf(framework, basename(snapshot.root));',
-	'				const body = conventionBodyOf(framework, basename(snapshot.root), payload !== null && typeof payload === "object" ? payload.strict : void 0);',
-	'conventionBodyOf(framework, basename(snapshot.root), payload !== null'
+	"convention-preview-flags",
+	`				const preview = await conventionPreview(snapshot.root, feature.docName, framework);`,
+	`				const flags = payload !== null && typeof payload === "object" ? payload : {};
+				const preview = await conventionPreview(snapshot.root, feature.docName, framework, flags.strict, flags.language);`
 );
 
 patch(
-	"workspace-strict-write",
-	'				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force);',
-	'				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null && typeof payload === "object" ? payload.strict : void 0);',
-	'workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null'
+	"convention-language-write",
+	`				const body = conventionBodyOf(framework, basename(snapshot.root), payload !== null && typeof payload === "object" ? payload.strict : void 0);`,
+	`				const policy = payload !== null && typeof payload === "object" ? payload : {};
+				const body = conventionBodyOf(framework, basename(snapshot.root), policy.strict, policy.language);`,
+	"conventionBodyOf(framework, basename(snapshot.root), policy.strict"
 );
+
+patch(
+	"workspace-language-write",
+	`				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null && typeof payload === "object" ? payload.strict : void 0);`,
+	`				const policy = payload !== null && typeof payload === "object" ? payload : {};
+				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict, policy.language);`,
+	"workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict"
+);
+
+// A route case may appear exactly once: two copies mean an earlier run
+// inserted a block a second time, and the second copy is dead code.
+const caseLines = source.split(String.fromCharCode(10)).map((line) => line.trim()).filter((line) => line.startsWith("case \"") && line.endsWith(": {"));
+const seenRoutes = new Set();
+for (const line of caseLines) {
+	if (seenRoutes.has(line)) throw new Error("patch-host: duplicate route case " + line);
+	seenRoutes.add(line);
+}
 
 console.log("patch-host: applied " + applied.length + ", already present " + skipped.length +
 	(applied.length > 0 ? " -> " + applied.join(", ") : ""));

@@ -27,8 +27,11 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | 1.6.0 | **released and installed** / 已发布并已装 | Tier 3: commit compliance, workspace document, upgrade preview. |
 | 1.6.1 | **released and installed** / 已发布并已装 | UI cleanup: the toolbar keeps refresh, zoom, export and init; the workspace overview and the full-window view were removed (their read-only routes `/git/cleanup`, `/git/health` stayed) and every panel font grew one step. |
 | 1.7.0 | **released and installed** / 已发布并已装 | Compliance accepts Chinese, English and mixed subjects (type aliases, full-width colon, Latin-only case and mood checks); optional strict mode writes `strict: true` and hardens the injected prompt; the framework list collapses once a card is picked; toolbar and action buttons take an explicit white control skin. |
+| 1.7.1 | **released and installed** / 已发布并已装 | Documentation only: the description no longer claims every repository — the scan reads up to three levels below the workspace root. |
+| 1.7.2 | **released and installed** / 已发布并已装 | The workspace document strip says what happened after a write, keeps a way to reach the file, and reports a failed write there instead of in the repository bar. |
+| 1.7.3 | **code complete, unreleased** / 代码完成待发版 | Subject language: `language: zh\|en\|mixed` in the document, a switch in the picker, a `lang` compliance reason and one `Subject language:` line in the injected block. |
 
-1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.
+1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.| 1.7.1 | **released and installed** / 已发布并已装 | Documentation only: the description no longer claims every repository — the scan reads up to three levels below the workspace root. |
 
 ## Tier 1 — 1.4.0 "make it usable" / 让图谱变得好用
 

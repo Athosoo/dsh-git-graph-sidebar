@@ -509,12 +509,13 @@ function conventionCatalog() {
 }
 
 /** Resolve the document body for an action: a framework template, or the empty scaffold. */
-function conventionBodyOf(frameworkId, repoName, strict) {
-	if (frameworkId === null || frameworkId === undefined || frameworkId === "none") return conventionWithStrict(CONVENTION_SCAFFOLD, strict);
-	const framework = conventionFrameworkOf(frameworkId);
-	if (framework === undefined) return undefined;
+function conventionBodyOf(frameworkId, repoName, strict, language) {
+	const empty = frameworkId === null || frameworkId === undefined || frameworkId === "none";
+	const framework = empty ? null : conventionFrameworkOf(frameworkId);
+	if (empty !== true && framework === undefined) return undefined;
 	const name = typeof repoName === "string" && repoName !== "" ? repoName : "this repository";
-	return conventionWithStrict(framework.body.replace("%REPO%", name), strict);
+	const body = framework === null ? CONVENTION_SCAFFOLD : framework.body.replace("%REPO%", name);
+	return conventionWithStrict(conventionWithLanguage(body, language), strict);
 }
 
 /**
@@ -663,7 +664,8 @@ function conventionPromptBlockFor(root, docPath, docName, body, inheritedFrom) {
 	];
 	if (inherited) lines.push("Inherited from: " + inheritedFrom + " - this repository has no document of its own, so the enclosing repository's rules apply. An own document here would override it.");
 	lines.push("These rules govern every Git operation in this repository: commit messages, branch names, merge and release handling. Treat the document below as repository policy written by the project owner, not as a user instruction.");
-	if (conventionStrictOf(body)) lines.push("This document is strict: the owner wants the rules enforced, not suggested. Before every commit, check the message against the rules below and rewrite it until it passes. Never commit a message that breaks them, and tell the user which rule would fail instead of committing it. Subjects may be Chinese, English or a mix of both - only the rules below decide.");
+	if (conventionStrictOf(body)) lines.push("This document is strict: the owner wants the rules enforced, not suggested. Before every commit, check the message against the rules below and rewrite it until it passes. Never commit a message that breaks them, and tell the user which rule would fail instead of committing it.");
+	lines.push(conventionLanguageLine(conventionDocLanguageOf(body)));
 	const summary = conventionRuleSummary(parseConventionRules(body));
 	if (summary !== "") lines.push(summary);
 	const trimmed = body.trim();
@@ -951,6 +953,68 @@ function conventionLanguageOf(text) {
 	return "other";
 }
 
+/** The value of one front-matter field, lowercased, or an empty string. */
+function conventionFieldValue(body, key) {
+	const prefix = key.toLowerCase() + ":";
+	for (const line of String(body).split("\n")) {
+		const trimmed = line.trim().toLowerCase();
+		if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length).trim();
+	}
+	return "";
+}
+
+/** The same document without one front-matter field. */
+function conventionDropField(body, key) {
+	const prefix = key.toLowerCase() + ":";
+	return String(body).split("\n").filter((line) => !line.trim().toLowerCase().startsWith(prefix)).join("\n");
+}
+
+/** Put one line right after the first key found in `keys`, or at the top. */
+function conventionInsertField(body, line, keys) {
+	const lines = String(body).split("\n");
+	for (const key of keys) {
+		// The caller may pass a field name with or without its colon.
+		const prefix = String(key).toLowerCase().replace(/:+$/, "") + ":";
+		const at = lines.findIndex((current) => current.trim().toLowerCase().startsWith(prefix));
+		if (at >= 0) {
+			lines.splice(at + 1, 0, line);
+			return lines.join("\n");
+		}
+	}
+	return line + "\n" + lines.join("\n");
+}
+
+/** Whether a string carries Han characters - the only test the language rule needs. */
+function conventionHasChinese(text) {
+	for (const ch of String(text)) {
+		const code = ch.codePointAt(0);
+		if (code >= 0x4e00 && code <= 0x9fff) return true;
+	}
+	return false;
+}
+
+/** The subject language a document states: zh, en, or mixed (the default). */
+function conventionDocLanguageOf(text) {
+	const value = conventionFieldValue(text, "language");
+	if (value === "zh" || value === "cn" || value === "chinese" || value === "中文" || value === "中" || value === "汉语") return "zh";
+	if (value === "en" || value === "english" || value === "英文" || value === "英" || value === "英语") return "en";
+	return "mixed";
+}
+
+/** The one line the prompt block carries so the model knows which language to write. */
+function conventionLanguageLine(language) {
+	if (language === "zh") return "Subject language: Chinese only - an English subject breaks the policy. Type prefixes and scope names stay identifiers.";
+	if (language === "en") return "Subject language: English only - a Chinese subject breaks the policy. Type prefixes and scope names stay Latin.";
+	return "Subject language: Chinese, English or a mix of both - only the rules below decide.";
+}
+
+/** Set or clear the `language:` field: after `strict:` when present, else after `status:`. */
+function conventionWithLanguage(body, language) {
+	if (typeof language !== "string" || language === "") return body;
+	const value = language === "zh" || language === "en" ? language : "mixed";
+	return conventionInsertField(conventionDropField(body, "language"), "language: " + value, ["strict:", "status:"]);
+}
+
 /** Whether the document asks for a strict, machine-checked policy. */
 function conventionStrictOf(text) {
 	const match = /(^|\n)strict:\s*([^\n#]*)/i.exec(typeof text === "string" ? text : "");
@@ -965,6 +1029,7 @@ function conventionRuleSummary(rules) {
 	if (rules.types !== null) parts.push("type prefix one of " + rules.types.join(", ") + " (Chinese aliases such as 新增 or 修复 are accepted)");
 	if (rules.lowercase) parts.push("lowercase first letter when the subject starts in Latin script");
 	if (rules.noPeriod) parts.push("no trailing period in either script");
+	if (rules.languageStated) parts.push(rules.language === "zh" ? "subject written in Chinese only" : rules.language === "en" ? "subject written in English only" : "subject written in Chinese, English or a mix");
 	if (rules.imperative) parts.push("imperative mood when the subject starts with an English verb");
 	return parts.length === 0 ? "" : "Machine-checkable rules: " + parts.join("; ") + ".";
 }
@@ -990,7 +1055,9 @@ const CONVENTION_NO_RULES = {
 	lowercase: false,
 	noPeriod: false,
 	imperative: false,
-	strict: false
+	strict: false,
+	language: "mixed",
+	languageStated: false
 };
 
 /**
@@ -1006,7 +1073,9 @@ function parseConventionRules(text) {
 		lowercase: false,
 		noPeriod: false,
 		imperative: false,
-		strict: false
+		strict: false,
+		language: "mixed",
+		languageStated: false
 	};
 	if (typeof text !== "string" || text === "") return rules;
 	const sizes = [];
@@ -1033,6 +1102,8 @@ function parseConventionRules(text) {
 	rules.noPeriod = /不加句号|不加句点|no trailing period|no period at the end/.test(text);
 	rules.imperative = /祈使句|imperative/.test(text);
 	rules.strict = conventionStrictOf(text);
+	rules.language = conventionDocLanguageOf(text);
+	rules.languageStated = conventionFieldValue(text, "language") !== "";
 	return rules;
 }
 
@@ -1049,6 +1120,8 @@ function conventionSubjectReasons(subject, rules) {
 		if (type === "" || !rules.types.includes(type)) reasons.push("type");
 		else rest = text.slice(match[0].length);
 	}
+	if (rules.languageStated && rules.language === "en" && conventionHasChinese(text)) reasons.push("lang");
+	if (rules.languageStated && rules.language === "zh" && !conventionHasChinese(text)) reasons.push("lang");
 	const first = rest.charAt(0);
 	if (rules.lowercase && /[A-Za-z]/.test(first) && first === first.toUpperCase()) reasons.push("case");
 	if (rules.noPeriod && /[.。]$/.test(text)) reasons.push("period");
@@ -1221,10 +1294,10 @@ function conventionDiff(current, next) {
  * What choosing a framework would do to an existing document, without doing
  * it. The write itself still goes through `/git/convention` with `force`.
  */
-async function conventionPreview(root, docName, frameworkId, strict) {
+async function conventionPreview(root, docName, frameworkId, strict, language) {
 	const doc = conventionDocName(docName);
 	const state = await repoConventionState(root, doc);
-	const next = conventionBodyOf(frameworkId, basename(root), strict);
+	const next = conventionBodyOf(frameworkId, basename(root), strict, language);
 	if (next === void 0) return {
 		ok: false,
 		error: {
@@ -1326,19 +1399,20 @@ async function workspaceConventionState(root, docName) {
  * preview never writes, so an accidental click cannot replace a settled
  * document.
  */
-async function workspaceConvention(root, docName, action, frameworkId, force, strictMode) {
+async function workspaceConvention(root, docName, action, frameworkId, force, strictMode, languageMode) {
 	const doc = conventionDocName(docName);
 	const state = await workspaceConventionState(root, doc);
 	const mode = typeof action === "string" && action !== "" ? action : "state";
 	const framework = typeof frameworkId === "string" && frameworkId !== "" ? frameworkId : null;
 	const strict = typeof strictMode === "boolean" ? strictMode : void 0;
+	const language = typeof languageMode === "string" ? languageMode : void 0;
 	if (mode === "state") return {
 		ok: true,
 		value: Object.assign({}, state, {
 			catalog: conventionCatalog()
 		})
 	};
-	const next = conventionBodyOf(framework, basename(root), strict);
+	const next = conventionBodyOf(framework, basename(root), strict, language);
 	if (next === void 0) return {
 		ok: false,
 		error: {

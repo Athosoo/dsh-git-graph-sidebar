@@ -1100,6 +1100,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			if (reason === "case") return t("sidebar.reasonCase");
 			if (reason === "period") return t("sidebar.reasonPeriod");
 			if (reason === "mood") return t("sidebar.reasonMood");
+			if (reason === "lang") return t("sidebar.reasonLang");
 			return reason;
 		}
 		/**
@@ -1238,6 +1239,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [pickerOpen, setPickerOpen] = react.useState(false);
 			/** The picker's strict switch: rules become enforced policy, not advice. */
 			const [strictMode, setStrictMode] = react.useState(false);
+			/** The subject language the document asks for: zh, en or mixed. */
+			const [conventionLang, setConventionLang] = react.useState("mixed");
 			/** Whether a convention document is being written right now. */
 			const [conventionBusy, setConventionBusy] = react.useState(false);
 			/** The last successful write, so the strip can confirm it. */
@@ -1450,7 +1453,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const writeConvention = react.useCallback((repoPath, frameworkId) => {
 				setConventionBusy(true);
 				setConventionError(null);
-				return sidebarTabGit().conventionOptions(repoPath, frameworkId, true, strictMode).then((result) => {
+				return sidebarTabGit().conventionOptions(repoPath, frameworkId, true, strictMode, conventionLang).then((result) => {
 					setConventionBusy(false);
 					if (!result.ok) {
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
@@ -1465,7 +1468,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setConventionError(t("sidebar.error.conventions"));
 					return false;
 				});
-			}, [runScan, strictMode, t]);
+			}, [conventionLang, runScan, strictMode, t]);
 			/** The selected repository's path, as an effect dependency. */
 			const selectedKey = selected !== void 0 ? selected.path : void 0;
 			/** The workspace whose shared document strip is shown, as a dependency. */
@@ -1484,7 +1487,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					path: repoPath,
 					framework: frameworkId
 				});
-				return sidebarTabGit().conventionPreview(repoPath, frameworkId).then((result) => {
+				return sidebarTabGit().conventionPreview(repoPath, frameworkId, strictMode, conventionLang).then((result) => {
 					if (!result.ok || result.value === null || result.value === void 0) {
 						setUpgrade(null);
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
@@ -1502,7 +1505,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setConventionError(t("sidebar.error.conventions"));
 					return false;
 				});
-			}, [t, writeConvention]);
+			}, [conventionLang, strictMode, t, writeConvention]);
 			/** Write the previewed framework, replacing the document on purpose. */
 			const confirmUpgrade = react.useCallback(() => {
 				if (upgrade === null || upgrade.phase !== "ready") return;
@@ -2404,6 +2407,21 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						key: "strict-hint",
 						style: SIDEBAR_TAB_STRICT_NOTE
 					}, t("sidebar.strictHint"))]);
+					/** The language switch: three explicit choices, never inferred. */
+					const langRow = h("div", {
+						key: "lang-row",
+						style: SIDEBAR_TAB_STRICT_ROW
+					}, [h("span", {key: "lang-label", style: SIDEBAR_TAB_STRICT_NOTE}, t("sidebar.language"))].concat(["zh", "en", "mixed"].map((value) => h("button", {
+							key: value,
+							type: "button",
+							"data-gitgraph-lang": value,
+							"aria-pressed": conventionLang === value ? "true" : "false",
+							title: t("sidebar.languageHint"),
+							style: conventionLang === value ? SIDEBAR_TAB_STRICT_ON : SIDEBAR_TAB_STRICT_OFF,
+							disabled: conventionBusy,
+							onClick: () => setConventionLang(value)
+						}, value === "zh" ? t("sidebar.langZh") : value === "en" ? t("sidebar.langEn") : t("sidebar.langMixed")))));
+					children.push(langRow);
 					children.push(h("div", {
 						key: "picker",
 						"data-gitgraph-conventions-picker": true,

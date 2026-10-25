@@ -8,6 +8,7 @@
 
 插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 已提交（`awesome-dsh-plugin#9196`，按维护者四条修正描述后 push 到 `a4521fc`）。
 
+**1.7.3 代码完成、测试全绿、待发版**：主题语言进了规范本身——文档前置元数据支持 `language: zh\|en\|mixed`（写在 `strict:` 之后），选择列表多一行「提交语言」，预览与写入都带上它，`git/compliance` 在语言写死时给违规主题一个 `lang` 原因，注入的提示块始终有一行 `Subject language: …`。顺手修掉两个真 bug：`conventionInsertField()` 重复拼冒号（`status::`）导致语言行永远落到文件顶部；`build-lib.mjs` 的 GitApi 注入改成「先按方法名删除、再按序插回」，避免旧签名残留覆盖新方法。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 ## 1. 这个插件是什么（读懂需求演进）
@@ -65,11 +66,11 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → spliced 2991 / 1278 / 329 lines（tab / conventions / branches）
-node scripts/patch-host.mjs     # → applied 0, already present 22（幂等）
+node scripts/build-lib.mjs      # → synced GitApi additions (5 blocks) + spliced 2670 / 1455 / 329 lines（tab / conventions / branches）
+node scripts/patch-host.mjs     # → applied 0, already present 25（幂等）
 node --check lib/client.js && node --check lib/index.js
-node scripts/validate-lib.mjs   # → OK — 178 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 132/132 checks passed
+node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
+node scripts/test-host.mjs      # → 161/161 checks passed
 node scripts/preview-tab.mjs \
   --repos ../.demo/data/repos.json \
   --graph ../.demo/data/graph-graph-demo.json \
@@ -135,6 +136,7 @@ node scripts/preview-tab.mjs \
 | 1.7.0 | 合规接受中文 / 英文 / 中英混排，可选强约束（`strict: true`），选择列表选完自动收起，控制按钮换白色皮肤；已发布并已装（commit `a1c4619`、Release id `422753809`、资产 852091 字节） |
 | 1.7.1 | 纯文档版：把 README 里的「每个仓库 / every repository」改成「往下三层」，代码未变；已发布并已装 |
 | 1.7.2 | 工作区总纲写入后的反馈：成功提示、失败消息、以及「打开 / 复制路径」按钮；已发布并已装 |
+| 1.7.3 | **[代码完成，待发布]** 主题语言策略：`language:` 字段、选择器、`lang` 合规原因、注入块一行 `Subject language:` |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -229,6 +231,42 @@ node scripts/preview-tab.mjs \
 - 框架卡片保持 `--dsw-alias-bg-layer-2`（卡片不是按钮）；虚线面板与「强约束」药丸改用 `--dsh-gg-ctl-bd`。
 - `scripts/preview-tab.mjs` 的静态页 shell 里同步补上这三个变量（亮色 / 深色两处），否则预览页会白底浅字。
 
+## 7.4 1.7.3 的改动（主题语言策略）
+
+### 7.4.1 host：字段、解析与注入（`src/host/conventions.js`）
+
+- 字段读写全按行解析，不写正则转义：`conventionFieldValue(body, key)`、`conventionDropField(body, key)`、`conventionInsertField(body, line, keys)`（字段名可带或不带冒号，内部 `replace(/:+$/, "")` 归一）。
+- `conventionHasChinese(text)`（`codePointAt` 判 `0x4e00–0x9fff`）、`conventionDocLanguageOf(text)`（`zh|cn|chinese|中文|中|汉语` → `zh`；`en|english|英文|英|英语` → `en`；其余 `mixed`）、`conventionLanguageLine(language)`（注入块那一行）、`conventionWithLanguage(body, language)`（插到 `strict:` 后，否则 `status:` 后，否则置顶）。
+- `parseConventionRules()` 的规则对象新增 `language: "mixed"` 与 `languageStated: false`；`conventionRuleSummary()` 在语言写死时追加 `subject written in Chinese only` / `in English only` / `in Chinese, English or a mix`。
+- `conventionSubjectReasons()`：`languageStated && language === "en" && conventionHasChinese(text)`，或 `languageStated && language === "zh" && !conventionHasChinese(text)` → 原因 `lang`。
+- `conventionBodyOf(frameworkId, repoName, strict, language)`、`conventionPreview(root, docName, frameworkId, strict, language)`、`workspaceConvention(root, docName, action, frameworkId, force, strictMode, languageMode)` 全部透传。
+- `conventionPromptBlockFor()` 在 `Machine-checkable rules:` 之前固定推入 `conventionLanguageLine(...)`，即注入块里始终有一行 `Subject language: …`。
+
+### 7.4.2 路由补丁（`scripts/patch-host.mjs` 第 15 段，共 25 处）
+
+- `convention-preview-flags`：预览也带 `strict` 与 `language`（预览此前从不传 strict，属顺带修好的疏漏）。
+- `convention-language-write`：`conventionBodyOf(framework, basename(snapshot.root), policy.strict, policy.language)`。
+- `workspace-language-write`：`workspaceConvention(..., policy.strict, policy.language)`。
+- 第 14 段的两个 strict 补丁被第 15 段取代，已删除；`patch()` 现在对 `case "/git/..."` 类锚点自己推导 guard，并在写盘前断言同名 `case` 唯一。
+
+### 7.4.3 客户端（`src/client/graph/SidebarTab.js`）
+
+- 新状态 `const [conventionLang, setConventionLang] = react.useState("mixed");`；`writeConvention` 与 `pickFramework` 都把它传给 `conventionOptions(...)` / `conventionPreview(...)`，依赖数组加 `conventionLang`。
+- picker 里 `strictRow` 之后是 `langRow`：`h("div", {key: "lang-row", style: SIDEBAR_TAB_STRICT_ROW}, [标签 span].concat(["zh", "en", "mixed"].map(...)))`，按钮带 `data-gitgraph-lang`、`aria-pressed`，选中样式复用 `SIDEBAR_TAB_STRICT_ON`。
+- `sidebarTabReasonLabel()` 增加 `lang` → `sidebar.reasonLang`。
+
+### 7.4.4 测试
+
+- `scripts/test-host.mjs` 第 [13] 段新增 `repos/langzh`（文档 `language: zh`，4 个提交含一个英文主题）：断言 `rules.language === "zh"`、`languageStated === true`、`failing === 1`、原因含 `lang`、注入块含 `Subject language` 与 `Chinese only`、写入 `language: "en"` 后出现 `language: en`、`strict: true` 与 `language: mixed` 同时写入时顺序为 `status → strict → language` 且只有一处 `language:`。
+- `scripts/preview-tab.mjs`：三个 `data-gitgraph-lang` 按钮、默认 `mixed` 被按下、点「中文」后 `aria-pressed` 变化、写入 payload 的 `language === "zh"`。
+- 结果：host **161/161**、preview 全绿、**166** locale 键、`patch-host` **25** 处。
+
+### 7.4.5 两个必须记住的坑
+
+- `conventionInsertField()` 的 key 参数本身已带冒号，早期实现又拼了一个 → `status::`，`startsWith` 永不命中，语言行被塞到文件第一行。任何「字段名 + 冒号」的拼接都要先归一。
+- `build-lib.mjs` 的 GitApi 注入不能只靠 `includes(guard)`：改了签名后 guard 变、旧方法留下，**对象字面量里后定义的旧方法赢**（`conventionOptions` 4 参数盖住 5 参数）。现在实现是 `stripMethod()`（连带删除前面的文档注释，收尾标记 `
+			}` 是 5 个字符）+ 按序插回 `API_ANCHOR` 之后。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -289,7 +327,7 @@ node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
 # 2) 升 1.6.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.7.0"
+npm pack --pack-destination "../dsh-git-graph-dist/1.7.3"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

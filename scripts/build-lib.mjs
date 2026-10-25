@@ -77,6 +77,12 @@ const EXTRA_KEYS = [
 			['"sidebar.reasonMood"', '"语气"'],
 			['"sidebar.strict"', '"强约束"'],
 			['"sidebar.strictHint"', '"写进文档的 strict: true：不合规的提交必须先改写，再提交"'],
+			['"sidebar.language"', '"提交语言"'],
+			['"sidebar.languageHint"', '"写进文档的 language: zh|en|mixed，主题语言不对会被标出来"'],
+			['"sidebar.langZh"', '"中文"'],
+			['"sidebar.langEn"', '"英文"'],
+			['"sidebar.langMixed"', '"中英混排"'],
+			['"sidebar.reasonLang"', '"语言"'],
 			['"sidebar.previewTitle"', '"写入前的差异"'],
 			['"sidebar.previewAdded"', '"{count} 节新增"'],
 			['"sidebar.previewChanged"', '"{count} 节改写"'],
@@ -170,6 +176,12 @@ const EXTRA_KEYS = [
 			['"sidebar.reasonMood"', '"mood"'],
 			['"sidebar.strict"', '"Strict"'],
 			['"sidebar.strictHint"', '"Writes strict: true into the document: a message that breaks the rules must be rewritten before it is committed"'],
+			['"sidebar.language"', '"Subject language"'],
+			['"sidebar.languageHint"', '"Writes language: zh|en|mixed into the document, so a subject in the other language is flagged"'],
+			['"sidebar.langZh"', '"Chinese"'],
+			['"sidebar.langEn"', '"English"'],
+			['"sidebar.langMixed"', '"Chinese + English"'],
+			['"sidebar.reasonLang"', '"language"'],
 			['"sidebar.previewTitle"', '"What would change"'],
 			['"sidebar.previewAdded"', '"{count} sections added"'],
 			['"sidebar.previewChanged"', '"{count} sections rewritten"'],
@@ -231,14 +243,15 @@ const API_METHODS = [{
 				return post("git/convention", payload);
 			}`
 }, {
-	guard: "conventionOptions(path, framework, force, strict)",
+	guard: "conventionOptions(path, framework, force, strict, language)",
 	code: `
-			/** Write a convention document with an explicit strict flag. */
-			conventionOptions(path, framework, force, strict) {
+			/** Write a convention document with an explicit strict flag and subject language. */
+			conventionOptions(path, framework, force, strict, language) {
 				const payload = { path };
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
 				if (force === true) payload.force = true;
 				if (typeof strict === "boolean") payload.strict = strict;
+				if ("zh" === language || "en" === language || "mixed" === language) payload.language = language;
 				return post("git/convention", payload);
 			}`
 }, {
@@ -258,9 +271,11 @@ const API_METHODS = [{
 				return post("git/compliance", { path });
 			}
 			/** What choosing a framework would change in the existing document. */
-			conventionPreview(path, framework) {
+			conventionPreview(path, framework, strict, language) {
 				const payload = { path };
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
+				if (typeof strict === "boolean") payload.strict = strict;
+				if ("zh" === language || "en" === language || "mixed" === language) payload.language = language;
 				return post("git/convention/preview", payload);
 			}
 			/** Workspace-wide document at a container root: state, preview or write. */
@@ -270,7 +285,9 @@ const API_METHODS = [{
 					path,
 					action: typeof body.action === "string" ? body.action : "state",
 					framework: typeof body.framework === "string" ? body.framework : void 0,
-					force: body.force === true ? true : void 0
+					force: body.force === true ? true : void 0,
+					strict: typeof body.strict === "boolean" ? body.strict : void 0,
+					language: typeof body.language === "string" ? body.language : void 0
 				});
 			}`
 }, {
@@ -300,11 +317,46 @@ let next = lib.slice(0, startLineEnd + 1) + region + lib.slice(endIndex);
 
 // GitApi additions (conventions/convention). Guarded by the marker so re-runs
 // neither duplicate the methods nor depend on their exact formatting.
+// GitApi additions: every managed method is stripped first and then inserted in
+// order after the repos() anchor, so a changed signature can never leave a
+// stale copy behind to win the object literal.
+/** Every GitApi method name declared in one addition block. */
+function methodNamesOf(code) {
+	const names = [];
+	const pattern = /\n\t{3}([A-Za-z_$][\w$]*)\(/g;
+	let hit = pattern.exec(code);
+	while (hit !== null) {
+		names.push(hit[1]);
+		hit = pattern.exec(code);
+	}
+	if (names.length === 0) throw new Error("build-lib: cannot read the method name from a GitApi addition");
+	return names;
+}
+
+/** Remove every definition of one GitApi method, doc comment included. */
+function stripMethod(text, name) {
+	let out = text;
+	for (let round = 0; round < 40; round += 1) {
+		const at = out.indexOf("\n\t\t\t" + name + "(");
+		if (at < 0) return out;
+		let start = at;
+		const docAt = out.lastIndexOf("\n\t\t\t/**", at);
+		if (docAt >= 0 && out.slice(docAt, at).indexOf("*/") >= 0) start = docAt;
+		const closeAt = out.indexOf("\n\t\t\t}", at);
+		if (closeAt < 0) throw new Error("build-lib: cannot find the end of GitApi." + name + "()");
+		out = out.slice(0, start) + out.slice(closeAt + 5);
+	}
+	throw new Error("build-lib: cannot settle the GitApi methods");
+}
+
+const beforeApi = next;
+for (const method of API_METHODS) for (const name of methodNamesOf(method.code)) next = stripMethod(next, name);
 for (const method of API_METHODS) {
-	if (next.includes(method.guard)) continue;
 	if (!next.includes(API_ANCHOR)) throw new Error("build-lib: GitApi.repos() anchor not found in lib/client.js");
 	next = next.replace(API_ANCHOR, API_ANCHOR + method.code);
 }
+console.log("build-lib: synced GitApi additions (" + API_METHODS.length + " blocks)");
+if (beforeApi === next) console.log("build-lib: GitApi additions unchanged");
 
 /** Absolute `[open, close]` brace positions of one `const <name> = { ... }` literal. */
 function dictionaryRange(text, name) {
