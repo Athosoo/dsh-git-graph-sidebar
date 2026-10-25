@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 17:20 (+08)。
+> 最后更新：2026-10-25 18:40 (+08)。
 
 ## 0. 一句话状态
 
@@ -15,7 +15,7 @@
 **1.8.2 已发布、已推送、已装进 `desktop`**：规范条不再统计「最近 N 个提交里有几个不符合」（那些提交在面板上改不了，看了也没用），改成把**文档自己写明、并且真的会注入给助手的规则**列成小标签（`type: feat / fix / docs`、`标题 ≤ 72 字`、`小写开头`、`不加句号`、`祈使句`、`中文`、`强约束`），容器改成横向换行；选择列表底部的「取消」改成「关闭」。`build-lib` spliced 2707 行、163 个 locale 键、host 186/186、客户端预览全过。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
-**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
+**1.9.1 已发布、已推送、已装进 `desktop`**：标签退出筛选排——一个标签只指向一个提交，静音它只能藏一行，所以它不再是筛选项，只留在提交行上作徽章（host `lib/index.js:616` 不再剥掉 `tag: ` 前缀，客户端据此区分标签与分支）；可筛分支少于 4 条时整排不显示；顺手删掉 1.6.1 遗留的两条死字典键 `sidebar.expandGraph`。`build-lib` spliced 2843 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、预览含新的 refs 一节全过。**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -146,6 +146,7 @@ node scripts/preview-tab.mjs \
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键；已发布并已装 |
 | 1.9.0 | 引用筛选改成一个分支一枚标签（本地与远程同名合并、符号引用不再出现、标签单独灰色、超 12 枚折 `+N`、静音时给「清除筛选」），行内徽章与导出 SVG 复用同一套标签；已发布并已装 |
 | 1.8.3 | 修「文档里的行内注释把字段值污染」：`conventionFieldValue()` 现在去掉 `#` 之后的注释与首尾引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese」这类写法、先认 mix/混 再认中英，模板自带的 `status: draft   # draft | settled` 不再让 `language: zh   # zh | en | mixed` 被读成 mixed；已发布并已装 |
 
@@ -434,6 +435,42 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 
 **教训**：标签的语义要跟着「用户在想什么」走，而不是跟着 Git 的字符串走——同一个分支的本地与远程两个名字、符号引用、行里的别名，都是同一个东西的三种写法，分开显示就只是噪音。`Map`/`Set` 走一遍就能合并，代价可以忽略。
 
+## 7.9 1.9.1 的改动（标签不再是筛选项）
+
+一句话：筛选排只留能「顺藤摸瓜」的东西。一个标签指向的是单个提交，不是一条线，静音它只能藏掉那一行——所以它不该占筛选项的位置。
+
+### 7.9.1 host：保留 `tag: ` 前缀（`lib/index.js:616`）
+
+```js
+return part.replace(/^HEAD -> /, "").trim();
+```
+
+原来还有一段 `.replace(/^tag: /, "")`，把标签和分支都变成光秃秃的名字，客户端根本分不出来——用户截图里那 9 枚 `v1.5.0 … v1.9.0` 被当成「分支」画成实心青蓝，就是这个原因。现在只剥 `HEAD -> `（和裸 `HEAD`），标签留着前缀，客户端才能区分。`lib/index.js` 的 repos/graph 区域本来就是手工维护的，这一行直接改在那里。
+
+### 7.9.2 客户端：标签不进 `refGroups`
+
+* `refGroups` 遇到 `tag: ` 开头的 ref 直接 `continue`，`group` 记录里删掉 `tag` 字段，`rankOf` 从四级变三级（当前分支 0、其他本地 1、只有远程 2）。
+* 但行内徽章与导出 SVG 仍要看得到标签，所以新增 `refLabelOf`：以 `refGroupOf` 为基础，把 `tag: v1.0.0` 映射成 `v1.0.0`。徽章的 ref 映射（`refLabelOf.get(ref)`）与 `sidebarTabExportSvg({refLabels})` 都用它，`refGroupOf` 只留给可见性过滤。
+* 可见性过滤补一条：`usable` 里 `if (key === void 0) return true;`——标签不参与静音，但它的提交必须仍算「起点」，否则静音任意分支时，只有标签指着的老版本提交会凭空消失。`HEAD` / `HEAD -> x` 仍然返回 `false`（它们是别名，不是起点）。
+* 整排的显示条件从 `refGroups.length === 0` 改成 `refGroups.length < SIDEBAR_TAB_FILTER_REFS_MIN && mutedCount === 0`（`MIN = 4`，在 `SIDEBAR_TAB_FILTER_REFS_MAX = 12` 旁边）；已经静音过东西时即使不足 4 枚也要显示，否则「清除筛选」按钮没地方点。
+* 删掉不再使用的 `SIDEBAR_TAB_CHIP_TAG`（灰底 chip 样式）。
+
+### 7.9.3 顺手清掉的死键
+
+`sidebar.expandGraph`（「全屏查看」/「Full-window view」）在 1.6.1 删功能时只从 `scripts/build-lib.mjs` 的 `EXTRA_KEYS` 里拿掉了，`lib/client.js` 里那两行还在（`build-lib` 只插入、从不删除）。这次手工删掉，`grep -c expandGraph lib/client.js` = 0。`validate-lib` 仍是 166 键——那两条本来就不在 `EXTRA_KEYS` 里，删掉不影响计数（`validate-lib` 只校验「用到的键都在」，从不报未使用的键，所以这类残留只能靠 grep 找）。
+
+### 7.9.4 测试（`scripts/preview-tab.mjs`）
+
+* fixture 增加第四条分支 `feat/z`，否则 3 枚 chip 会低于 `MIN = 4`，整排不显示，测不到 chip 本身。
+* 断言改为：chip 恰好 `main, feat/x, feat/z, feat/y`；没有任何 chip 的键是 `tag: …` 或 `v1.0.0`；没有 `data-gitgraph-ref-kind === "tag"`；行上（徽章或折叠计数的 `title`）仍能看到 `v1.0.0`，且**不出现** `tag: ` 前缀。
+* 新增用例：`repos-refs/tiny`（单分支 + 一个标签）挂载后 `data-gitgraph-ref-filter` 节点数为 0，而搜索框仍在——证明只藏这一排，不动别的。
+* 输出行：`preview-tab: ref chips folded to one per branch (main, feat/x, feat/z, feat/y), tags kept off the row, mute and clear wired`。
+* 预览页 `preview/graph-tab-refs.html` 的标题改为「Ref chips - one per branch, tags stay on the rows」。
+
+### 7.9.5 教训
+
+筛选排的分量要和它能筛掉的东西成正比。一个仓库只有 1 条分支 + 9 个发布标签时，这一排既筛不出内容又占掉三成首屏高度——那是纯装饰。判断标准很简单：**能不能从这一枚「顺藤摸瓜」走到别的提交**。能（分支、远程分支）就留，不能（标签、符号引用）就当行内标记。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -449,7 +486,8 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
    bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
-5. ~~发 1.9.0~~ **已完成**（commit `94923c9`、tag `v1.9.0`、Release id `423280585`、资产 `dsh-git-graph-sidebar.tgz` 874347 字节、`desktop` 已装 1.9.0）；用户需重启 DSH 才看得到新的引用标签。下一版候选：图谱分页（host 已算 `hasMore`，`lib/index.js` 里 `/git/log` 支持 `limit`，tab 还没有「加载更早」入口）、真历史搜索（`--grep` / `--author` / `--since`）、状态条显示落后上游、详情卡加 `--stat`、PNG 导出（需要光栅化）。
+5. ~~发 1.9.0~~ **已完成**（commit `94923c9`、tag `v1.9.0`、Release id `423280585`、资产 `dsh-git-graph-sidebar.tgz` 874347 字节、`desktop` 已装 1.9.0）。
+5a. ~~发 1.9.1~~ **已完成**：标签退出筛选排、少于 4 枚不画这一排、清掉 `sidebar.expandGraph` 死键；`spliced 2843 / 1560 / 449`、`patch-host` 23 处、166 个 locale 键、host 186/186、预览 10 节全过。原先那行留档：用户需重启 DSH 才看得到新的引用标签。下一版候选：图谱分页（host 已算 `hasMore`，`lib/index.js` 里 `/git/log` 支持 `limit`，tab 还没有「加载更早」入口）、真历史搜索（`--grep` / `--author` / `--since`）、状态条显示落后上游、详情卡加 `--stat`、PNG 导出（需要光栅化）。
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。

@@ -297,12 +297,23 @@ language: zh           # zh | en | mixed
 The filter row is built from `refGroups`, not from the raw refs, so a branch and its remote twin are one chip and one mute.
 
 * `remoteNames` derives remote names from the refs: a ref ending in `/<local branch>` contributes the single-segment prefix in front of it. Fallback: if nothing can be derived and some ref starts with `origin/`, treat `origin` as a remote.
-* `refGroups` folds refs into `{key, refs, local, remote, tag}`, drops `HEAD` / `HEAD -> …` / `<remote>/HEAD`, keeps `tag: …` apart, and sorts by `rank` (current branch, other local, remote-only, tags) then by name.
+* `refGroups` folds refs into `{key, refs, local, remote}`, drops `HEAD` / `HEAD -> …` / `<remote>/HEAD` and skips `tag: …` outright (see 1.9.1 below), and sorts by `rank` (current branch, other local, remote-only) then by name.
 * `refGroupOf` (`ref -> key`) drives the visibility filter, the row badges and the export, so muting a chip mutes both twins.
-* The row shows at most `SIDEBAR_TAB_FILTER_REFS_MAX` chips plus a `data-gitgraph-refs-toggle` `+N`, and a `data-gitgraph-refs-clear` chip whenever anything is muted.
-* Row badges map `HEAD -> main` to `main` and reuse the chip labels; `sidebarTabExportSvg()` takes the same map as its `refLabels` option.
+* The row shows at most `SIDEBAR_TAB_FILTER_REFS_MAX` chips plus a `data-gitgraph-refs-toggle` `+N`, and a `data-gitgraph-refs-clear` chip whenever anything is muted; below `SIDEBAR_TAB_FILTER_REFS_MIN` (four) chips it is not drawn at all unless something is muted.
+* Row badges map `HEAD -> main` to `main` and reuse the chip labels; tags map through `refLabelOf` to their bare name. `sidebarTabExportSvg()` takes that map as its `refLabels` option.
 
 Tests live in the refs section of `scripts/preview-tab.mjs` (synthetic repo + its own `GRAPH_BY_ROOT` entry, restored afterwards) and the page it writes is `preview/graph-tab-refs.html`.
+
+## Tags are not filters (1.9.1)
+
+A tag points at one commit, so muting it hides exactly one row - it cannot pay for a slot in the filter row. Host `lib/index.js:616` therefore keeps the `tag: ` prefix (it used to strip it, which made every release tag look like a branch in the panel).
+
+* `refGroups` skips `tag: …`, so a repository with one branch and nine release tags ends up with a single chip and the row disappears (`SIDEBAR_TAB_FILTER_REFS_MIN = 4`, beside `SIDEBAR_TAB_FILTER_REFS_MAX = 12`).
+* `refLabelOf` keeps tags readable: it starts from `refGroupOf` and adds `tag: v1.0.0 -> v1.0.0`. Row badges and the export use it; the visibility filter keeps using `refGroupOf`.
+* `usable` in the visibility memo returns `true` when a ref has no chip key, otherwise muting any branch would also drop release commits that only a tag points at. `HEAD` / `HEAD -> x` still return `false`.
+* The muted case always shows the row, because *Clear filters* lives there.
+* `SIDEBAR_TAB_CHIP_TAG` is gone; `sidebar.expandGraph` (dead since 1.6.1) is gone from `lib/client.js` as well, since `build-lib` only inserts keys and never deletes them.
+* `scripts/preview-tab.mjs` needs four branches in its fixture to reach the chip assertions, plus a one-branch mount (`repos-refs/tiny`) that proves the row is skipped while the search field stays.
 
 ## Known debt
 

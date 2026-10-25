@@ -986,8 +986,9 @@ if (!usingRealData) {
 }
 
 // Ref chips are per branch, not per ref: a local branch and its remote twin
-// share one chip, symbolic refs never become chips, and muting or clearing
-// works on the chip instead of the raw ref string.
+// share one chip, symbolic refs never become chips, tags stay row badges
+// instead of chip candidates, and a repository with only a branch or two does
+// not spend a row on a filter that cannot filter.
 const REFS_PATH = WORKSPACE + "/repos-refs/branchy";
 let refsChipHtml = "";
 let refsMutedHtml = "";
@@ -1026,7 +1027,8 @@ let refsMutedHtml = "";
 		commit("aaa1111", ["bbb2222"], "feat: 主线提交", ["HEAD -> main", "main", "origin/main", "origin/HEAD", "tag: v1.0.0"]),
 		commit("bbb2222", ["ccc3333"], "feat: 主线上一条", []),
 		commit("ddd4444", ["ccc3333"], "feat: 本地与远程同名", ["feat/x", "origin/feat/x"]),
-		commit("eee5555", ["ccc3333"], "feat: 只有远程", ["origin/feat/y"]),
+		commit("fff6666", ["ccc3333"], "feat: 另一条本地分支", ["feat/z"]),
+	commit("eee5555", ["ccc3333"], "feat: 只有远程", ["origin/feat/y"]),
 		commit("ccc3333", [], "chore: 根提交", [])
 	];
 	const graphs = savedGraphs === null ? [] : Array.from(savedGraphs.entries());
@@ -1037,7 +1039,7 @@ let refsMutedHtml = "";
 	const chips = () => findAll(chipMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-ref-filter"] === "string");
 	const labelOf = (node) => node.props["data-gitgraph-ref-filter"];
 	const labels = chips().map(labelOf);
-	const expected = ["main", "feat/x", "feat/y", "tag: v1.0.0"];
+	const expected = ["main", "feat/x", "feat/z", "feat/y"];
 	if (labels.join("|") !== expected.join("|")) throw new Error("ref chips are not one per branch in order: " + labels.join("|"));
 	if (labels.some((label) => label.indexOf("origin/") >= 0)) throw new Error("a remote ref still gets its own chip: " + labels.join("|"));
 	const kindOf = (label) => {
@@ -1046,7 +1048,11 @@ let refsMutedHtml = "";
 	};
 	if (kindOf("main") !== "branch" || kindOf("feat/x") !== "branch") throw new Error("a local branch lost its branch chip");
 	if (kindOf("feat/y") !== "remote") throw new Error("a remote-only branch is not marked as remote");
-	if (kindOf("tag: v1.0.0") !== "tag") throw new Error("a tag is not marked as a tag");
+	if (labels.some((label) => label.indexOf("tag: ") === 0 || label === "v1.0.0")) throw new Error("a tag still gets a chip: " + labels.join("|"));
+	if (chips().some((node) => node.props["data-gitgraph-ref-kind"] === "tag")) throw new Error("a chip is still marked as a tag");
+	const titled = findAll(chipMount.tree, (node) => node.props !== undefined && typeof node.props.title === "string");
+	if (!titled.some((node) => node.props.title.indexOf("v1.0.0") >= 0)) throw new Error("the release tag vanished from the rows");
+	if (titled.some((node) => node.props.title.indexOf("tag: ") >= 0)) throw new Error("a row still shows the raw tag ref");
 	const merged = chips().filter((item) => labelOf(item) === "feat/x")[0];
 	if (String(merged.props.title).indexOf("origin/feat/x") < 0) throw new Error("the merged chip does not name both refs: " + merged.props.title);
 	const rowsWithRefs = rowNodes(chipMount).length;
@@ -1066,9 +1072,31 @@ let refsMutedHtml = "";
 	if (findAll(chipMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-refs-clear"] === true).length !== 0) {
 		throw new Error("the clear button stayed after clearing");
 	}
+	const TINY_PATH = WORKSPACE + "/repos-refs/tiny";
+	const tinyEntry = Object.assign({}, injected, {
+		path: TINY_PATH,
+		root: TINY_PATH,
+		name: "tiny",
+		relPath: "repos-refs/tiny",
+		status: Object.assign({}, injected.status, { root: TINY_PATH })
+	});
+	REPOS = Object.assign({}, savedRepos, { repos: (savedRepos.repos || []).concat([injected, tinyEntry]) });
+	GRAPH_BY_ROOT = new Map(graphs.concat([[viewKey(TINY_PATH), { root: TINY_PATH, branch: "main", commits: [
+		commit("aaa1111", ["ccc3333"], "feat: 单分支提交", ["HEAD -> main", "main", "tag: v1.0.0"]),
+		commit("ccc3333", [], "chore: 根提交", [])
+	], hasMore: false }]]));
+	const tinyMount = await mountComponent(descriptor.component, tabProps(TINY_PATH));
+	await wait(60);
+	await tinyMount.render();
+	if (findAll(tinyMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-ref-filter"] === "string").length !== 0) {
+		throw new Error("the ref row is shown for a single branch");
+	}
+	if (findAll(tinyMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true).length !== 1) {
+		throw new Error("the search field went away with the ref row");
+	}
 	REPOS = savedRepos;
 	GRAPH_BY_ROOT = savedGraphs;
-	console.log("preview-tab: ref chips folded to one per branch (" + expected.join(", ") + "), mute and clear wired");
+	console.log("preview-tab: ref chips folded to one per branch (" + expected.join(", ") + "), tags kept off the row, mute and clear wired");
 }
 
 // Tier 3: the compliance line, the upgrade preview before a framework replaces
@@ -1519,7 +1547,7 @@ if (refsChipHtml !== "") {
 	const refsFile = join(dirname(outFile), "graph-tab-refs.html");
 	const shellEnd = statesHtml.indexOf("</head>") + "</head>".length;
 	const panels = "<body>" +
-		"<h2>Ref chips - one per branch</h2>" +
+		"<h2>Ref chips - one per branch, tags stay on the rows</h2>" +
 		'<div class="panel">' + refsChipHtml + "</div>" +
 		"<h2>After muting the remote-only branch</h2>" +
 		'<div class="panel">' + refsMutedHtml + "</div>" +
