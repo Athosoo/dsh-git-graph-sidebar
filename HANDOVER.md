@@ -74,24 +74,20 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (6 blocks) + spliced 2838 / 1560 / 449 lines（tab / conventions / branches）
+node scripts/build-lib.mjs      # → synced GitApi additions (6 blocks) + spliced 2843 / 1560 / 449 lines（tab / conventions / branches）
 node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 186/186 checks passed
-node scripts/preview-tab.mjs \
-  --repos ../.demo/data/repos.json \
-  --graph ../.demo/data/graph-graph-demo.json \
-  --graph ../.demo/data/graph-dsh-git-graph-src.json \
-  --focus graph-demo
+node scripts/test-host.mjs      # → 189/189 checks passed
+node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real workspace
 ```
 
-`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero,overview,overview-light,tier3}.html`，可截图：
+`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero,tier3,refs}.html`，可截图：
 
 ```bash
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --hide-scrollbars \
   --force-device-scale-factor=2 --window-size=452,1040 \
-  --screenshot="C:\...\.demo\data\shot.png" \
+  --screenshot="C:\...\preview-shot.png" \
   "file:///C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src/preview/graph-tab-hero.html"
 ```
 
@@ -551,7 +547,7 @@ cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-sr
 node scripts/build-lib.mjs && node scripts/patch-host.mjs
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
-node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
+node scripts/preview-tab.mjs
 # 2) 升 1.8.0 后打包
 npm pack --pack-destination "../dsh-git-graph-dist/1.8.2"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启

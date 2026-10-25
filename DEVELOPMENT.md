@@ -39,15 +39,15 @@ The same script splices the two host modules (`conventions.js`, `branches.js`) b
 node scripts/preview-tab.mjs
 ```
 
-Writes `preview/graph-tab-preview.html` (three panels: default two-line rows, a nested repository, a pinned-commit view with compact zoom), `preview/graph-tab-preview-light.html`, `preview/graph-tab-states.html` (the pinned detail card, the full-window overlay and the conventions picker), `preview/graph-tab-hero.html` (a single narrow panel, the shape README screenshots use) and `preview/graph-tab-overview.html` plus `-light` (the workspace overview with one detail block expanded).
+Writes `preview/graph-tab-preview.html` (three panels: default two-line rows, a nested repository, a pinned-commit view with compact zoom), `preview/graph-tab-preview-light.html`, `preview/graph-tab-states.html` (the pinned detail card, the init flow and the conventions picker), `preview/graph-tab-hero.html` and `-light` (a single narrow panel, the shape README screenshots use), `preview/graph-tab-tier3.html` (compliance chips, the upgrade preview and the workspace strip) and `preview/graph-tab-refs.html` (the ref chips, plain and muted). The generated HTML is tracked so the pages are reviewable in a diff; the PNGs you take from them are not (`preview/*.png`).
 
 The script also exercises interaction against its own fake DOM: it asserts that no hover tooltip is rendered, clicks a row and asserts the detail card, clicks *Copy commit info* and asserts the button flips to "copied", opens the full-window view and asserts an overlay with an SVG, then closes it, and finally runs the conventions flow — a repository without a document must auto-write the scaffold, open the picker and list six framework cards. Any broken prop, missing locale key or missing DOM guard fails the run instead of silently rendering nothing.
 
 The same run covers the 1.4.0 tier-1 features: the rollback prompt (asserted token by token), the search field and the ref toggles, and the SVG export. The export is checked as a document, not as a download: it must start with `<svg`, carry `xmlns` + `viewBox` + a `<title>`, avoid CSS variables, hold one `data-gitgraph-export-row` per panel row, mark the pinned commit, and keep the lane pitch identical to the panel's row height (a zoomed panel used to drift). Two environment switches help when working on it:
 
 ```sh
-EXPORT_SVG_PATH=../.demo/data/export-graph-demo.svg node scripts/preview-tab.mjs …   # dump the SVG
-EXPORT_DARK=1 EXPORT_SVG_PATH=../.demo/data/export-dark.svg node scripts/preview-tab.mjs …   # dark palette
+EXPORT_SVG_PATH=/tmp/export-graph.svg node scripts/preview-tab.mjs   # dump the SVG
+EXPORT_DARK=1 EXPORT_SVG_PATH=/tmp/export-dark.svg node scripts/preview-tab.mjs   # dark palette
 ```
 
 The exported file opens on its own — `google-chrome --headless=new --screenshot=… file.svg` is enough to eyeball it.
@@ -78,11 +78,10 @@ better-sidebar keeps inactive tabs mounted but unmounts a tab that is closed, so
 
 `preview-tab.mjs` asserts this behaviour by mounting the component a second time through the registered descriptor and checking that the very first render already contains `data-gitgraph-row` and `data-gitgraph-repo-tree`.
 
-To render the real repositories of this machine, pass the JSON responses of `/git/repos` and `/git/graph` (one `--graph` per repository) and point the first panel at one of them:
+With no arguments the harness runs on its built-in fixture. To render the real repositories of this machine, pass the JSON responses of `/git/repos` and `/git/graph` (one `--graph` per repository) and point the first panel at one of them with `--focus <relPath>`:
 
 ```sh
-node scripts/preview-tab.mjs --repos .demo/data/repos.json \
-  --graph .demo/data/graph-graph-demo.json --focus graph-demo
+node scripts/preview-tab.mjs
 ```
 
 Screenshot the generated HTML with Chrome headless (`--headless=new --screenshot=<absolute windows path> --window-size=1160,2100 --force-device-scale-factor=2`); relative paths and missing directories make it fail with exit code 0x3.

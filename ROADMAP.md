@@ -154,7 +154,7 @@ Choosing a framework while a document exists currently overwrites it with `force
 3. `node --check lib/client.js && node --check lib/index.js`.
 4. `node scripts/validate-lib.mjs` — locale keys and fork identifiers.
 5. `node scripts/test-host.mjs` — offline host end-to-end (132 checks).
-6. `node scripts/preview-tab.mjs --repos ../.demo/data/repos.json --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo` — offline client end-to-end.
+6. `node scripts/preview-tab.mjs` — offline client end-to-end, on the built-in fixture (pass `--repos …`/`--graph …` to point it at a real workspace instead).
 7. Bump `package.json`, update `README.md` / `README.zh.md` / `DEVELOPMENT.md`, `npm pack --pack-destination ../dsh-git-graph-dist/<version>`, copy to a version-less `dsh-git-graph-sidebar.tgz`.
 8. Commit, push, create the GitHub release, upload the asset, verify the mirror checksum, `remove_bundle` + `install_bundle`, restart DSH.
 

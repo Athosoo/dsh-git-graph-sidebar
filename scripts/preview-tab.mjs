@@ -843,13 +843,42 @@ if (process.env.EXPORT_SVG_PATH !== undefined) {
 	writeFileSync(process.env.EXPORT_SVG_PATH, exportedSvg, "utf8");
 	console.log("preview-tab: wrote " + process.env.EXPORT_SVG_PATH);
 }
-const searchField = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true)[0];
-if (searchField === undefined) throw new Error("filter bar has no search field");
+// The query has to come from the data on screen: the offline fixture and a real
+// repository do not share a single subject. Walk the candidate words of the
+// loaded graph until one really narrows the rows.
+const searchCorpus = [];
+if (GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.size > 0) {
+	for (const view of GRAPH_BY_ROOT.values()) for (const entry of view.commits ?? []) searchCorpus.push(String(entry.subject ?? ""));
+} else {
+	for (const entry of ROOT_GRAPH.commits) searchCorpus.push(String(entry.subject));
+	for (const entry of NESTED_GRAPH.commits) searchCorpus.push(String(entry.subject));
+}
+const searchWords = new Map();
+for (const subject of searchCorpus) {
+	for (const word of subject.split(/[^\p{L}\p{N}]+/u)) {
+		if (word.length < 4) continue;
+		const seen = searchWords.get(word) ?? 0;
+		searchWords.set(word, seen + 1);
+	}
+}
+const searchCandidates = Array.from(searchWords.entries()).filter((entry) => entry[1] < searchCorpus.length).map((entry) => entry[0]).concat(searchCorpus.length > 1 ? [searchCorpus[0]] : []);
+if (searchCandidates.length === 0) throw new Error("the graph has nothing to search for");
 const rowsBeforeSearch = rowNodes(detailMount).length;
-searchField.props.onChange({ target: { value: "changelog" } });
-await detailMount.render();
-const rowsAfterSearch = rowNodes(detailMount);
-if (rowsAfterSearch.length === 0) throw new Error("search removed every row instead of narrowing");
+let rowsAfterSearch = [];
+let searchQuery = "";
+for (const candidate of searchCandidates) {
+	const field = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-search"] === true)[0];
+	if (field === undefined) throw new Error("filter bar has no search field");
+	field.props.onChange({ target: { value: candidate } });
+	await detailMount.render();
+	const narrowed = rowNodes(detailMount);
+	if (narrowed.length > 0 && narrowed.length < rowsBeforeSearch) {
+		rowsAfterSearch = narrowed;
+		searchQuery = candidate;
+		break;
+	}
+}
+if (rowsAfterSearch.length === 0) throw new Error("no query word narrowed the rows (" + rowsBeforeSearch + " rows, tried " + searchCandidates.length + " words)");
 if (rowsAfterSearch.length >= rowsBeforeSearch) throw new Error("search did not narrow the rows: " + rowsBeforeSearch + " -> " + rowsAfterSearch.length);
 const filteredChip = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-filtered"] === true)[0];
 if (filteredChip === undefined) throw new Error("filtered counter is missing");
@@ -862,34 +891,42 @@ if (rowNodes(detailMount).length !== rowsBeforeSearch) throw new Error("clearing
 
 // A ref toggle hides the commits that only that ref reaches.
 const refToggles = findAll(detailMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-ref-filter"] === "string");
-if (refToggles.length === 0) throw new Error("filter bar lists no refs");
-// Not every ref hides something: the commits of a merged branch are still
-// reachable from main, so that toggle correctly keeps them. Walk the toggles
-// until one actually removes rows, then undo it and check the rows come back.
-let mutedRefName = "";
-let hiddenByRef = 0;
-for (const toggle of refToggles) {
-	const name = toggle.props["data-gitgraph-ref-filter"];
-	click(toggle, "toggle ref " + name);
-	await detailMount.render();
-	const after = rowNodes(detailMount).length;
-	if (after < rowsBeforeSearch) {
-		mutedRefName = name;
-		hiddenByRef = rowsBeforeSearch - after;
-		const muted = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
-		if (muted === undefined || muted.props["data-gitgraph-ref-muted"] !== "true") throw new Error("muted ref is not marked");
-		click(muted, "unmute ref " + name);
+	if (refToggles.length === 0) {
+		// The row only exists once four branches are filterable ($SIDEBAR_TAB_FILTER_REFS_MIN),
+		// and the dedicated refs block below owns the full chip coverage - so an empty row
+		// here is correct behaviour, not a failure.
+		const filterRow = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-filter"] === true);
+		if (filterRow.length !== 1) throw new Error("the filter bar vanished together with the ref row");
+		console.log("preview-tab: search narrows to " + rowsAfterSearch.length + " of " + rowsBeforeSearch + " rows, too few branches here for the ref row");
+	} else {
+	// Not every ref hides something: the commits of a merged branch are still
+	// reachable from main, so that toggle correctly keeps them. Walk the toggles
+	// until one actually removes rows, then undo it and check the rows come back.
+	let mutedRefName = "";
+	let hiddenByRef = 0;
+	for (const toggle of refToggles) {
+		const name = toggle.props["data-gitgraph-ref-filter"];
+		click(toggle, "toggle ref " + name);
 		await detailMount.render();
-		if (rowNodes(detailMount).length !== rowsBeforeSearch) throw new Error("unmuting the ref did not restore the rows");
-		break;
+		const after = rowNodes(detailMount).length;
+		if (after < rowsBeforeSearch) {
+			mutedRefName = name;
+			hiddenByRef = rowsBeforeSearch - after;
+			const muted = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
+			if (muted === undefined || muted.props["data-gitgraph-ref-muted"] !== "true") throw new Error("muted ref is not marked");
+			click(muted, "unmute ref " + name);
+			await detailMount.render();
+			if (rowNodes(detailMount).length !== rowsBeforeSearch) throw new Error("unmuting the ref did not restore the rows");
+			break;
+		}
+		const restore = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
+		if (restore === undefined) throw new Error("ref toggle disappeared: " + name);
+		click(restore, "restore ref " + name);
+		await detailMount.render();
 	}
-	const restore = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ref-filter"] === name)[0];
-	if (restore === undefined) throw new Error("ref toggle disappeared: " + name);
-	click(restore, "restore ref " + name);
-	await detailMount.render();
-}
-if (mutedRefName === "") throw new Error("no ref toggle hid any commit");
-console.log("preview-tab: search narrows to " + rowsAfterSearch.length + " of " + rowsBeforeSearch + " rows, muting " + mutedRefName + " hides " + hiddenByRef);
+	if (mutedRefName === "") throw new Error("no ref toggle hid any commit");
+	console.log("preview-tab: search narrows to " + rowsAfterSearch.length + " of " + rowsBeforeSearch + " rows, muting " + mutedRefName + " hides " + hiddenByRef);
+	}
 
 // The toolbar carries only what the panel still offers: the full-window view
 // and the workspace overview were removed, the graph export stayed.
@@ -977,8 +1014,17 @@ if (!usingRealData) {
 	click(cards[0], "framework card");
 	await new Promise((resolve) => setTimeout(resolve, 40));
 	blankHtml = (await blankMount.render()).html;
+		// Since 1.6.0 a document that already exists is never overwritten silently:
+		// picking a framework opens the upgrade preview first, and only the confirm
+		// button writes.
+	if (blankHtml.indexOf('data-gitgraph-upgrade="ready"') < 0) throw new Error("picking a framework over an existing document did not open the upgrade preview");
+	const confirmWrite = findAll(blankMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-confirm")[0];
+	if (confirmWrite === undefined) throw new Error("the upgrade preview has no confirm button");
+	click(confirmWrite, "confirm the upgrade");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	blankHtml = (await blankMount.render()).html;
 	const settled = REPOS.repos.find((entry) => entry.path === blankEntry.path);
-	if (settled === undefined || settled.conventions === undefined || settled.conventions.draft !== false) throw new Error("picking a framework did not settle the document");
+	if (settled === undefined || settled.conventions === undefined || settled.conventions.draft !== false) throw new Error("confirming the upgrade did not settle the document");
 	if (blankHtml.indexOf('data-gitgraph-conventions-state="settled"') < 0) throw new Error("conventions strip did not report the settled document");
 	if (draftHtml.indexOf('data-gitgraph-conventions-state="draft"') < 0) throw new Error("conventions strip did not report the draft after the auto scaffold");
 	if (blankHtml.indexOf("data-gitgraph-conventions-picker") >= 0) throw new Error("the framework list stayed open after the write");
@@ -1187,6 +1233,10 @@ let pickerHtml = "";
 	await wait(20);
 	await tierMount.render();
 	if (SETTINGS_CALLS.length !== 3 || SETTINGS_CALLS[2].strict !== false) throw new Error("turning strict off did not reach the host");
+	// This block owns the counters: an earlier block may already have written a
+	// document through the same stubs.
+	CONVENTION_CALLS.length = 0;
+	WORKSPACE_CALLS.length = 0;
 	const tierCard = findAll(tierMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string")[0];
 	if (tierCard === undefined) throw new Error("no framework card to preview");
 	const tierFramework = tierCard.props["data-gitgraph-framework"];
