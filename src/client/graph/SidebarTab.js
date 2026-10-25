@@ -606,8 +606,10 @@
 		/** The compliance line: one sentence plus the offending subjects. */
 const SIDEBAR_TAB_COMPLIANCE = {
 			display: "flex",
-			flexDirection: "column",
-			gap: 1,
+			flexDirection: "row",
+			flexWrap: "wrap",
+			alignItems: "center",
+			gap: 4,
 			padding: "2px 2px 0",
 			fontSize: 12,
 			lineHeight: "16px"
@@ -1094,15 +1096,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			};
 		}
 		/** The localized name of one compliance reason code. */
-		function sidebarTabReasonLabel(t, reason) {
-			if (reason === "length") return t("sidebar.reasonLength");
-			if (reason === "type") return t("sidebar.reasonType");
-			if (reason === "case") return t("sidebar.reasonCase");
-			if (reason === "period") return t("sidebar.reasonPeriod");
-			if (reason === "mood") return t("sidebar.reasonMood");
-			if (reason === "lang") return t("sidebar.reasonLang");
-			return reason;
-		}
 		/**
 		 * The better-sidebar tab body: scan the workspace for its repositories
 		 * (the root repository first, then nested ones), let the user pick one,
@@ -2262,44 +2255,51 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					"aria-label": t("sidebar.conventionsSetup")
 				}, t("sidebar.conventionsSetup"))]);
 				/**
-				 * Compliance against the document's own checkable rules. It is a
-				 * read, so a repository without a document says so instead of
-				 * pretending everything is fine.
+				 * The rules the document puts in force, shown as chips. Nothing
+				 * here counts the past: a commit that is already written cannot be
+				 * fixed from this panel, so the line says what the agent is told
+				 * before the next commit instead of scolding about history.
 				 */
 				const complianceLine = compliance === null ? null : (() => {
 					const enforced = compliance.enforced === true;
-					const failing = typeof compliance.failing === "number" ? compliance.failing : 0;
-					const checked = typeof compliance.checked === "number" ? compliance.checked : 0;
-					const parts = [h("span", {
+					const rules = compliance.rules !== void 0 && compliance.rules !== null ? compliance.rules : null;
+					const parts = [];
+					let shown = 0;
+					const push = (key, rule, label) => {
+						shown += 1;
+						parts.push(h("span", {
+							key,
+							"data-gitgraph-rule": rule,
+							style: SIDEBAR_TAB_CONVENTIONS_CHIP
+						}, label));
+					};
+					if (enforced === true && rules !== null) {
+						if (Array.isArray(rules.types) && rules.types.length > 0) push("types", "types", t("sidebar.ruleTypes", {
+							types: rules.types.join(" / ")
+						}));
+						if (typeof rules.maxSubject === "number") push("length", "length", t("sidebar.ruleLength", {
+							count: rules.maxSubject
+						}));
+						if (rules.lowercase === true) push("case", "case", t("sidebar.ruleLowercase"));
+						if (rules.noPeriod === true) push("period", "period", t("sidebar.rulePeriod"));
+						if (rules.imperative === true) push("mood", "mood", t("sidebar.ruleMood"));
+						if (rules.languageStated === true) push("language", "language", rules.language === "zh" ? t("sidebar.langZh") : rules.language === "en" ? t("sidebar.langEn") : t("sidebar.langMixed"));
+					}
+					if (shown === 0) parts.push(h("span", {
 						key: "text",
 						style: SIDEBAR_TAB_CONVENTIONS_NOTE
-					}, enforced !== true ? t("sidebar.complianceOff") : failing === 0 ? t("sidebar.complianceOk", {
-						count: checked
-					}) : t("sidebar.complianceMiss", {
-						count: checked,
-						failing
-					}))];
+					}, t("sidebar.complianceOff")));
 					if (compliance.strict === true) parts.push(h("span", {
 						key: "strict",
 						"data-gitgraph-compliance-strict": true,
 						title: t("sidebar.strictHint"),
 						style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_CHIP, {
-							alignSelf: "flex-start",
 							color: "var(--dsw-alias-state-warn-primary, #b45309)"
 						})
 					}, t("sidebar.strict")));
-					const offenders = compliance.offenders !== void 0 && compliance.offenders !== null ? compliance.offenders : [];
-					offenders.slice(0, 3).forEach((offender) => {
-						const reasons = offender.reasons !== void 0 && offender.reasons !== null ? offender.reasons.map((reason) => sidebarTabReasonLabel(t, reason)).join(", ") : "";
-						parts.push(h("span", {
-							key: "offender-" + offender.oid,
-							"data-gitgraph-offender": offender.oid,
-							style: SIDEBAR_TAB_PREVIEW_SNIPPET
-						}, offender.oid + "  " + offender.subject + (reasons === "" ? "" : "  [" + reasons + "]")));
-					});
 					return h("div", {
 						key: "compliance",
-						"data-gitgraph-compliance": enforced !== true ? "none" : failing > 0 ? "failing" : "clean",
+						"data-gitgraph-compliance": enforced !== true || shown === 0 ? "none" : "rules",
 						style: SIDEBAR_TAB_COMPLIANCE
 					}, parts);
 				})();
@@ -2484,7 +2484,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 							setPickerOpen(false);
 							setConventionError(null);
 						}
-					}, t("sidebar.conventionsCancel"))])));
+					}, t("sidebar.conventionsClose"))])));
 				}
 				return h("div", {
 					key: "conventions",

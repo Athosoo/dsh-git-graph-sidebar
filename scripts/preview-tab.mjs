@@ -596,7 +596,7 @@ const fakeFetch = async (path, init) => {
 			strict: true,
 			checked: 5,
 			failing: exists ? 2 : 0,
-			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true },
+			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true, languageStated: true, language: "zh" },
 			offenders: exists ? [
 				{ oid: "aaaaaaa", subject: "Fixed the parser crash.", reasons: ["case", "period"] },
 				{ oid: "bbbbbbb", subject: "chore: tidy the tree", reasons: ["type"] }
@@ -1024,9 +1024,11 @@ let pickerHtml = "";
 	const tierMount = await mountComponent(descriptor.component, tabProps(TIER3_PATH));
 	await wait(60);
 	let tierHtml = (await tierMount.render()).html;
-	if (tierHtml.indexOf('data-gitgraph-compliance="failing"') < 0) throw new Error("the compliance line did not report the failing commits");
-	if (tierHtml.indexOf("aaaaaaa") < 0) throw new Error("the compliance line lost the offending subject");
-	if (tierHtml.indexOf("不符合") < 0 && tierHtml.indexOf("do not match") < 0) throw new Error("the compliance line lost its sentence");
+	if (tierHtml.indexOf('data-gitgraph-compliance="rules"') < 0) throw new Error("the compliance line did not list the rules in force");
+	if (tierHtml.indexOf('data-gitgraph-rule="types"') < 0 || tierHtml.indexOf("feat / fix / docs") < 0) throw new Error("the compliance line lost the type rule");
+	if (tierHtml.indexOf('data-gitgraph-rule="length"') < 0 || tierHtml.indexOf("72") < 0) throw new Error("the compliance line lost the length rule");
+	if (tierHtml.indexOf("aaaaaaa") >= 0) throw new Error("the compliance line still grades commits that are already written");
+	if (tierHtml.indexOf("不符合") >= 0 || tierHtml.indexOf("do not match") >= 0) throw new Error("the compliance line still counts the past");
 	if (tierHtml.indexOf("data-gitgraph-compliance-strict") < 0) throw new Error("a strict document shows no strict chip");
 	if (tierHtml.indexOf("data-gitgraph-workspace-bar") < 0) throw new Error("the workspace document strip is missing");
 	if (tierHtml.indexOf('data-gitgraph-action="workspace-doc-create"') < 0) throw new Error("the workspace document strip has no create button");
@@ -1038,6 +1040,7 @@ let pickerHtml = "";
 	await wait(60);
 	pickerHtml = (await tierMount.render()).html;
 	if (pickerHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("the picker snapshot is empty");
+	if (pickerHtml.indexOf('data-gitgraph-conventions-close') < 0 && pickerHtml.indexOf("关闭") < 0 && pickerHtml.indexOf("Close") < 0) throw new Error("the picker has no close button");
 	await wait(40);
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("the switch button did not open the framework picker");

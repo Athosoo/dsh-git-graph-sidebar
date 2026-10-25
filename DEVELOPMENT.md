@@ -261,6 +261,26 @@ Two traps worth remembering:
 1. A regex written through a python heredoc loses its backslash escapes (`\b` becomes `b`), and the only检查 that catches it is `node --check lib/index.js`.
 2. `test-host.mjs` needs a real repository to prove `convention-missing-document`; a plain directory answers `not-a-repository` first.
 
+## Rule chips instead of a tally (1.8.2)
+
+The conventions strip used to say *2 of the last 5 commits do not match* and print three offenders. Those commits are already written and cannot be fixed from the panel, so the line was noise. It now prints the rules the document puts in force, which is the same list the prompt block receives:
+
+| chip | source | `data-gitgraph-rule` |
+| --- | --- | --- |
+| `type: feat / fix / docs` | `rules.types` | `types` |
+| `subject ≤ 72` | `rules.maxSubject` | `length` |
+| `lowercase start` | `rules.lowercase` | `case` |
+| `no trailing period` | `rules.noPeriod` | `period` |
+| `imperative` | `rules.imperative` | `mood` |
+| `Chinese` / `English` / `Chinese + English` | `rules.languageStated` + `rules.language` | `language` |
+| amber *Strict* | `compliance.strict` | — |
+
+`SIDEBAR_TAB_COMPLIANCE` is a wrapping row (`flexWrap: "wrap"`, `gap: 4`); as a column every chip was stretched into its own full-width row. `data-gitgraph-compliance` now reads `none` (no checkable rule) or `rules`, never `failing` / `clean`.
+
+`/git/compliance` still returns `checked`, `failing`, `offenders` and `languages` — the host side is unchanged and `scripts/test-host.mjs` keeps asserting it. The preview stub keeps those fields too, so the assertions only cover the chips and the absence of the old tally.
+
+The picker's cancel button is now `sidebar.conventionsClose` (*Close*); the upgrade preview keeps `sidebar.previewCancel` (*Cancel*), because there it really does cancel a write. `sidebarTabReasonLabel()` and six `sidebar.reason*` keys went with the offender rows: 166 → 163 locale keys.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.

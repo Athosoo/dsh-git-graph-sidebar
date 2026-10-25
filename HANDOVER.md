@@ -10,6 +10,7 @@
 
 **1.8.0 已发布、已推送、已装进 `desktop`**：主题语言进了规范本身（1.7.3 的改动随 1.8.0 一起发布），并且扫描成本下来了——每个仓库的 refs 探针从三次合成一次 `git for-each-ref`，refs 没动时整轮命中缓存（`timings.probeSpawns` / `timings.probeHits` 写在 `/git/repos` 的返回里），规范文档改成并发批量读，状态探针并发 4 → 8、单仓超时 5s → 2.5s，客户端 20 秒轮询只刷仓库列表、图谱交给变更流。`build-lib` spliced 2674 / 1455 / 449 行、`patch-host` 22 处、166 个 locale 键、host 174/174。**1.7.3 的语言策略**：主题语言进了规范本身——文档前置元数据支持 `language: zh\|en\|mixed`（写在 `strict:` 之后），选择列表多一行「提交语言」，预览与写入都带上它，`git/compliance` 在语言写死时给违规主题一个 `lang` 原因，注入的提示块始终有一行 `Subject language: …`。顺手修掉两个真 bug：`conventionInsertField()` 重复拼冒号（`status::`）导致语言行永远落到文件顶部；`build-lib.mjs` 的 GitApi 注入改成「先按方法名删除、再按序插回」，避免旧签名残留覆盖新方法。
 **1.8.1 已发布、已推送、已装进 `desktop`**：修「设置了却不生效」——新 `conventionSettings()` 与 `/git/convention/settings`（工作区侧用 `action: "settings"`）只改文档前置的 `strict` / `language` 而不重建正文，`repoConventionState()` / `workspaceConventionState()` 把这两个字段读出来，选择列表据此显示文档里的值，点开关即刻落盘；容器（不是仓库）的 cwd 现在会读 `<工作区>/.dsh/GIT_CONVENTIONS.md` 并把它（含语言行、strict 段、可机检规则与正文）连同子仓索引注入提示块。`patch-host` 23 处、host **186/186**。
+**1.8.2 已发布、已推送、已装进 `desktop`**：规范条不再统计「最近 N 个提交里有几个不符合」（那些提交在面板上改不了，看了也没用），改成把**文档自己写明、并且真的会注入给助手的规则**列成小标签（`type: feat / fix / docs`、`标题 ≤ 72 字`、`小写开头`、`不加句号`、`祈使句`、`中文`、`强约束`），容器改成横向换行；选择列表底部的「取消」改成「关闭」。`build-lib` spliced 2707 行、163 个 locale 键、host 186/186、客户端预览全过。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 ## 1. 这个插件是什么（读懂需求演进）
@@ -140,6 +141,7 @@ node scripts/preview-tab.mjs \
 | 1.7.3 | 主题语言策略：`language:` 字段、选择器、`lang` 合规原因、注入块一行 `Subject language:`；随 1.8.0 一起发布 |
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
+| 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -371,6 +373,28 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 ### 7.6.5 测试
 - `scripts/test-host.mjs` 第 [15] 段：`repos/switched` 上 `languageStated === false` → `POST /git/convention/settings {strict:true, language:"zh"}` 后正文仍在、出现 `strict: true` 与 `language: zh`、state 报回三字段 → 只传 `{strict:false}` 时 `language: zh` 保留 → `repos/undocumented`（真仓库、无文档）返回 `convention-missing-document` → 工作区 `write` 带 `strict:true, language:"en"` 后 `section.text(cwdOf(wsContainer))` 含 `this workspace's Git conventions` / `Subject language: English only` / `This document is strict` → `action:"settings", language:"zh"` 后文档同时有 `language: zh` 与 `strict: true`，提示块变成 `Subject language: Chinese only`。共 **186/186**。
 - `scripts/preview-tab.mjs`：`SETTINGS_CALLS` 计数器 + `git/convention/settings` stub；点「中文」→ 立刻 1 次调用且 `language === "zh"`、`strict === false`；点强约束开 → 2 次且 `strict === true`、语言仍是 `zh`；再点关 → 3 次且 `strict === false`；创建工作区文档的 payload 必须带 `strict === false` 与 `language === "zh"`。
+## 7.6 1.8.2 的改动（合规行改成「生效规则」，「取消」改「关闭」）
+
+### 7.6.1 合规行不再统计已经写下的提交（`src/client/graph/SidebarTab.js`）
+
+原先规范条里那句「最近 5 个提交里有 2 个不符合」配三行 offender 清单，指出的都是**已经提交、从面板上改不了**的历史记录——用户的原话是「这个本身没有意义啊，又改不了」。现在这一行只列**文档自己写明、并且真的会注入给助手的规则**，用小标签（chip）呈现：
+
+- `data-gitgraph-rule="types"` → `type: feat / fix / docs`（`sidebar.ruleTypes`）
+- `data-gitgraph-rule="length"` → `标题 ≤ 72 字` / `subject ≤ 72`（`sidebar.ruleLength`）
+- `data-gitgraph-rule="case"` / `"period"` / `"mood"` → 小写开头 / 不加句号 / 祈使句
+- `data-gitgraph-rule="language"` → 中文 / 英文 / 中英混排（仅当文档写了 `language:`）
+- `data-gitgraph-compliance-strict` → 琥珀色「强约束」标记
+
+容器 `SIDEBAR_TAB_COMPLIANCE` 从 `flexDirection: "column"` 改成 `row` + `flexWrap: "wrap"` + `gap: 4`，否则每个 chip 会被拉成整行（截图确认过，一行一个标签很难看）。`data-gitgraph-compliance` 的取值也随之改成 `none`（没有可机检规则）或 `rules`（有规则），不再有 `failing` / `clean` 这种「给历史打分」的状态。offender 数据仍由 `/git/compliance` 返回（host 不动、`test-host` 第 [13] / [15] 段照旧断言），只是界面不再渲染。
+
+### 7.6.2 选择列表底部的「取消」改成「关闭」
+
+`sidebar.conventionsCancel`（`取消` / `Cancel`）重命名为 `sidebar.conventionsClose`（`关闭` / `Close`）——那个按钮的动作是收起列表，不是撤销什么。**升级预览面板里的「取消」保持不动**（它旁边是「确认写入」，语义就是放弃这次升级），`sidebar.previewCancel` 未被触碰。
+
+### 7.6.3 一并删掉的死代码
+
+`sidebarTabReasonLabel(t, reason)` 只被 offender 行用过，随之一并删除；`sidebar.reasonLength` / `reasonType` / `reasonCase` / `reasonPeriod` / `reasonMood` / `reasonLang` 六个键（zh + en 共 12 行）与 `sidebar.complianceOk` / `complianceMiss`（4 行）一起从 `scripts/build-lib.mjs` 的 `EXTRA_KEYS` 移除，换成 `ruleTypes` / `ruleLength` / `ruleLowercase` / `rulePeriod` / `ruleMood` 五个键。locale 键总数 166 → **163**。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -426,6 +450,8 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 28. **同一个 `switch` 里的多处补丁要各自带 guard**：`patch()` 的幂等判定是 `source.includes(replacement)`，可一旦后一个补丁把新 case 插进前一个补丁的「块 + 锚点行」之间，replacement 就再也不是连续文本 → 每次运行都重复插入（实测 `case "/git/init"` 累积到 7 份、`lib/index.js` 从 3743 涨到 4636 行）。现在 `patch(label, anchor, replacement, guard)` 支持第四参，第 9/13 段分别用 `'\t\t\tcase "/git/init": {'`、`'\t\t\tcase "/git/compliance": {'` 判定，连跑两次稳定输出 `applied 0, already present 22`。
 
 29. 拼 JS 正则时 `\b` 的 `b` 会被 python 字符串吃掉（写成 `"\bstatus"` 结果是 `\status`），`SyntaxError: Invalid regular expression: missing /` 只在 `node --check lib/index.js` 时才暴露 → 正则里出现反斜杠一律用 `chr(92)` 拼，或者把整段 JS 用 quoted heredoc 写进文件再插入。
+30. **按行号删代码必须两端都断言**：想删 `sidebarTabReasonLabel()` 时用「从函数行往下找第一个 `	}`」定位结尾，可它的收尾是 `		}`（2 tab），于是循环一路吃到 30 行之后的另一个 1 tab `}`——`SIDEBAR_TAB_CACHE` 的定义被删掉，`node --check lib/client.js` 依然通过，只有 `validate-lib` 的 `unresolved identifiers: sidebarTabCacheEntry, SIDEBAR_TAB_CACHE` 抓到了。现在删区间都写成「先断言起始行的 `/**` 或函数签名、再断言收尾行内容、再断言收尾行的下一行长什么样」，并用 `git diff --stat` 核对删掉的行数与预期相符。
+31. **往 `EXTRA_KEYS` 里插字典项要连缩进和逗号一起带**：只写 `['"sidebar.ruleTypes"', '"…"']` 会把裸数组甩在数组外，`build-lib` 直接 `TypeError: Cannot read properties of undefined`；而 `["brew…` 这种 `Q` 拼法也匹配不到文件里实际存在的 `['"sidebar.xxx"'`。可靠做法：`T*3 + "['" + Q + "sidebar." + key + Q + "', '" + Q + value + Q + "'],"`，写完 `sed -n` 看一眼再跑 build。
 30. 用户说「设置了不生效」时，先数链路节点：界面状态 → 请求 payload → 路由 → 写盘 → 回读 → 注入。这次四个节点各断一处，逐个用 `grep` 验证比猜快得多。
 
 ## 10. 下一步照做即可（最短路径）
@@ -438,7 +464,7 @@ node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
 # 2) 升 1.8.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.8.1"
+npm pack --pack-destination "../dsh-git-graph-dist/1.8.2"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

@@ -2,6 +2,8 @@
 
 ```yaml
 status: settled
+strict: true
+language: zh
 framework: github-flow
 ```
 
