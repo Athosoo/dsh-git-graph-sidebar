@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 18:40 (+08)。
+> 最后更新：2026-10-25 19:05 (+08)。
 
 ## 0. 一句话状态
 
@@ -15,7 +15,9 @@
 **1.8.2 已发布、已推送、已装进 `desktop`**：规范条不再统计「最近 N 个提交里有几个不符合」（那些提交在面板上改不了，看了也没用），改成把**文档自己写明、并且真的会注入给助手的规则**列成小标签（`type: feat / fix / docs`、`标题 ≤ 72 字`、`小写开头`、`不加句号`、`祈使句`、`中文`、`强约束`），容器改成横向换行；选择列表底部的「取消」改成「关闭」。`build-lib` spliced 2707 行、163 个 locale 键、host 186/186、客户端预览全过。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
-**1.9.1 已发布、已推送、已装进 `desktop`**：标签退出筛选排——一个标签只指向一个提交，静音它只能藏一行，所以它不再是筛选项，只留在提交行上作徽章（host `lib/index.js:616` 不再剥掉 `tag: ` 前缀，客户端据此区分标签与分支）；可筛分支少于 4 条时整排不显示；顺手删掉 1.6.1 遗留的两条死字典键 `sidebar.expandGraph`。`build-lib` spliced 2843 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、预览含新的 refs 一节全过。**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
+**1.9.2 已发布、已推送、已装进 `desktop`**：补上 1.9.1 漏掉的 host 那一行——`lib/index.js:616` 的 `parseDecoration()` 不再剥掉 `tag: ` 前缀，客户端才真的能把标签和分支分开。**这一行没改，1.9.1 在实机上等于没修**：预览的 fixture 是手写的、自带 `tag: ` 前缀，所以测试全绿，而真实主机一直把前缀剥掉。`test-host` 因此新增第 [16] 段（真建仓库 + 打 annotated tag，断言 `/git/graph` 的 refs 里有 `tag: v1.0.0`、`main` 没有前缀），现在 **189/189**。
+
+**1.9.1 已发布、已推送、已装进 `desktop`（客户端半边）**：标签退出筛选排——一个标签只指向一个提交，静音它只能藏一行，所以它不再是筛选项，只留在提交行上作徽章；可筛分支少于 4 条时整排不显示；顺手删掉 1.6.1 遗留的两条死字典键 `sidebar.expandGraph`。`build-lib` spliced 2843 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键。**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -146,7 +148,8 @@ node scripts/preview-tab.mjs \
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
-| 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键；已发布并已装 |
+| 1.9.2 | 补上 1.9.1 漏掉的 host 那一行（`parseDecoration` 保留 `tag: ` 前缀），标签与分支终于真的能区分；`test-host` 增加第 [16] 段真标签断言（189/189）；已发布并已装 |
+| 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键（只改了客户端，实机无效，见 1.9.2）；已发布并已装 |
 | 1.9.0 | 引用筛选改成一个分支一枚标签（本地与远程同名合并、符号引用不再出现、标签单独灰色、超 12 枚折 `+N`、静音时给「清除筛选」），行内徽章与导出 SVG 复用同一套标签；已发布并已装 |
 | 1.8.3 | 修「文档里的行内注释把字段值污染」：`conventionFieldValue()` 现在去掉 `#` 之后的注释与首尾引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese」这类写法、先认 mix/混 再认中英，模板自带的 `status: draft   # draft | settled` 不再让 `language: zh   # zh | en | mixed` 被读成 mixed；已发布并已装 |
 
@@ -439,13 +442,15 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 
 一句话：筛选排只留能「顺藤摸瓜」的东西。一个标签指向的是单个提交，不是一条线，静音它只能藏掉那一行——所以它不该占筛选项的位置。
 
-### 7.9.1 host：保留 `tag: ` 前缀（`lib/index.js:616`）
+### 7.9.1 host：保留 `tag: ` 前缀（`lib/index.js:616`，实际随 1.9.2 发布）
 
 ```js
 return part.replace(/^HEAD -> /, "").trim();
 ```
 
-原来还有一段 `.replace(/^tag: /, "")`，把标签和分支都变成光秃秃的名字，客户端根本分不出来——用户截图里那 9 枚 `v1.5.0 … v1.9.0` 被当成「分支」画成实心青蓝，就是这个原因。现在只剥 `HEAD -> `（和裸 `HEAD`），标签留着前缀，客户端才能区分。`lib/index.js` 的 repos/graph 区域本来就是手工维护的，这一行直接改在那里。
+原来还有一段 `.replace(/^tag: /, "")`，把标签和分支都变成光秃秃的名字，客户端根本分不出来——用户截图里那 9 枚 `v1.5.0 … v1.9.0` 被当成「分支」画成实心青蓝，就是这个原因。现在只剥 `HEAD -> `（和裸 `HEAD`），标签留着前缀，客户端才能区分。`lib/index.js` 的 graph 区域是上游代码、`repos` 区域是手工维护的，这一行直接改在 `lib/index.js` 里（`src/` 没有对应副本，所以不会被 `build-lib` 覆盖）。
+
+**为什么 1.9.1 漏了它**：那次只改了 `src/client/graph/SidebarTab.js` 并全部验证通过——因为 `scripts/preview-tab.mjs` 的 fixture 是手写的 `["HEAD -> main", "main", "origin/main", "tag: v1.0.0"]`，自带了前缀，客户端逻辑在假数据上完全正确；真实主机却在链路的前一步把前缀剥掉了。**教训：fixture 里出现的字符串形态，必须与真主机实际返回的形态一致，否则测试只是在测自己的想象力。** 现在 `test-host` 第 [16] 段用真仓库 + 真 annotated tag 把这条链路钉住了。
 
 ### 7.9.2 客户端：标签不进 `refGroups`
 
@@ -487,7 +492,8 @@ return part.replace(/^HEAD -> /, "").trim();
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
 5. ~~发 1.9.0~~ **已完成**（commit `94923c9`、tag `v1.9.0`、Release id `423280585`、资产 `dsh-git-graph-sidebar.tgz` 874347 字节、`desktop` 已装 1.9.0）。
-5a. ~~发 1.9.1~~ **已完成**：标签退出筛选排、少于 4 枚不画这一排、清掉 `sidebar.expandGraph` 死键；`spliced 2843 / 1560 / 449`、`patch-host` 23 处、166 个 locale 键、host 186/186、预览 10 节全过。原先那行留档：用户需重启 DSH 才看得到新的引用标签。下一版候选：图谱分页（host 已算 `hasMore`，`lib/index.js` 里 `/git/log` 支持 `limit`，tab 还没有「加载更早」入口）、真历史搜索（`--grep` / `--author` / `--since`）、状态条显示落后上游、详情卡加 `--stat`、PNG 导出（需要光栅化）。
+5a. ~~发 1.9.1~~ **已完成**（只含客户端半边，实机无效）：标签退出筛选排、少于 4 枚不画这一排、清掉 `sidebar.expandGraph` 死键。
+5b. ~~发 1.9.2~~ **已完成**：补上 `lib/index.js:616` 保留 `tag: ` 前缀 + `test-host` 第 [16] 段真标签断言；`spliced 2843 / 1560 / 449`、`patch-host` 23 处、166 个 locale 键、host **189/189**、预览 10 节全过。用户需重启 DSH 才看得到新的引用标签。下一版候选：图谱分页（host 已算 `hasMore`，`lib/index.js` 里 `/git/log` 支持 `limit`，tab 还没有「加载更早」入口）、真历史搜索（`--grep` / `--author` / `--since`）、状态条显示落后上游、详情卡加 `--stat`、PNG 导出（需要光栅化）。
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
@@ -529,8 +535,13 @@ return part.replace(/^HEAD -> /, "").trim();
 
 29. 拼 JS 正则时 `\b` 的 `b` 会被 python 字符串吃掉（写成 `"\bstatus"` 结果是 `\status`），`SyntaxError: Invalid regular expression: missing /` 只在 `node --check lib/index.js` 时才暴露 → 正则里出现反斜杠一律用 `chr(92)` 拼，或者把整段 JS 用 quoted heredoc 写进文件再插入。
 30. **按行号删代码必须两端都断言**：想删 `sidebarTabReasonLabel()` 时用「从函数行往下找第一个 `	}`」定位结尾，可它的收尾是 `		}`（2 tab），于是循环一路吃到 30 行之后的另一个 1 tab `}`——`SIDEBAR_TAB_CACHE` 的定义被删掉，`node --check lib/client.js` 依然通过，只有 `validate-lib` 的 `unresolved identifiers: sidebarTabCacheEntry, SIDEBAR_TAB_CACHE` 抓到了。现在删区间都写成「先断言起始行的 `/**` 或函数签名、再断言收尾行内容、再断言收尾行的下一行长什么样」，并用 `git diff --stat` 核对删掉的行数与预期相符。
+` 会变成真换行**：在 `python - <<'PY'`（单引号 heredoc，本该原样保留）里写 `'console.log("\n[16] …")'`，落到文件里变成 `console.log("` + 真换行 → `SyntaxError: Invalid or unexpected token`（本次连踩两次，第一次在 `scripts/test-host.mjs:708`）。可靠写法：`B = chr(92)`、`N = chr(10)`，所有反斜杠用 `B + "n"` 拼；长 JS 用 `cat > ../.tmp/x.js <<'JSEOF' … JSEOF` 先落盘。
+[15] …");` 这种 anchor 受转义层数影响极难对齐（先试 `s.count(anchor)` 得 0），改成 `idx = [i for i,l in enumerate(lines) if "[15] switch-only" in l]` + `lines[at:at] = block`，一次成功。定位用「内容片段」、写入用「整行列表」，比反复数反斜杠快得多。
 31. **往 `EXTRA_KEYS` 里插字典项要连缩进和逗号一起带**：只写 `['"sidebar.ruleTypes"', '"…"']` 会把裸数组甩在数组外，`build-lib` 直接 `TypeError: Cannot read properties of undefined`；而 `["brew…` 这种 `Q` 拼法也匹配不到文件里实际存在的 `['"sidebar.xxx"'`。可靠做法：`T*3 + "['" + Q + "sidebar." + key + Q + "', '" + Q + value + Q + "'],"`，写完 `sed -n` 看一眼再跑 build。
-30. 用户说「设置了不生效」时，先数链路节点：界面状态 → 请求 payload → 路由 → 写盘 → 回读 → 注入。这次四个节点各断一处，逐个用 `grep` 验证比猜快得多。
+32. 用户说「设置了不生效」时，先数链路节点：界面状态 → 请求 payload → 路由 → 写盘 → 回读 → 注入。这次四个节点各断一处，逐个用 `grep` 验证比猜快得多。
+33. **fixture 自带的字符串形态，必须与真主机返回的一致**：1.9.1 里客户端已经能把 `tag: v1.0.0` 和 `main` 分开，`preview-tab` 全绿，但实机完全没变化——因为 `preview-tab.mjs` 的 fixture 是手写的 `["HEAD -> main", "main", "origin/main", "tag: v1.0.0"]`，而真主机 `lib/index.js:616` 一直在 `.replace(/^tag: /, "")`。客户端逻辑测的是一个真实链路永远不会产生的形状。**凡是「host 产出 → client 消费」的字段，测试要么两边都用真数据（`test-host` 建真仓库、真 tag、真 remote），要么在 fixture 上写明它是假的。** 1.9.2 加的第 [16] 段就是这条的形状：`git tag -a` 真打标签，再断言 `/git/graph` 的 refs 里有 `tag: v1.0.0`、没有 `v1.0.0` 裸名。
+34. **`ops_bash` 会吃掉一层反斜杠，`
+35. **按「行内文本」插入测试块比按整行字符串做 anchor 更稳**：`	console.log("
 
 ## 10. 下一步照做即可（最短路径）
 

@@ -306,7 +306,7 @@ Tests live in the refs section of `scripts/preview-tab.mjs` (synthetic repo + it
 
 ## Tags are not filters (1.9.1)
 
-A tag points at one commit, so muting it hides exactly one row - it cannot pay for a slot in the filter row. Host `lib/index.js:616` therefore keeps the `tag: ` prefix (it used to strip it, which made every release tag look like a branch in the panel).
+A tag points at one commit, so muting it hides exactly one row - it cannot pay for a slot in the filter row. Host `lib/index.js:616` therefore keeps the `tag: ` prefix (it used to strip it, which made every release tag look like a branch in the panel). **That host line shipped one version late (1.9.2)**: the client half was verified only against `scripts/preview-tab.mjs` fixtures that wrote `tag: v1.0.0` by hand, so the code was correct against data the real host never produced. `test-host` section [16] now builds a repository with a real annotated tag and asserts the ref shape coming out of `/git/graph`.
 
 * `refGroups` skips `tag: …`, so a repository with one branch and nine release tags ends up with a single chip and the row disappears (`SIDEBAR_TAB_FILTER_REFS_MIN = 4`, beside `SIDEBAR_TAB_FILTER_REFS_MAX = 12`).
 * `refLabelOf` keeps tags readable: it starts from `refGroupOf` and adds `tag: v1.0.0 -> v1.0.0`. Row badges and the export use it; the visibility filter keeps using `refGroupOf`.

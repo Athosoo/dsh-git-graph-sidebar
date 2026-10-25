@@ -705,6 +705,25 @@ const noRules = await call("/git/compliance", { path: docless });
 	const movedB = entryAt(scanMoved.json, scanB);
 	check("the moved repository reports newer activity", typeof movedB.activity === "number" && movedB.activity >= (activityFirst[rootKeyOf(scanB)] ?? 0), JSON.stringify(movedB.activity));
 
+	console.log("\n[16] a tag keeps its own prefix, so the panel can tell it from a branch");
+
+	const tagged = join(workspace, "repos", "tagged");
+	await mkdir(tagged, { recursive: true });
+	await git(tagged, "init", "-b", "main");
+	await writeFile(join(tagged, "a.txt"), "a\n", "utf8");
+	await git(tagged, "add", ".");
+	await git(tagged, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+	await git(tagged, "-c", "user.name=Test", "-c", "user.email=test@example.com", "tag", "-a", "v1.0.0", "-m", "release one");
+	await writeFile(join(tagged, "b.txt"), "b\n", "utf8");
+	await git(tagged, "add", ".");
+	await git(tagged, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: second");
+	const taggedGraph = await call("/git/graph", { path: tagged, limit: 10 });
+	check("the graph loads for a tagged repository", taggedGraph.json?.ok === true, taggedGraph.raw.slice(0, 200));
+	const taggedRefs = [];
+	for (const entry of taggedGraph.json?.value?.commits ?? []) for (const ref of entry.refs ?? []) taggedRefs.push(ref);
+	check("a tag arrives with its own prefix", taggedRefs.indexOf("tag: v1.0.0") >= 0, JSON.stringify(taggedRefs));
+	check("the branch arrives without one", taggedRefs.some((ref) => ref === "main" || ref === "HEAD -> main"), JSON.stringify(taggedRefs));
+
 	console.log("\n[15] switch-only updates keep the document, and the workspace document reaches the prompt");
 
 	const switched = join(workspace, "repos", "switched");
