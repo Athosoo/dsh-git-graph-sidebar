@@ -1047,6 +1047,9 @@ let pickerHtml = "";
 	if (WORKSPACE_CALLS.length !== 1) throw new Error("creating the workspace document must call the host once, got " + WORKSPACE_CALLS.length);
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf('data-gitgraph-workspace-doc="draft"') < 0) throw new Error("the workspace strip did not report the new document");
+	if (tierHtml.indexOf('data-gitgraph-workspace-note="written"') < 0) throw new Error("creating the workspace document left no confirmation in the strip");
+	if (tierHtml.indexOf('data-gitgraph-action="workspace-doc-copy"') < 0) throw new Error("without an editor to open, the strip must offer the document path instead");
+	if (tierHtml.indexOf("workspace-doc-create") >= 0) throw new Error("the create button stayed after the document exists");
 	REPOS = savedRepos;
 	console.log("preview-tab: compliance, upgrade preview and workspace document ok");
 }

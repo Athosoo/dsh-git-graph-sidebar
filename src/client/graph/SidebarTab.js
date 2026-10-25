@@ -1252,6 +1252,10 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [workspaceBusy, setWorkspaceBusy] = react.useState(false);
 			/** The workspace-level document, read once per workspace. */
 			const [workspaceDoc, setWorkspaceDoc] = react.useState(null);
+			/** Set for a few seconds after a write, so the strip says what happened. */
+			const [workspaceNote, setWorkspaceNote] = react.useState(false);
+			/** A failed write has nowhere else to be reported: the workspace strip shows it. */
+			const [workspaceError, setWorkspaceError] = react.useState(null);
 			/** Repositories the auto-scaffold already ran for (once per session). */
 			const autoScaffolded = react.useRef(new Set());
 			const graphSeq = react.useRef(0);
@@ -1528,12 +1532,13 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				if (workspaceBusy === true || workspaceKey === void 0) return;
 				setWorkspaceBusy(true);
 				setConventionError(null);
+				setWorkspaceError(null);
 				sidebarTabGit().workspaceConvention(workspaceKey, {
 					action: "write"
 				}).then((result) => {
 					setWorkspaceBusy(false);
 					if (!result.ok || result.value === null || result.value === void 0) {
-						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						setWorkspaceError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
 						return;
 					}
 					setWorkspaceDoc(Object.assign({}, workspaceDoc, {
@@ -1543,12 +1548,19 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						size: result.value.bytes,
 						draft: true
 					}));
+					setWorkspaceNote(true);
 					runScan(true);
 				}).catch(() => {
 					setWorkspaceBusy(false);
-					setConventionError(t("sidebar.error.conventions"));
+					setWorkspaceError(t("sidebar.error.conventions"));
 				});
 			}, [runScan, t, workspaceBusy, workspaceDoc, workspaceKey]);
+			/** The confirmation fades out on its own; the chip keeps the new state. */
+			react.useEffect(() => {
+				if (workspaceNote !== true) return void 0;
+				const timer = setTimeout(() => setWorkspaceNote(false), 8000);
+				return () => clearTimeout(timer);
+			}, [workspaceNote]);
 			/** Read the selected repository's compliance against its own document. */
 			react.useEffect(() => {
 				if (selectedKey === void 0) return void 0;
@@ -2595,9 +2607,22 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					title: t("sidebar.conventionsOpen"),
 					"aria-label": t("sidebar.conventionsOpen")
 				}, t("sidebar.conventionsOpen")));
+				/** Without an editor to open it, at least hand over the path of the document. */
+				else head.push(h("button", {
+					key: "copy",
+					type: "button",
+					"data-gitgraph-action": "workspace-doc-copy",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: () => {
+						if (typeof workspaceDoc.docPath === "string") sidebarTabCopy(workspaceDoc.docPath);
+					},
+					title: t("sidebar.workspaceDocCopy"),
+					"aria-label": t("sidebar.workspaceDocCopy")
+				}, t("sidebar.workspaceDocCopy")));
 				return h("div", {
 					key: "workspace-doc",
 					"data-gitgraph-workspace-bar": true,
+				"data-gitgraph-workspace-note": workspaceError !== null ? "error" : workspaceNote === true ? "written" : "idle",
 					style: SIDEBAR_TAB_CONVENTIONS
 				}, [h("div", {
 					key: "head",
@@ -2605,7 +2630,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				}, head), h("span", {
 					key: "hint",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
-				}, exists !== true ? t("sidebar.workspaceDocMissing") : t("sidebar.workspaceDocExists"))]);
+				}, workspaceError !== null ? workspaceError : workspaceNote === true ? t("sidebar.workspaceDocWritten") + "  " + docName : exists !== true ? t("sidebar.workspaceDocMissing") : t("sidebar.workspaceDocExists"))]);
 			})();
 			return h("div", {
 				style: SIDEBAR_TAB_ROOT,
