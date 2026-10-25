@@ -2,9 +2,11 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 15:35 (+08)。
+> 最后更新：2026-10-25 16:45 (+08)。
 
 ## 0. 一句话状态
+
+1.8.3（字段解析修复）已发布并已装进 `desktop`：`conventionFieldValue()` 去掉行内 `#` 注释与引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese / 中英混排」，于是模板自带的注释不再把 `language: zh` 读成 `mixed`。
 
 插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 已提交（`awesome-dsh-plugin#9196`，按维护者四条修正描述后 push 到 `a4521fc`）。
 
@@ -142,6 +144,7 @@ node scripts/preview-tab.mjs \
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.8.3 | 修「文档里的行内注释把字段值污染」：`conventionFieldValue()` 现在去掉 `#` 之后的注释与首尾引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese」这类写法、先认 mix/混 再认中英，模板自带的 `status: draft   # draft | settled` 不再让 `language: zh   # zh | en | mixed` 被读成 mixed；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -373,7 +376,7 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 ### 7.6.5 测试
 - `scripts/test-host.mjs` 第 [15] 段：`repos/switched` 上 `languageStated === false` → `POST /git/convention/settings {strict:true, language:"zh"}` 后正文仍在、出现 `strict: true` 与 `language: zh`、state 报回三字段 → 只传 `{strict:false}` 时 `language: zh` 保留 → `repos/undocumented`（真仓库、无文档）返回 `convention-missing-document` → 工作区 `write` 带 `strict:true, language:"en"` 后 `section.text(cwdOf(wsContainer))` 含 `this workspace's Git conventions` / `Subject language: English only` / `This document is strict` → `action:"settings", language:"zh"` 后文档同时有 `language: zh` 与 `strict: true`，提示块变成 `Subject language: Chinese only`。共 **186/186**。
 - `scripts/preview-tab.mjs`：`SETTINGS_CALLS` 计数器 + `git/convention/settings` stub；点「中文」→ 立刻 1 次调用且 `language === "zh"`、`strict === false`；点强约束开 → 2 次且 `strict === true`、语言仍是 `zh`；再点关 → 3 次且 `strict === false`；创建工作区文档的 payload 必须带 `strict === false` 与 `language === "zh"`。
-## 7.6 1.8.2 的改动（合规行改成「生效规则」，「取消」改「关闭」）
+## 7.7 1.8.2 的改动（合规行改成「生效规则」，「取消」改「关闭」）
 
 ### 7.6.1 合规行不再统计已经写下的提交（`src/client/graph/SidebarTab.js`）
 
@@ -394,6 +397,19 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 ### 7.6.3 一并删掉的死代码
 
 `sidebarTabReasonLabel(t, reason)` 只被 offender 行用过，随之一并删除；`sidebar.reasonLength` / `reasonType` / `reasonCase` / `reasonPeriod` / `reasonMood` / `reasonLang` 六个键（zh + en 共 12 行）与 `sidebar.complianceOk` / `complianceMiss`（4 行）一起从 `scripts/build-lib.mjs` 的 `EXTRA_KEYS` 移除，换成 `ruleTypes` / `ruleLength` / `ruleLowercase` / `rulePeriod` / `ruleMood` 五个键。locale 键总数 166 → **163**。
+
+## 7.8 1.8.3 的改动（字段值不再被注释污染）
+
+**症状**：在面板里把工作区规范设成「中文 + 强约束」，写进去的行是 `language: zh           # zh | en | mixed`、`strict: true           # 强约束：不合规的提交先改写再提交`（`conventionWithLanguage()` / `conventionWithStrict()` 只换行、不删注释），而 `conventionFieldValue()` 返回的是整段 `"zh           # zh | en | mixed"`，`conventionDocLanguageOf()` 精确比对失败 → 回落 `mixed`，注入给助手的提示块仍然写「Chinese, English or a mix of both」，看起来就是「设了中文没生效」。
+
+**改法**（`src/host/conventions.js`）：
+
+* `conventionFieldValue()` 先截断 `#` 之后的部分、再 `trim()`，并把成对的 `"…"` / `'…'` 引号去掉。
+* `conventionDocLanguageOf()` 改成包含式判定：先认 `mix` / `混` → `mixed`，再认 `zh|cn|chinese|中文|中|汉语` → `zh`、`en|english|英文|英|英语` → `en`。
+* `scripts/test-host.mjs` 第 [13] 段的 `repos/langzh` 文档改成带注释的写法（`status: settled        # draft | settled`、`language: zh           # zh | en | mixed`），原有的 `rules.language === "zh"` 断言从此覆盖注释场景。
+* 工作区那份 `<workspace>/.dsh/GIT_CONVENTIONS.md` 的前置字段换成 `status: settled` / `strict: true` / `language: zh` / `framework: conventional-commits`（备份在 `.tmp/GIT_CONVENTIONS.workspace.bak`）。
+
+**教训**：自己写进文档的行要能被自己读回——写入端保留注释、读取端就必须剥注释；`test-host` 的 fixture 要故意用带注释的写法。
 
 ## 8. 待办清单（按优先级）
 

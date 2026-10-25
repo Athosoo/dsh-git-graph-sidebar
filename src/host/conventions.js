@@ -997,12 +997,19 @@ function conventionLanguageOf(text) {
 	return "other";
 }
 
-/** The value of one front-matter field, lowercased, or an empty string. */
+/** The value of one front-matter field, without its inline comment or quotes. */
 function conventionFieldValue(body, key) {
 	const prefix = key.toLowerCase() + ":";
 	for (const line of String(body).split("\n")) {
 		const trimmed = line.trim().toLowerCase();
-		if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length).trim();
+		if (trimmed.startsWith(prefix) === false) continue;
+		let value = trimmed.slice(prefix.length);
+		const hash = value.indexOf("#");
+		if (hash >= 0) value = value.slice(0, hash);
+		value = value.trim();
+		const first = value.charAt(0);
+		if (value.length > 1 && (first === '"' || first === "'") && value.charAt(value.length - 1) === first) value = value.slice(1, value.length - 1).trim();
+		return value;
 	}
 	return "";
 }
@@ -1040,8 +1047,10 @@ function conventionHasChinese(text) {
 /** The subject language a document states: zh, en, or mixed (the default). */
 function conventionDocLanguageOf(text) {
 	const value = conventionFieldValue(text, "language");
-	if (value === "zh" || value === "cn" || value === "chinese" || value === "中文" || value === "中" || value === "汉语") return "zh";
-	if (value === "en" || value === "english" || value === "英文" || value === "英" || value === "英语") return "en";
+	if (value === "") return "mixed";
+	if (value.indexOf("mix") >= 0 || value.indexOf("混") >= 0) return "mixed";
+	if (value.indexOf("zh") >= 0 || value.indexOf("cn") >= 0 || value.indexOf("chinese") >= 0 || value.indexOf("中文") >= 0 || value === "中" || value.indexOf("汉语") >= 0) return "zh";
+	if (value.indexOf("en") >= 0 || value.indexOf("english") >= 0 || value.indexOf("英文") >= 0 || value === "英" || value.indexOf("英语") >= 0) return "en";
 	return "mixed";
 }
 

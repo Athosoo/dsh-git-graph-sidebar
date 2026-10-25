@@ -543,8 +543,8 @@ async function main() {
 	await writeFile(join(langzh, "GIT_CONVENTIONS.md"), [
 		"# Git 规范",
 		"",
-		"status: settled",
-		"language: zh",
+		"status: settled        # draft | settled",
+		"language: zh           # zh | en | mixed",
 		"",
 		"## 提交信息",
 		"",

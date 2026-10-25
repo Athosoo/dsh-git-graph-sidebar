@@ -281,6 +281,17 @@ The conventions strip used to say *2 of the last 5 commits do not match* and pri
 
 The picker's cancel button is now `sidebar.conventionsClose` (*Close*); the upgrade preview keeps `sidebar.previewCancel` (*Cancel*), because there it really does cancel a write. `sidebarTabReasonLabel()` and six `sidebar.reason*` keys went with the offender rows: 166 → 163 locale keys.
 
+## Front-matter values carry comments (1.8.3)
+
+The templates and the scaffold write their fields with an explanatory comment on the same line:
+
+```yaml
+status: draft          # draft | settled
+language: zh           # zh | en | mixed
+```
+
+`conventionWithLanguage()` and `conventionWithStrict()` only replace the line, so the comment survives - and a reader that compares the raw value against `zh` sees `zh           # zh | en | mixed` and falls back to `mixed`. `conventionFieldValue()` therefore cuts at the first `#` and strips paired quotes, and `conventionDocLanguageOf()` matches by containment (mix/混 first, then Chinese tokens, then English ones). The `repos/langzh` fixture in `test-host.mjs` keeps its comments on purpose: if the strip ever regresses, `rules.language` turns into `mixed` and the suite fails.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.
