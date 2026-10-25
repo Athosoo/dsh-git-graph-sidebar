@@ -37,13 +37,15 @@
 
 | 东西 | 位置 |
 | --- | --- |
-| 插件源码（git 仓库，工作副本） | `C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-src` |
-| 打包产物 | `...\default-workspace\dsh-git-graph-dist\<version>\`（含带版本与无版本两个 tgz） |
-| 演示/测试用仓库 | `...\default-workspace\graph-demo`（13 提交、4 泳道、3 次合并、`feature/c` 故意不合并）；其余夹具由 `scripts/test-host.mjs` 与 `scripts/preview-tab.mjs` 自己现建 |
+| 插件源码（git 仓库，工作副本） | `E:\git-graph\dsh-git-graph-src` |
+| 打包产物 | `E:\git-graph\dsh-git-graph-dist\<version>\`（含带版本与无版本两个 tgz） |
+| 演示/测试用仓库 | `E:\git-graph\graph-demo`（13 提交、4 泳道、3 次合并、`feature/c` 故意不合并）；其余夹具由 `scripts/test-host.mjs` 与 `scripts/preview-tab.mjs` 自己现建 |
 | 预览数据 | `scripts/preview-tab.mjs` 自带内置夹具（6 个仓库、5 行图谱），不带参数就能跑；要看真实仓库时传 `--repos <repos.json> --graph <graph.json>`，内容就是 `/git/repos`、`/git/graph` 的响应 |
 | DSH profile | `C:\Users\18316\.dsh\profiles\desktop`（`package.json` 的 bundles 含包名；依赖指向稳定副本 `file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.9.2.tgz`，因为工作区会被搬走） |
-| 市场收录克隆 | `...\default-workspace\awesome-dsh-plugin`（fork，分支 `add/athosoo-dsh-git-graph-sidebar`） |
-| 市场投稿材料 | `...\default-workspace\.market-pr\{pr-body.md,open-pr.sh}` |
+| 市场收录克隆 | `E:\git-graph\awesome-dsh-plugin`（fork，分支 `add/athosoo-dsh-git-graph-sidebar`） |
+| 市场投稿材料 | `E:\git-graph\.market-pr\{pr-body.md,open-pr.sh}` |
+
+工作区已于 2026-10-25 从 `C:\Users\18316\Documents\deepseek-harness\default-workspace` 迁到 `E:\git-graph`（旧目录已清空，只剩空壳）。上表与全文的路径、命令都按新位置写；`dsh-git-graph-dist\1.6.0` 这类旧版本目录已不存在，§5 的「原始步骤留档」只作流程参考。今后以 `E:\git-graph` 为唯一工作区。
 
 环境注意：
 - GUI 端口**每次重启都变**（历史上 65206/56515/50836/52702/56428/56004），一律以 runtime context 为准。
@@ -72,7 +74,7 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 ## 4. 构建与测试（改完必须全过）
 
 ```bash
-cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
+cd "E:/git-graph/dsh-git-graph-src"
 node scripts/build-lib.mjs      # → synced GitApi additions (6 blocks) + spliced 2843 / 1560 / 449 lines（tab / conventions / branches）
 node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
 node --check lib/client.js && node --check lib/index.js
@@ -87,7 +89,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --hide-scrollbars \
   --force-device-scale-factor=2 --window-size=452,1040 \
   --screenshot="C:\...\preview-shot.png" \
-  "file:///C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src/preview/graph-tab-hero.html"
+  "file:///E:/git-graph/dsh-git-graph-src/preview/graph-tab-hero.html"
 ```
 
 ## 5. 发布与安装（照抄）
@@ -479,11 +481,11 @@ return part.replace(/^HEAD -> /, "").trim();
    - 跑 §10 的全链路自检（应得 `spliced 2991 / 1278 / 329`、`already present 22`、`178 locale keys`、`132/132`、预览 9 节全过）；
    - `mkdir -p ../dsh-git-graph-dist/1.6.0 && npm pack --pack-destination ../dsh-git-graph-dist/1.6.0`，并复制一份无版本名；
    - commit（`feat(conventions): commit compliance, workspace document and upgrade preview (tier 3)`）→ `git gpush` → tag `v1.6.0` → GitHub Release（资产名 `dsh-git-graph-sidebar.tgz`）；tag 的 sha 必须用 `git rev-parse v1.6.0` 现取，别手写；
-   - 换装 `desktop`：`node "C:/Users/18316/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs" add "file:C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-dist/1.6.0/dsh-git-graph-sidebar.tgz"`（先备份 profile 的 `package.json`）；
+   - 换装 `desktop`：`node "C:/Users/18316/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs" add "file:E:/git-graph/dsh-git-graph-dist/1.6.0/dsh-git-graph-sidebar.tgz"`（先备份 profile 的 `package.json`）；
    - 让用户**重启 DSH**（三条新路由是 host 侧，不重启不生效）。
 3. **市场收录 PR**：门槛 = 仓库满 1 天 = `2026-10-24T22:07:00+08:00`。之后：
    ```bash
-   bash "C:/Users/18316/Documents/deepseek-harness/default-workspace/.market-pr/open-pr.sh"
+   bash "E:/git-graph/.market-pr/open-pr.sh"
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
 5. ~~发 1.9.0~~ **已完成**（commit `94923c9`、tag `v1.9.0`、Release id `423280585`、资产 `dsh-git-graph-sidebar.tgz` 874347 字节、`desktop` 已装 1.9.0）。
@@ -541,7 +543,7 @@ return part.replace(/^HEAD -> /, "").trim();
 ## 10. 下一步照做即可（最短路径）
 
 ```bash
-cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
+cd "E:/git-graph/dsh-git-graph-src"
 # 1) 全链路自检（都应为绿）
 node scripts/build-lib.mjs && node scripts/patch-host.mjs
 node --check lib/client.js && node --check lib/index.js
@@ -559,4 +561,4 @@ npm pack --pack-destination "../dsh-git-graph-dist/1.8.2"
 - 开发说明（布局、构建、发布、host 两处 region）：`DEVELOPMENT.md`
 - 用户向文档（中英双语）：`README.md` / `README.zh.md`
 - 上游来源与改动归属：`NOTICE`（上游 `@linxin666/dsh-client-ui-git-graph` 0.4.8）
-- 方案与早期评估：`...\default-workspace\git-graph-sidebar-multirepo-plan.md`
+- 方案与早期评估：`E:\git-graph\git-graph-sidebar-multirepo-plan.md`

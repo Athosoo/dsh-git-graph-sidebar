@@ -52,8 +52,9 @@ const outFile = argValue("--out") !== undefined
 		: join(root, "preview/graph-tab-preview.html");
 const usingRealData = reposFile !== undefined || graphFiles.length > 0;
 
-const WORKSPACE = "C:/Users/18316/Documents/deepseek-harness/default-workspace";
+const WORKSPACE = "E:/git-graph";
 const NESTED = WORKSPACE + "/dsh-git-graph-src";
+const WORKSPACE_NAME = WORKSPACE.split("/").pop();
 
 // ---------------------------------------------------------------- fake react
 let currentRender = null;
@@ -295,7 +296,7 @@ let REPOS = {
 		{
 			path: WORKSPACE,
 			root: WORKSPACE,
-			name: "default-workspace",
+			name: WORKSPACE_NAME,
 			relPath: "",
 			kind: "root",
 			outside: false,
@@ -819,7 +820,7 @@ if (!/已导出|已复制|Exported|SVG copied/.test(detailHtml)) throw new Error
 if (COPIED.length !== copiedBeforeExport + 1) throw new Error("export produced neither a download nor copied markup");
 const exportedSvg = COPIED[COPIED.length - 1] ?? "";
 if (exportedSvg.slice(0, 4) !== "<svg") throw new Error("exported markup does not start with <svg: " + exportedSvg.slice(0, 60));
-const exportRepoName = usingRealData ? "graph-demo" : focusEntry !== undefined ? focusEntry.name : "default-workspace";
+const exportRepoName = usingRealData ? "graph-demo" : focusEntry !== undefined ? focusEntry.name : WORKSPACE_NAME;
 for (const expected of ["xmlns=\"http://www.w3.org/2000/svg\"", "viewBox=\"0 0 ", "<title>", exportRepoName, "data-gitgraph-export-row="]) {
 	if (exportedSvg.indexOf(expected) < 0) throw new Error("exported SVG is missing " + JSON.stringify(expected));
 }
