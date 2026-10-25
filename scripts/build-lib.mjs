@@ -255,6 +255,17 @@ const API_METHODS = [{
 				return post("git/convention", payload);
 			}`
 }, {
+	guard: "conventionSettings(path, payload)",
+	code: `
+			/** Update only the subject language and strict switch of an existing document. */
+			conventionSettings(path, payload) {
+				const body = payload !== null && typeof payload === "object" ? payload : {};
+				const request = { path };
+				if (typeof body.strict === "boolean") request.strict = body.strict;
+				if ("zh" === body.language || "en" === body.language || "mixed" === body.language) request.language = body.language;
+				return post("git/convention/settings", request);
+			}`
+}, {
 	guard: "git/init",
 	code: `
 			/** Initialize a repository in a directory that has none yet. */

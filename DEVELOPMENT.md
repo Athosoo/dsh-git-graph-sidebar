@@ -14,7 +14,7 @@ This repository ships a prebuilt plugin. Running DSH loads `lib/index.js` (host 
 | `src/**/*.ts` | The upstream TypeScript sources, kept for reference. They are not compiled here. |
 | `scripts/build-lib.mjs` | Splices `SidebarTab.js` into `lib/client.js`, inserts the tab's locale keys into both dictionaries, adds the fork's `GitApi` methods, and splices `conventions.js` and `branches.js` into `lib/index.js` (writing the `branches` region header itself). Idempotent. |
 | `scripts/patch-host.mjs` | Idempotent patch of the upstream host bundle in 22 places: config fields, repository scan entries and decoration, and the `/git/conventions` + `/git/convention` + `/git/convention/preview` + `/git/compliance` + `/git/workspace-convention` + `/git/init` + `/git/cleanup` + `/git/health` routes. |
-| `scripts/test-host.mjs` | Offline end-to-end test of the host half (174 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance, upgrade previews, the workspace document, the cost of a scan (one ref probe per repository, cached while the refs sit still), gate rejections and error codes. |
+| `scripts/test-host.mjs` | Offline end-to-end test of the host half (186 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance, upgrade previews, the workspace document, the cost of a scan (one ref probe per repository, cached while the refs sit still), gate rejections and error codes. |
 | `scripts/validate-lib.mjs` | Checks that every `t("…")` key used in the tab exists in both the `zh` and `en` dictionaries, and that every `sidebarTab*` / `SIDEBAR_TAB_*` identifier is defined. |
 | `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html` (`-preview`, `-states`, `-hero`, `-overview`, `-tier3`). |
 | `scripts/prepend-shared.mjs` | One-off helper: extracts the shared prelude (helpers and style constants) of the tab region from a pristine `lib/client.js`. |
@@ -246,6 +246,20 @@ A scan answers "what is in this workspace": one `status` probe per repository, o
 - **The client polls less.** The twenty-second tick only re-scans the repository list; the graph follows the host's change stream, which already says when the selected repository moved. `loadGraph` is no longer in that effect's dependency list.
 
 The three `patch-host.mjs` patches that used to add the convention state, the scan view and the augment call to `repoScan()` are gone: that region has no `src/` counterpart, so it is edited directly and the patch count is 22. Section `[14]` of `test-host.mjs` proves the behaviour — two repositories, four scans, `2/0`, `0/2`, `0/2` (dirty worktree, still cached), `1/1` (one repository committed, the other cached).
+
+## Switches that stick (1.8.1)
+
+The picker's two front fields are part of the document, not of the session.
+
+- `conventionSettings(root, docName, strict, language)` in `src/host/conventions.js` rewrites only the front fields of an existing document (`conventionWithStrict` + `conventionWithLanguage`) and reports `convention-missing-document` when there is nothing to rewrite. It is reachable as `POST /git/convention/settings` and as `action: "settings"` on `/git/workspace-convention`.
+- `repoConventionState()` and `workspaceConventionState()` return `strict`, `language` and `languageStated`, so the picker opens on what the document says. `languageStated` matters: a document with no `language:` line means "mixed" without claiming a rule.
+- The client stores a switch the moment it is clicked (`applyConventionSettings`) and re-reads it on the next scan; `writeWorkspaceDoc` sends both fields with the write.
+- A container that is not a repository used to inject only the index of the repositories below it. `conventionsDocumentFor()` now climbs to `<workspace>/.dsh/<doc>` and the prompt carries the document itself (language line, strict paragraph, machine-checkable rules, body) plus that index.
+
+Two traps worth remembering:
+
+1. A regex written through a python heredoc loses its backslash escapes (`\b` becomes `b`), and the only检查 that catches it is `node --check lib/index.js`.
+2. `test-host.mjs` needs a real repository to prove `convention-missing-document`; a plain directory answers `not-a-repository` first.
 
 ## Known debt
 

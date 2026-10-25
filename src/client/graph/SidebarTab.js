@@ -1537,7 +1537,9 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				setConventionError(null);
 				setWorkspaceError(null);
 				sidebarTabGit().workspaceConvention(workspaceKey, {
-					action: "write"
+					action: "write",
+					strict: strictMode,
+					language: conventionLang
 				}).then((result) => {
 					setWorkspaceBusy(false);
 					if (!result.ok || result.value === null || result.value === void 0) {
@@ -1557,7 +1559,26 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setWorkspaceBusy(false);
 					setWorkspaceError(t("sidebar.error.conventions"));
 				});
-			}, [runScan, t, workspaceBusy, workspaceDoc, workspaceKey]);
+			}, [conventionLang, runScan, strictMode, t, workspaceBusy, workspaceDoc, workspaceKey]);
+
+		/** A switch clicked on an existing document is stored right away, not on the next framework pick. */
+		const applyConventionSettings = react.useCallback((next) => {
+			if (selected === void 0) return;
+			const state = selected.conventions !== null && typeof selected.conventions === "object" ? selected.conventions : null;
+			if (state === null || state.exists !== true) return;
+			sidebarTabGit().conventionSettings(selected.path, next).then((result) => {
+				if (!result.ok) return;
+				runScan(true);
+			}).catch(() => {});
+		}, [selected, runScan]);
+
+		/** The switches always show what the document says, not what was clicked last. */
+		react.useEffect(() => {
+			const state = selected !== void 0 && selected.conventions !== null && typeof selected.conventions === "object" ? selected.conventions : null;
+			if (state === null) return;
+			setStrictMode(state.strict === true);
+			setConventionLang(state.languageStated === true && (state.language === "zh" || state.language === "en" || state.language === "mixed") ? state.language : "mixed");
+		}, [selectedKey, scan]);
 			/** The confirmation fades out on its own; the chip keeps the new state. */
 			react.useEffect(() => {
 				if (workspaceNote !== true) return void 0;
@@ -2406,7 +2427,14 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						title: t("sidebar.strictHint"),
 						style: strictMode === true ? SIDEBAR_TAB_STRICT_ON : SIDEBAR_TAB_STRICT_OFF,
 						disabled: conventionBusy,
-						onClick: () => setStrictMode((current) => current !== true)
+						onClick: () => {
+							const next = strictMode !== true;
+							setStrictMode(next);
+							applyConventionSettings({
+								strict: next,
+								language: conventionLang
+							});
+						}
 					}, (strictMode === true ? "☑ " : "☐ ") + t("sidebar.strict")), h("span", {
 						key: "strict-hint",
 						style: SIDEBAR_TAB_STRICT_NOTE
@@ -2423,7 +2451,13 @@ const SIDEBAR_TAB_COMPLIANCE = {
 							title: t("sidebar.languageHint"),
 							style: conventionLang === value ? SIDEBAR_TAB_STRICT_ON : SIDEBAR_TAB_STRICT_OFF,
 							disabled: conventionBusy,
-							onClick: () => setConventionLang(value)
+							onClick: () => {
+								setConventionLang(value);
+								applyConventionSettings({
+									strict: strictMode,
+									language: value
+								});
+							}
 						}, value === "zh" ? t("sidebar.langZh") : value === "en" ? t("sidebar.langEn") : t("sidebar.langMixed")))));
 					children.push(langRow);
 					children.push(h("div", {

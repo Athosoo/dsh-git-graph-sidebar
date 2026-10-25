@@ -705,6 +705,63 @@ const noRules = await call("/git/compliance", { path: docless });
 	const movedB = entryAt(scanMoved.json, scanB);
 	check("the moved repository reports newer activity", typeof movedB.activity === "number" && movedB.activity >= (activityFirst[rootKeyOf(scanB)] ?? 0), JSON.stringify(movedB.activity));
 
+	console.log("\n[15] switch-only updates keep the document, and the workspace document reaches the prompt");
+
+	const switched = join(workspace, "repos", "switched");
+	await mkdir(switched, { recursive: true });
+	await git(switched, "init", "-b", "main");
+	await writeFile(join(switched, "GIT_CONVENTIONS.md"), [
+		"# Git 规范 / Git conventions",
+		"",
+		"```yaml",
+		"status: settled",
+		"framework: conventional-commits",
+		"```",
+		"",
+		"## 1. 提交信息 / Commit messages",
+		"",
+		"- type 取值：`feat` / `fix` / `docs`",
+		""
+	].join("\n"), "utf8");
+	await writeFile(join(switched, "a.txt"), "a\n", "utf8");
+	await git(switched, "add", ".");
+	await git(switched, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: keep the body");
+
+	const beforeSwitches = await call("/git/conventions", { path: switched });
+	check("no language is reported before one is stated", beforeSwitches.json?.value?.languageStated === false, JSON.stringify(beforeSwitches.json?.value?.languageStated));
+
+	const setSwitches = await call("/git/convention/settings", { path: switched, strict: true, language: "zh" });
+	check("/git/convention/settings ok", setSwitches.json?.ok === true, setSwitches.raw.slice(0, 200));
+	const switchedBody = await readFile(join(switched, "GIT_CONVENTIONS.md"), "utf8");
+	check("a switch update keeps the body", switchedBody.includes("## 1. 提交信息 / Commit messages"), switchedBody.slice(0, 160));
+	check("a switch update writes strict and language", /\nstrict: true/.test(switchedBody) && /\nlanguage: zh/.test(switchedBody), switchedBody.slice(0, 200));
+
+	const switchedState = await call("/git/conventions", { path: switched });
+	check("the state reports the stored switches", switchedState.json?.value?.strict === true && switchedState.json?.value?.language === "zh" && switchedState.json?.value?.languageStated === true, JSON.stringify(switchedState.json?.value?.strict) + "/" + JSON.stringify(switchedState.json?.value?.language));
+
+	const strictOnly = await call("/git/convention/settings", { path: switched, strict: false });
+	const strictOnlyBody = await readFile(join(switched, "GIT_CONVENTIONS.md"), "utf8");
+	check("a strict-only update keeps the language", strictOnly.json?.ok === true && /\nlanguage: zh/.test(strictOnlyBody) && /\nstrict: false/.test(strictOnlyBody), strictOnlyBody.slice(0, 200));
+
+	const undocumented = join(workspace, "repos", "undocumented");
+	await mkdir(undocumented, { recursive: true });
+	await git(undocumented, "init", "-b", "main");
+	await writeFile(join(undocumented, "a.txt"), "a\n", "utf8");
+	await git(undocumented, "add", ".");
+	await git(undocumented, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+	const noDocument = await call("/git/convention/settings", { path: undocumented });
+	check("switches without a document are refused", noDocument.json?.ok === false && noDocument.json?.error?.code === "convention-missing-document", JSON.stringify(noDocument.json?.error?.code));
+
+	await call("/git/workspace-convention", { path: wsContainer, action: "write", framework: "conventional-commits", strict: true, language: "en", force: true });
+	const workspaceText = section.text(cwdOf(wsContainer));
+	check("the workspace document reaches a container prompt", workspaceText.includes("this workspace's Git conventions"), workspaceText.slice(0, 200));
+	check("the container prompt states the language", workspaceText.includes("Subject language: English only"), workspaceText.slice(0, 400));
+	check("the container prompt states the strict mode", workspaceText.includes("This document is strict"), workspaceText.slice(0, 400));
+
+	const workspaceSwitches = await call("/git/workspace-convention", { path: wsContainer, action: "settings", language: "zh" });
+	const workspaceBody = await readFile(join(wsContainer, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
+	check("the workspace switches update in place", workspaceSwitches.json?.ok === true && /\nlanguage: zh/.test(workspaceBody) && /\nstrict: true/.test(workspaceBody), workspaceBody.slice(0, 200));
+	check("the container prompt follows a switch update", section.text(cwdOf(wsContainer)).includes("Subject language: Chinese only"), section.text(cwdOf(wsContainer)).slice(0, 300));
 	await rm(workspace, { recursive: true, force: true });
 
 	const failed = checks.filter((entry) => !entry.ok);

@@ -2,13 +2,14 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 14:40 (+08)。
+> 最后更新：2026-10-25 15:35 (+08)。
 
 ## 0. 一句话状态
 
 插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 已提交（`awesome-dsh-plugin#9196`，按维护者四条修正描述后 push 到 `a4521fc`）。
 
 **1.8.0 已发布、已推送、已装进 `desktop`**：主题语言进了规范本身（1.7.3 的改动随 1.8.0 一起发布），并且扫描成本下来了——每个仓库的 refs 探针从三次合成一次 `git for-each-ref`，refs 没动时整轮命中缓存（`timings.probeSpawns` / `timings.probeHits` 写在 `/git/repos` 的返回里），规范文档改成并发批量读，状态探针并发 4 → 8、单仓超时 5s → 2.5s，客户端 20 秒轮询只刷仓库列表、图谱交给变更流。`build-lib` spliced 2674 / 1455 / 449 行、`patch-host` 22 处、166 个 locale 键、host 174/174。**1.7.3 的语言策略**：主题语言进了规范本身——文档前置元数据支持 `language: zh\|en\|mixed`（写在 `strict:` 之后），选择列表多一行「提交语言」，预览与写入都带上它，`git/compliance` 在语言写死时给违规主题一个 `lang` 原因，注入的提示块始终有一行 `Subject language: …`。顺手修掉两个真 bug：`conventionInsertField()` 重复拼冒号（`status::`）导致语言行永远落到文件顶部；`build-lib.mjs` 的 GitApi 注入改成「先按方法名删除、再按序插回」，避免旧签名残留覆盖新方法。
+**1.8.1 代码完成、待发版**：修「设置了却不生效」——新 `conventionSettings()` 与 `/git/convention/settings`（工作区侧用 `action: "settings"`）只改文档前置的 `strict` / `language` 而不重建正文，`repoConventionState()` / `workspaceConventionState()` 把这两个字段读出来，选择列表据此显示文档里的值，点开关即刻落盘；容器（不是仓库）的 cwd 现在会读 `<工作区>/.dsh/GIT_CONVENTIONS.md` 并把它（含语言行、strict 段、可机检规则与正文）连同子仓索引注入提示块。`patch-host` 23 处、host **186/186**。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 ## 1. 这个插件是什么（读懂需求演进）
@@ -138,6 +139,7 @@ node scripts/preview-tab.mjs \
 | 1.7.2 | 工作区总纲写入后的反馈：成功提示、失败消息、以及「打开 / 复制路径」按钮；已发布并已装 |
 | 1.7.3 | 主题语言策略：`language:` 字段、选择器、`lang` 合规原因、注入块一行 `Subject language:`；随 1.8.0 一起发布 |
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
+| 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -337,6 +339,38 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 
 比较仓库路径必须走 `rootKeyOf()`（小写 + 反斜杠换斜杠），Windows 会把同一个目录以另一种大小写还回来。
 
+
+## 7.6 1.8.1 的改动（设置真的会生效）
+
+起因是一个真实的用户反馈：在仓库图谱里把「提交语言」设成中文、把「强约束」打开，提交时却什么都没变。查下来是**四条彼此独立的断点**，代码从来没有一条链路把这两个开关从界面送到文档、再送到注入的提示里。
+
+### 7.6.1 四个真因
+1. `writeWorkspaceDoc`（`src/client/graph/SidebarTab.js`）只发 `{action: "write"}`，不带 `strict` / `language`，所以「创建工作区规范」写出的 `.dsh/GIT_CONVENTIONS.md` 里没有这两个字段——尽管 host 的 `workspaceConvention()` 早就接受它们。
+2. 容器（不是 git 仓库的目录，例如工作区根）的提示注入完全不读工作区文档：`conventionsDocumentFor(cwd, docName)` 第一行 `const root = conventionsRepoRoot(cwd); if (root === void 0) return void 0;` → 退到 `conventionsContainerBlock()`，那里只列子仓文档路径，从不读文档自身内容。
+3. 选择列表的两个开关从不从文档回读：`repoConventionState()` 只返回 `{doc, docPath, exists, size, draft}`，客户端是 `useState(false)` / `useState("mixed")`，看起来永远是没保存的样子。
+4. 开关只在「点框架卡片」时随整篇文档写入，单点开关不落盘，界面也没有任何「未保存」提示。
+
+### 7.6.2 host（`src/host/conventions.js`）
+- `repoConventionState()` 与 `workspaceConventionState()` 读全文后返回 `strict: conventionStrictOf(text)`、`language: conventionDocLanguageOf(text)`、`languageStated: conventionFieldValue(text, "language") !== ""`；两个 `exists: false` 分支补 `strict: false, language: "mixed", languageStated: false`。
+- 新 `async function conventionSettings(root, docName, strictMode, languageMode)`：读现有文档 → `conventionWithStrict(conventionWithLanguage(current, language), strict)` → `repoWriteConvention(root, doc, next, {force: true})`。**只改前置字段，不重建正文**；文档不存在或为空返回 `{ok: false, error: {code: "convention-missing-document"}}`；成功返回 `{ok: true, value: {root, doc, docPath, bytes, strict, language}}`。
+- `workspaceConvention()` 加 `if (mode === "settings") return await conventionSettings(root, CONVENTION_WORKSPACE_DIR + "/" + doc, strict, language);`
+- `conventionsDocumentFor()` 的 `root === void 0` 分支改为向上找 `.dsh/<doc>`（`conventionsWorkspaceDocFor(resolve(cwd), docName)`），命中返回 `{root: workspace, owner: workspace, path: containerPath, container: true}`。
+- 新 `function conventionsWorkspacePromptBlock(root, docPath, docName, body)`：标题 `## <doc> - this workspace's Git conventions`、`Workspace: <root>`、`Document: ...`、容器导语、strict 段、`conventionLanguageLine(...)`、`conventionRuleSummary(...)`、正文（超 `CONVENTION_PROMPT_MAX_CHARS` 截断），末尾接 `conventionsContainerBlock(root, docName)` 的子仓索引。
+- `conventionsPromptText()` 按 `found.container === true` 二选一。
+
+### 7.6.3 路由（`scripts/patch-host.mjs` 第 16 段，共 23 处）
+- `convention-settings-route`：在 `case "/git/convention": {` 之前插 `case "/git/convention/settings": {`，gate → `service.rootAndHead` → `conventionSettings(snapshot.root, feature.docName, policy.strict, policy.language)` → `OK(updated.value)`；guard 是 `			case "/git/convention/settings": {` 这一行。
+- 工作区侧复用 `/git/workspace-convention` 的 `action: "settings"`，无需新路由。
+
+### 7.6.4 客户端（`src/client/graph/SidebarTab.js`）
+- `writeWorkspaceDoc` 的 payload 变成 `{action: "write", strict, language}`，依赖数组加 `conventionLang` / `strictMode`。
+- 新 `applyConventionSettings`（`react.useCallback`，依赖 `[selected, runScan]`）：`selected.conventions.exists !== true` 直接返回，否则 `conventionSettings(selected.path, next)` 成功后 `runScan(true)`。
+- 两个开关的 onClick 都是「先 setState，再 `applyConventionSettings({strict, language})`」。
+- 新回读 effect（依赖 `[selectedKey, scan]`）：`setStrictMode(state.strict === true)`、`setConventionLang(state.languageStated === true ? state.language : "mixed")`。
+
+### 7.6.5 测试
+- `scripts/test-host.mjs` 第 [15] 段：`repos/switched` 上 `languageStated === false` → `POST /git/convention/settings {strict:true, language:"zh"}` 后正文仍在、出现 `strict: true` 与 `language: zh`、state 报回三字段 → 只传 `{strict:false}` 时 `language: zh` 保留 → `repos/undocumented`（真仓库、无文档）返回 `convention-missing-document` → 工作区 `write` 带 `strict:true, language:"en"` 后 `section.text(cwdOf(wsContainer))` 含 `this workspace's Git conventions` / `Subject language: English only` / `This document is strict` → `action:"settings", language:"zh"` 后文档同时有 `language: zh` 与 `strict: true`，提示块变成 `Subject language: Chinese only`。共 **186/186**。
+- `scripts/preview-tab.mjs`：`SETTINGS_CALLS` 计数器 + `git/convention/settings` stub；点「中文」→ 立刻 1 次调用且 `language === "zh"`、`strict === false`；点强约束开 → 2 次且 `strict === true`、语言仍是 `zh`；再点关 → 3 次且 `strict === false`；创建工作区文档的 payload 必须带 `strict === false` 与 `language === "zh"`。
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -354,6 +388,7 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
+6. **1.8.1（已完成代码，待发版）**：`patch-host` 23 处、186/186、166 个 locale 键；发版照 §10 把路径换成 `1.8.1`。
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
@@ -390,6 +425,9 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 27. **`git checkout -- lib/*.js` 会把换行变成 CRLF**：仓库 `core.autocrlf=true`，blob 是 LF、检出成 CRLF，而 build-lib 的 `REGION_END = "\n\t\t//#endregion\n//#region src/client/index.ts"` 是 LF 字面量 → 直接报 `region end marker not found in lib/client.js`。恢复 `lib/` 后先 `python` 把 `\r\n` 换成 `\n` 再 build（提交时 git 会自己转回 LF，不会产生差异）。
 28. **同一个 `switch` 里的多处补丁要各自带 guard**：`patch()` 的幂等判定是 `source.includes(replacement)`，可一旦后一个补丁把新 case 插进前一个补丁的「块 + 锚点行」之间，replacement 就再也不是连续文本 → 每次运行都重复插入（实测 `case "/git/init"` 累积到 7 份、`lib/index.js` 从 3743 涨到 4636 行）。现在 `patch(label, anchor, replacement, guard)` 支持第四参，第 9/13 段分别用 `'\t\t\tcase "/git/init": {'`、`'\t\t\tcase "/git/compliance": {'` 判定，连跑两次稳定输出 `applied 0, already present 22`。
 
+29. 拼 JS 正则时 `\b` 的 `b` 会被 python 字符串吃掉（写成 `"\bstatus"` 结果是 `\status`），`SyntaxError: Invalid regular expression: missing /` 只在 `node --check lib/index.js` 时才暴露 → 正则里出现反斜杠一律用 `chr(92)` 拼，或者把整段 JS 用 quoted heredoc 写进文件再插入。
+30. 用户说「设置了不生效」时，先数链路节点：界面状态 → 请求 payload → 路由 → 写盘 → 回读 → 注入。这次四个节点各断一处，逐个用 `grep` 验证比猜快得多。
+
 ## 10. 下一步照做即可（最短路径）
 
 ```bash
@@ -400,7 +438,7 @@ node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
 # 2) 升 1.8.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.8.0"
+npm pack --pack-destination "../dsh-git-graph-dist/1.8.1"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

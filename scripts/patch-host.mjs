@@ -375,6 +375,38 @@ patch(
 	"workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict"
 );
 
+patch(
+	"convention-settings-route",
+	`			case "/git/convention": {`,
+	`			case "/git/convention/settings": {
+				const gated = await createWorkspaceGate(ctx)(path);
+				if (!gated.ok) {
+					writeJson(res, 200, FAIL(gated.error));
+					return;
+				}
+				const feature = featureOf(config);
+				const snapshot = await service.rootAndHead(gated.canonical).catch(() => null);
+				if (snapshot === null || typeof snapshot.root !== "string") {
+					writeJson(res, 200, FAIL({
+						code: "not-a-repository",
+						message: "path is not a git repository"
+					}));
+					return;
+				}
+				const policy = payload !== null && typeof payload === "object" ? payload : {};
+				const updated = await conventionSettings(snapshot.root, feature.docName, policy.strict, policy.language);
+				if (!updated.ok) {
+					writeJson(res, 200, FAIL(updated.error));
+					return;
+				}
+				ctx.logger.info("dsh-git-graph: updated the convention switches in " + updated.value.docPath);
+				writeJson(res, 200, OK(updated.value));
+				return;
+			}
+			case "/git/convention": {`,
+	`			case "/git/convention/settings": {`
+);
+
 // A route case may appear exactly once: two copies mean an earlier run
 // inserted a block a second time, and the second copy is dead code.
 const caseLines = source.split(String.fromCharCode(10)).map((line) => line.trim()).filter((line) => line.startsWith("case \"") && line.endsWith(": {"));

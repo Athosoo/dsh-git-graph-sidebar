@@ -494,6 +494,7 @@ const COPIED = [];
 const CONVENTION_CALLS = [];
 /** Every workspace document write, and the shared document's fake state. */
 const WORKSPACE_CALLS = [];
+const SETTINGS_CALLS = [];
 const WORKSPACE_DOC = { exists: false, draft: false, size: 0 };
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
@@ -549,6 +550,29 @@ const fakeFetch = async (path, init) => {
 			? entry.conventions
 			: { doc: "GIT_CONVENTIONS.md", docPath: String(payload.path) + "/GIT_CONVENTIONS.md", exists: false, size: 0, draft: false };
 		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG }, state);
+	} else if (path === "git/convention/settings") {
+		// A switch-only update keeps the body, so the stub keeps the entry and only
+		// moves the two front fields.
+		SETTINGS_CALLS.push(Object.assign({}, payload));
+		const switchEntry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
+		if (switchEntry !== undefined && switchEntry.conventions !== undefined && switchEntry.conventions !== null) {
+			switchEntry.conventions = Object.assign({}, switchEntry.conventions, {
+				strict: payload.strict === true,
+				language: typeof payload.language === "string" ? payload.language : "mixed",
+				languageStated: typeof payload.language === "string"
+			});
+		}
+		value = {
+			ok: true,
+			value: {
+				root: payload.path,
+				doc: "GIT_CONVENTIONS.md",
+				docPath: String(payload.path) + "/GIT_CONVENTIONS.md",
+				bytes: 2400,
+				strict: payload.strict === true,
+				language: typeof payload.language === "string" ? payload.language : "mixed"
+			}
+		};
 	} else if (path === "git/convention") {
 		// The host writes the document and reports the new state; the stub flips
 		// the repository entry so the following /git/repos refresh sees it.
@@ -1030,6 +1054,22 @@ let pickerHtml = "";
 	await tierMount.render();
 	const zhAfter = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-lang"] === "zh")[0];
 	if (zhAfter === undefined || zhAfter.props["aria-pressed"] !== "true") throw new Error("choosing Chinese did not mark the button");
+	if (SETTINGS_CALLS.length !== 1) throw new Error("toggling the subject language on a settled document must store it right away, got " + SETTINGS_CALLS.length);
+	if (SETTINGS_CALLS[0].language !== "zh") throw new Error("the language switch sent " + String(SETTINGS_CALLS[0].language));
+	if (SETTINGS_CALLS[0].strict !== false) throw new Error("the language switch should carry the strict flag as it stands");
+	const strictSwitch = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-strict")[0];
+	if (strictSwitch === undefined) throw new Error("the picker lost its strict switch");
+	click(strictSwitch, "turn strict on");
+	await wait(20);
+	await tierMount.render();
+	if (SETTINGS_CALLS.length !== 2) throw new Error("toggling strict on a settled document must store it right away, got " + SETTINGS_CALLS.length);
+	if (SETTINGS_CALLS[1].strict !== true) throw new Error("the strict switch did not send true");
+	if (SETTINGS_CALLS[1].language !== "zh") throw new Error("the strict switch dropped the language, sent " + String(SETTINGS_CALLS[1].language));
+	const strictBack = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-strict")[0];
+	click(strictBack, "turn strict off again");
+	await wait(20);
+	await tierMount.render();
+	if (SETTINGS_CALLS.length !== 3 || SETTINGS_CALLS[2].strict !== false) throw new Error("turning strict off did not reach the host");
 	const tierCard = findAll(tierMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string")[0];
 	if (tierCard === undefined) throw new Error("no framework card to preview");
 	const tierFramework = tierCard.props["data-gitgraph-framework"];
@@ -1057,6 +1097,8 @@ let pickerHtml = "";
 	click(createButton, "create workspace document");
 	await wait(60);
 	if (WORKSPACE_CALLS.length !== 1) throw new Error("creating the workspace document must call the host once, got " + WORKSPACE_CALLS.length);
+	if (WORKSPACE_CALLS[0].strict !== false) throw new Error("the workspace document should carry the strict switch, got " + String(WORKSPACE_CALLS[0].strict));
+	if (WORKSPACE_CALLS[0].language !== "zh") throw new Error("the workspace document should carry the subject language, got " + String(WORKSPACE_CALLS[0].language));
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf('data-gitgraph-workspace-doc="draft"') < 0) throw new Error("the workspace strip did not report the new document");
 	if (tierHtml.indexOf('data-gitgraph-workspace-note="written"') < 0) throw new Error("creating the workspace document left no confirmation in the strip");
