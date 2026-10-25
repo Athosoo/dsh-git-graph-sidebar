@@ -39,10 +39,9 @@
 | --- | --- |
 | 插件源码（git 仓库，工作副本） | `C:\Users\18316\Documents\deepseek-harness\default-workspace\dsh-git-graph-src` |
 | 打包产物 | `...\default-workspace\dsh-git-graph-dist\<version>\`（含带版本与无版本两个 tgz） |
-| 演示/测试用仓库 | `...\default-workspace\graph-demo`（13 提交、4 泳道、3 次合并、`feature/c` 故意不合并）、`...\default-workspace\dsh-git-graph-smoke\{alpha,nest/beta}` |
-| 真实图谱数据（预览/断言用） | `...\default-workspace\.demo\data\repos.json`、`graph-*.json` |
-| 开发期脚本/截图 | `...\default-workspace\.demo\`（`patch-*.py`、`probe-*.mjs`、`fetch-graphs.mjs`、`data\*.png`） |
-| DSH profile | `C:\Users\18316\.dsh\profiles\desktop`（`package.json:31` bundles 含包名；`:45` 依赖为 `file:...dsh-git-graph-dist/1.5.0/dsh-git-graph-sidebar.tgz`） |
+| 演示/测试用仓库 | `...\default-workspace\graph-demo`（13 提交、4 泳道、3 次合并、`feature/c` 故意不合并）；其余夹具由 `scripts/test-host.mjs` 与 `scripts/preview-tab.mjs` 自己现建 |
+| 预览数据 | `scripts/preview-tab.mjs` 自带内置夹具（6 个仓库、5 行图谱），不带参数就能跑；要看真实仓库时传 `--repos <repos.json> --graph <graph.json>`，内容就是 `/git/repos`、`/git/graph` 的响应 |
+| DSH profile | `C:\Users\18316\.dsh\profiles\desktop`（`package.json` 的 bundles 含包名；依赖指向稳定副本 `file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.9.2.tgz`，因为工作区会被搬走） |
 | 市场收录克隆 | `...\default-workspace\awesome-dsh-plugin`（fork，分支 `add/athosoo-dsh-git-graph-sidebar`） |
 | 市场投稿材料 | `...\default-workspace\.market-pr\{pr-body.md,open-pr.sh}` |
 
@@ -524,7 +523,7 @@ return part.replace(/^HEAD -> /, "").trim();
 23. **locale 键的引号会被外层吃掉**：用 python heredoc 写 `['"sidebar.x"', '"值"']` 时容易生成 `["sidebar.x", "值"]`，build-lib 插出 `sidebar.compliance: 提交合规`（无引号）→ `lib/client.js:1714 SyntaxError: Unexpected token '.'`。可靠写法：`Q = chr(34); OPEN = chr(39) + Q; CLOSE = Q + chr(39)`；已损坏的行用 `re.compile(r"^[ \t]*sidebar\.(compliance|preview|workspaceDoc)[A-Za-z]*: .*,$", re.M)` 删掉再重跑 build-lib。
 24. **python 字符串里的 Windows 路径会语法报错**：`"...\Users\18316\..."` 触发 `SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes ... truncated \UXXXXXXXX escape`，`\d`/`\s` 则被吞成 `d`/`s`。用 `chr(92)` 拼、写 raw string，或把长文本先 `cat > .tmp.md <<'MD'`（单引号 heredoc 不解析反斜杠）再让 python 读文件插入。
 25. **给预览页做「浅色变体」前先确认 CSS 支持**：`.html.replace("<body>", '<body data-theme="light">')` 只对含 `body[data-theme="light"]` 覆盖的页面（hero/overview）有效；states 页没有这些覆盖（`grep -c light preview/graph-tab-states.html` = 0），硬写出来是假的浅色页，已删。
-26. **截图单面板要拼独立 HTML**：Chrome 传相对路径会 `net::ERR_HTTP_RESPONSE_CODE_FAILURE`，必须 `file:///C:/...` 绝对 URL；只想拍某一段时用 python 从生成页里 `s.index("<h2>Upgrade preview")` 切片，套上 shell 的 head/style 另存 `.demo/preview-only.html`。
+26. **截图单面板要拼独立 HTML**：Chrome 传相对路径会 `net::ERR_HTTP_RESPONSE_CODE_FAILURE`，必须 `file:///C:/...` 绝对 URL；只想拍某一段时用 python 从生成页里 `s.index("<h2>Upgrade preview")` 切片，套上 shell 的 head/style 另存 `%TEMP%\preview-only.html`。
 
 27. **`git checkout -- lib/*.js` 会把换行变成 CRLF**：仓库 `core.autocrlf=true`，blob 是 LF、检出成 CRLF，而 build-lib 的 `REGION_END = "\n\t\t//#endregion\n//#region src/client/index.ts"` 是 LF 字面量 → 直接报 `region end marker not found in lib/client.js`。恢复 `lib/` 后先 `python` 把 `\r\n` 换成 `\n` 再 build（提交时 git 会自己转回 LF，不会产生差异）。
 28. **同一个 `switch` 里的多处补丁要各自带 guard**：`patch()` 的幂等判定是 `source.includes(replacement)`，可一旦后一个补丁把新 case 插进前一个补丁的「块 + 锚点行」之间，replacement 就再也不是连续文本 → 每次运行都重复插入（实测 `case "/git/init"` 累积到 7 份、`lib/index.js` 从 3743 涨到 4636 行）。现在 `patch(label, anchor, replacement, guard)` 支持第四参，第 9/13 段分别用 `'\t\t\tcase "/git/init": {'`、`'\t\t\tcase "/git/compliance": {'` 判定，连跑两次稳定输出 `applied 0, already present 22`。
