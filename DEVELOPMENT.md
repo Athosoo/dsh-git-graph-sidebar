@@ -14,7 +14,7 @@ This repository ships a prebuilt plugin. Running DSH loads `lib/index.js` (host 
 | `src/**/*.ts` | The upstream TypeScript sources, kept for reference. They are not compiled here. |
 | `scripts/build-lib.mjs` | Splices `SidebarTab.js` into `lib/client.js`, inserts the tab's locale keys into both dictionaries, adds the fork's `GitApi` methods, and splices `conventions.js` and `branches.js` into `lib/index.js` (writing the `branches` region header itself). Idempotent. |
 | `scripts/patch-host.mjs` | Idempotent patch of the upstream host bundle in 22 places: config fields, repository scan entries and decoration, and the `/git/conventions` + `/git/convention` + `/git/convention/preview` + `/git/compliance` + `/git/workspace-convention` + `/git/init` + `/git/cleanup` + `/git/health` routes. |
-| `scripts/test-host.mjs` | Offline end-to-end test of the host half (132 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance, upgrade previews, the workspace document, gate rejections and error codes. |
+| `scripts/test-host.mjs` | Offline end-to-end test of the host half (174 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance, upgrade previews, the workspace document, the cost of a scan (one ref probe per repository, cached while the refs sit still), gate rejections and error codes. |
 | `scripts/validate-lib.mjs` | Checks that every `t("…")` key used in the tab exists in both the `zh` and `en` dictionaries, and that every `sidebarTab*` / `SIDEBAR_TAB_*` identifier is defined. |
 | `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html` (`-preview`, `-states`, `-hero`, `-overview`, `-tier3`). |
 | `scripts/prepend-shared.mjs` | One-off helper: extracts the shared prelude (helpers and style constants) of the tab region from a pristine `lib/client.js`. |
@@ -212,7 +212,7 @@ Two traps worth remembering:
   run `sidebarTabEnsureStyle()`; `scripts/preview-tab.mjs` declares the same three
   variables in its own shell so the previews match.
 
-## Subject language (1.7.3)
+## Subject language (1.7.3, shipped in 1.8.0)
 
 `src/host/conventions.js` stores the language policy as one more front line of the same document:
 
@@ -228,6 +228,24 @@ Two traps worth knowing:
 
 - `conventionInsertField()` takes a key that may already carry a colon; normalise it (`replace(/:+$/, "")`) before appending one, otherwise the anchor becomes `status::` and never matches, and the new line lands at the top of the file.
 - `scripts/build-lib.mjs` strips a GitApi addition by method name before inserting it again. Never rely on `includes(guard)`: when a signature changes the guard no longer matches, the old definition stays, and in an object literal the later (older) method wins.
+
+## Scan cost and caches (1.8.0)
+
+A scan answers "what is in this workspace": one `status` probe per repository, one ref probe per repository, and one document read per repository. The first two used to be four spawns; now it is two on a cold scan and one on every later scan.
+
+- **One ref probe.** `summaryRowsArgv()` asks `for-each-ref refs/heads` for name, tip date, upstream and `%(upstream:track)` in a single call, so `parseUpstreamTrack()` derives ahead/behind without `rev-list` or `rev-parse`. `repoSummaryOf()` picks the checked-out branch, else the first branch with an upstream, else the first branch, and returns `{activity, upstream}`.
+- **The fingerprint cache.** `repoSummaryFingerprint(root)` is the content of `.git/HEAD` plus the `mtimeMs` of `.git/logs/HEAD` — every commit, checkout and branch creation rewrites that reflog. It deliberately ignores `.git/index`: `git status` may touch it, and the status probe runs on every scan anyway, so folding the index in would make the cache miss every time. A hit skips the spawn entirely and records `probeHits`. `.git` as a file (submodule or linked worktree) is resolved through its `gitdir:` line.
+- **The counter window.** `repoScan()` clears the counters before `repoAugment()` and reads them after, so `timings` describes this scan only:
+
+  ```js
+  timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
+  ```
+
+  Taking the snapshot before the work it measures silently reports zeros — that is exactly what the first cut did.
+- **Batched document reads.** `repoScan()` groups `repoConventionState()` calls by `REPO_SCAN_CONCURRENCY` instead of awaiting them one at a time. Status probes are 8 at a time with a 2.5 s budget per repository (`REPO_SCAN_STATUS_TIMEOUT_MS`), so one slow repository cannot hold a batch slot for five seconds.
+- **The client polls less.** The twenty-second tick only re-scans the repository list; the graph follows the host's change stream, which already says when the selected repository moved. `loadGraph` is no longer in that effect's dependency list.
+
+The three `patch-host.mjs` patches that used to add the convention state, the scan view and the augment call to `repoScan()` are gone: that region has no `src/` counterpart, so it is edited directly and the patch count is 22. Section `[14]` of `test-host.mjs` proves the behaviour — two repositories, four scans, `2/0`, `0/2`, `0/2` (dirty worktree, still cached), `1/1` (one repository committed, the other cached).
 
 ## Known debt
 

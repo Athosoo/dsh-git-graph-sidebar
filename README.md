@@ -13,6 +13,7 @@ A Git browsing plugin for DeepSeek Harness (DSH): a branch chip in the composer,
 The tab works from the session's working directory and treats that directory as a container: Git repositories up to three levels below it are reachable without registering each repository as a separate DSH workspace.
 
 - **Multi-repository discovery** — the workspace root itself, plus repositories nested up to 3 levels below it. Each entry carries its current branch, short head, dirty-file count and conflict count.
+- **A scan that costs what it should** — one `git for-each-ref` per repository returns the branch time, the upstream and the ahead/behind distance in one call; while the refs have not moved the whole answer comes from the last scan, and only the status probe (dirty files, conflicts) is repeated. A workspace full of repositories no longer gets slower with every extra one.
 - **Repository tree** — the root, the intermediate directories and each repository, so the level relationship between them is visible rather than implied by a path.
 - **SVG commit graph** — one row per commit, one colored lane per branch line, curved edges where a commit's parent sits on another lane, merge commits drawn as diamonds, ref badges and relative timestamps.
 - **Zoom** — rows are two lines by default; `−` / `+` scale the rows and their text from a compact single line up to a roomy list.

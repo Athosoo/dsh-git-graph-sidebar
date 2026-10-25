@@ -87,16 +87,12 @@ patch(
 	"async function repoScan(base, service) {",
 	"async function repoScan(base, service, docName, autoScaffold) {"
 );
-patch(
-	"repo-scan-conventions",
-	"\tentries.sort((left, right) => {",
-	"\tfor (const entry of entries) entry.conventions = await repoConventionState(entry.root, docName);\n\tentries.sort((left, right) => {"
-);
-patch(
-	"repo-scan-view",
-	"\t\ttruncated: dirs.length >= REPO_SCAN_LIMIT,\n\t\tmaxDepth: REPO_SCAN_MAX_DEPTH,\n\t\tscannedAt: Date.now()\n\t};",
-	"\t\ttruncated: dirs.length >= REPO_SCAN_LIMIT,\n\t\tmaxDepth: REPO_SCAN_MAX_DEPTH,\n\t\tconventions: {\n\t\t\tdoc: conventionDocName(docName),\n\t\t\tautoScaffold: autoScaffold !== false\n\t\t},\n\t\tscannedAt: Date.now()\n\t};"
-);
+// The three patches that used to add the convention state, the scan view and
+// the activity/upstream probe to `repoScan()` are gone: that region of
+// lib/index.js is maintained by hand (it has no `src/` counterpart), the scan
+// now batches the convention reads and probes the refs in one spawn, so an
+// anchor inside it would only fight the code. Everything below still patches
+// text that `src/` does not own.
 patch(
 	"repo-scan-cached-signature",
 	"async function repoScanCached(base, service, refresh) {",
@@ -247,15 +243,6 @@ patch(
 	'\t\t\tcase "/git/init": {'
 );
 
-// 11. Every scanned repository also reports its last activity and how far it
-//     trails its upstream (best effort: a repository without a remote simply
-//     keeps `upstream: null`).
-patch(
-	"repo-scan-augment",
-	`	for (const entry of entries) entry.conventions = await repoConventionState(entry.root, docName);`,
-	`	await repoAugment(service, entries);
-	for (const entry of entries) entry.conventions = await repoConventionState(entry.root, docName);`
-);
 
 // 12. Two read-only routes: branch cleanup hints (/git/cleanup, NOT
 //     /git/branches — upstream already owns that path) and the health

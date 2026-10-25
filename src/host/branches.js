@@ -19,7 +19,9 @@ const BRANCH_REPORT_CONCURRENCY = 4;
 /** A branch whose tip is older than this is reported as stale. */
 const BRANCH_STALE_DAYS = 30;
 /** Repositories augmented with upstream/activity per batch. */
-const REPO_AUGMENT_CONCURRENCY = 4;
+const REPO_AUGMENT_CONCURRENCY = 8;
+/** Cached per-repository probes kept before the oldest are dropped. */
+const REPO_SUMMARY_CACHE_LIMIT = 400;
 /** Untracked files measured for the health report (one stat per file, so bounded). */
 const HEALTH_UNTRACKED_LIMIT = 400;
 /** A single untracked file at or above this size is called out. */
@@ -55,24 +57,29 @@ const branchRowsArgv = () => [
 	"--format=%(refname:short)%00%(committerdate:unix)%00%(upstream:short)%00%(HEAD)"
 ];
 
-/** `git rev-parse --abbrev-ref --symbolic-full-name @{upstream}` — the tracking ref. */
-const upstreamNameArgv = () => [
-	"rev-parse",
-	"--abbrev-ref",
-	"--symbolic-full-name",
-	"@{upstream}"
+/** `git for-each-ref refs/heads --format=...` — tip date, upstream and its distance, one spawn. */
+const summaryRowsArgv = () => [
+	"for-each-ref",
+	"refs/heads",
+	"--format=%(refname:short)%00%(committerdate:unix)%00%(upstream:short)%00%(upstream:track)"
 ];
 
-/** `git rev-list --left-right --count HEAD...@{upstream}` — ahead, then behind. */
-const upstreamCountArgv = () => [
-	"rev-list",
-	"--left-right",
-	"--count",
-	"HEAD...@{upstream}"
-];
+/** Probe counters for one scan, so a test can prove the cache removed the spawns. */
+const repoProbeCounters = {
+	spawns: 0,
+	hits: 0
+};
 
-/** `git log -1 --format=%ct` — the tip commit time, in seconds. */
-const lastCommitArgv = () => ["log", "-1", "--format=%ct"];
+/** Read and reset the probe counters (a scan owns the window between two calls). */
+function repoTakeProbeCounters() {
+	const snapshot = {
+		spawns: repoProbeCounters.spawns,
+		hits: repoProbeCounters.hits
+	};
+	repoProbeCounters.spawns = 0;
+	repoProbeCounters.hits = 0;
+	return snapshot;
+}
 
 /** `git rev-list --count <base>..<branch>` — commits on the branch the base lacks. */
 const unmergedCountArgv = (base, branch) => [
@@ -132,39 +139,129 @@ function branchBaseOf(rows, current) {
 	return rows.length > 0 ? rows[0].name : "";
 }
 
-/** Tip commit time of one repository, in seconds; null when it has no commits. */
-async function repoActivity(service, root) {
-	const stdout = await repoGit(service, root, lastCommitArgv());
-	if (stdout === null) return null;
-	const stamp = Number.parseInt(stdout.trim(), 10);
-	return Number.isFinite(stamp) ? stamp : null;
-}
-
 /**
- * The branch's upstream and how far apart the two are; null when the branch
- * tracks nothing (no remote, or a local-only branch).
- * @param service - the workspace-gated git service.
- * @param root - repository root to run in.
+ * Parse `%(upstream:track)` into counts: "" while level, "[ahead 3, behind 1]"
+ * while apart, "[gone]" once the remote branch is deleted. Split by hand so
+ * the source survives shells that eat backslashes.
+ * @param track - raw track field of one branch.
  */
-async function repoUpstream(service, root) {
-	const name = await repoGit(service, root, upstreamNameArgv());
-	if (name === null) return null;
-	const label = name.trim();
-	if (label === "") return null;
-	const counts = await repoGit(service, root, upstreamCountArgv());
-	if (counts === null) return null;
-	const [ahead = "0", behind = "0"] = counts.trim().split(/\s+/);
+function parseUpstreamTrack(track) {
+	const text = typeof track === "string" ? track : "";
+	const plain = text.split("[").join("").split("]").join("").trim();
+	if (plain === "" || plain.indexOf("gone") >= 0) return { ahead: 0, behind: 0 };
+	let ahead = 0;
+	let behind = 0;
+	for (const part of plain.split(",")) {
+		const piece = part.trim();
+		if (piece.indexOf("ahead ") === 0) ahead = Number.parseInt(piece.slice(6), 10) || 0;
+		else if (piece.indexOf("behind ") === 0) behind = Number.parseInt(piece.slice(7), 10) || 0;
+	}
 	return {
-		name: label,
-		ahead: Number.parseInt(ahead, 10) || 0,
-		behind: Number.parseInt(behind, 10) || 0
+		ahead,
+		behind
 	};
 }
 
 /**
+ * Parse {@link summaryRowsArgv} output: one row per local branch.
+ * @param stdout - NUL-separated fields, one branch per line.
+ */
+function parseSummaryRows(stdout) {
+	const rows = [];
+	for (const line of String(stdout).split("\n")) {
+		if (line === "") continue;
+		const fields = line.split("\0");
+		const name = fields[0];
+		if (typeof name !== "string" || name === "") continue;
+		const stamp = Number.parseInt(fields[1], 10);
+		const distance = parseUpstreamTrack(fields[3]);
+		rows.push({
+			name,
+			lastCommit: Number.isFinite(stamp) ? stamp : null,
+			upstream: typeof fields[2] === "string" ? fields[2] : "",
+			ahead: distance.ahead,
+			behind: distance.behind
+		});
+	}
+	return rows;
+}
+
+/** The git directory of a working tree: `.git` itself, or the path its file points at. */
+async function repoGitDirOf(root) {
+	const dot = join(root, ".git");
+	try {
+		const info = await stat(dot);
+		if (info.isDirectory()) return dot;
+		const text = await readFile(dot, "utf8");
+		const line = String(text).split("\n")[0].trim();
+		if (line.indexOf("gitdir:") !== 0) return null;
+		const target = line.slice(7).trim();
+		if (target === "") return null;
+		return isAbsolute(target) ? target : join(root, target);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * A cheap identity for "the refs have not moved": the HEAD pointer plus the
+ * reflog of HEAD, which every commit, checkout and branch creation rewrites.
+ * Deliberately ignores `.git/index`, since `git status` may touch it and the
+ * status probe runs on every scan anyway.
+ * @param root - repository root.
+ */
+async function repoSummaryFingerprint(root) {
+	try {
+		const gitDir = await repoGitDirOf(root);
+		if (gitDir === null) return null;
+		const head = await readFile(join(gitDir, "HEAD"), "utf8");
+		const reflog = await stat(join(gitDir, "logs", "HEAD"));
+		return head.trim() + "|" + Math.round(reflog.mtimeMs);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Last activity and upstream distance for one repository, in a single spawn.
+ * The probed branch is the checked-out one when it still exists, else the
+ * first branch that tracks something, else the first branch at all.
+ * @param service - the workspace-gated git service.
+ * @param root - repository root to run in.
+ * @param branch - the checked-out branch, "" when detached.
+ */
+async function repoSummaryOf(service, root, branch) {
+	repoProbeCounters.spawns += 1;
+	const stdout = await repoGit(service, root, summaryRowsArgv());
+	if (stdout === null) return null;
+	const rows = parseSummaryRows(stdout);
+	if (rows.length === 0) return null;
+	let row = rows.find((item) => item.name === branch);
+	if (row === undefined) row = rows.find((item) => item.upstream !== "");
+	if (row === undefined) row = rows[0];
+	let newest = null;
+	for (const item of rows) {
+		if (item.lastCommit === null) continue;
+		if (newest === null || item.lastCommit > newest) newest = item.lastCommit;
+	}
+	return {
+		activity: row.lastCommit === null ? newest : row.lastCommit,
+		upstream: row.upstream === "" ? null : {
+			name: row.upstream,
+			ahead: row.ahead,
+			behind: row.behind
+		}
+	};
+}
+
+/** Per-repository summary cache: root key -> fingerprint and the values it produced. */
+const repoSummaryCache = new Map();
+
+/**
  * Fill in the overview fields of scanned repositories: last activity and the
- * upstream distance. Bounded concurrency, one repository per slot; a failing
- * probe leaves its field null instead of failing the scan.
+ * upstream distance. One spawn per repository instead of three, and none at
+ * all while the refs have not moved since the last scan; a failing probe
+ * leaves its field null instead of failing the scan.
  * @param service - the workspace-gated git service.
  * @param entries - repository entries as produced by the scan (mutated).
  */
@@ -175,9 +272,32 @@ async function repoAugment(service, entries) {
 		await Promise.all(batch.map(async (entry) => {
 			if (entry === null || entry === void 0) return;
 			if (typeof entry.root !== "string" || entry.root === "") return;
-			const [activity, upstream] = await Promise.all([repoActivity(service, entry.root), repoUpstream(service, entry.root)]);
-			entry.activity = activity;
-			entry.upstream = upstream;
+			const key = repoPathKeyOf(entry.root);
+			const branch = entry.status !== null && entry.status !== void 0 && typeof entry.status.branch === "string" ? entry.status.branch : "";
+			const fingerprint = await repoSummaryFingerprint(entry.root);
+			if (fingerprint !== null) {
+				const cached = repoSummaryCache.get(key);
+				if (cached !== void 0 && cached.fingerprint === fingerprint) {
+					entry.activity = cached.activity;
+					entry.upstream = cached.upstream;
+					repoProbeCounters.hits += 1;
+					return;
+				}
+			}
+			const summary = await repoSummaryOf(service, entry.root, branch);
+			entry.activity = summary === null ? null : summary.activity;
+			entry.upstream = summary === null ? null : summary.upstream;
+			if (summary !== null && fingerprint !== null) {
+				if (repoSummaryCache.size >= REPO_SUMMARY_CACHE_LIMIT && !repoSummaryCache.has(key)) {
+					const oldest = repoSummaryCache.keys().next();
+					if (oldest.done !== true) repoSummaryCache.delete(oldest.value);
+				}
+				repoSummaryCache.set(key, {
+					fingerprint,
+					activity: summary.activity,
+					upstream: summary.upstream
+				});
+			}
 		}));
 	}
 	return rows;

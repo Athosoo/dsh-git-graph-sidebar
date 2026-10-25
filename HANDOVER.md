@@ -2,13 +2,13 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-24 19:45 (+08)。
+> 最后更新：2026-10-25 14:40 (+08)。
 
 ## 0. 一句话状态
 
 插件 **已开源**（`https://github.com/Athosoo/dsh-git-graph-sidebar`，Apache-2.0），**1.4.0 已发布、已推送、已装进 `desktop`**（Tier 1：复制回滚提示、提交搜索 + 引用筛选、导出独立 SVG）。**1.5.0（Tier 2：多仓库总览、分支清理提示、仓库体检）已发布、已推送、已装进 `desktop`**（host 95/95、客户端预览全过）。**1.6.0（Tier 3：提交合规提示、工作区总纲、规范升级预览）已发布、已推送、已装进 `desktop`**（host 132/132、客户端预览含 tier-3 一节全过；commit `92f15a1`、Release id `422695343`、资产 854388 字节）。市场收录 PR 已提交（`awesome-dsh-plugin#9196`，按维护者四条修正描述后 push 到 `a4521fc`）。
 
-**1.7.3 代码完成、测试全绿、待发版**：主题语言进了规范本身——文档前置元数据支持 `language: zh\|en\|mixed`（写在 `strict:` 之后），选择列表多一行「提交语言」，预览与写入都带上它，`git/compliance` 在语言写死时给违规主题一个 `lang` 原因，注入的提示块始终有一行 `Subject language: …`。顺手修掉两个真 bug：`conventionInsertField()` 重复拼冒号（`status::`）导致语言行永远落到文件顶部；`build-lib.mjs` 的 GitApi 注入改成「先按方法名删除、再按序插回」，避免旧签名残留覆盖新方法。
+**1.8.0 已发布、已推送、已装进 `desktop`**：主题语言进了规范本身（1.7.3 的改动随 1.8.0 一起发布），并且扫描成本下来了——每个仓库的 refs 探针从三次合成一次 `git for-each-ref`，refs 没动时整轮命中缓存（`timings.probeSpawns` / `timings.probeHits` 写在 `/git/repos` 的返回里），规范文档改成并发批量读，状态探针并发 4 → 8、单仓超时 5s → 2.5s，客户端 20 秒轮询只刷仓库列表、图谱交给变更流。`build-lib` spliced 2674 / 1455 / 449 行、`patch-host` 22 处、166 个 locale 键、host 174/174。**1.7.3 的语言策略**：主题语言进了规范本身——文档前置元数据支持 `language: zh\|en\|mixed`（写在 `strict:` 之后），选择列表多一行「提交语言」，预览与写入都带上它，`git/compliance` 在语言写死时给违规主题一个 `lang` 原因，注入的提示块始终有一行 `Subject language: …`。顺手修掉两个真 bug：`conventionInsertField()` 重复拼冒号（`status::`）导致语言行永远落到文件顶部；`build-lib.mjs` 的 GitApi 注入改成「先按方法名删除、再按序插回」，避免旧签名残留覆盖新方法。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 ## 1. 这个插件是什么（读懂需求演进）
@@ -136,7 +136,8 @@ node scripts/preview-tab.mjs \
 | 1.7.0 | 合规接受中文 / 英文 / 中英混排，可选强约束（`strict: true`），选择列表选完自动收起，控制按钮换白色皮肤；已发布并已装（commit `a1c4619`、Release id `422753809`、资产 852091 字节） |
 | 1.7.1 | 纯文档版：把 README 里的「每个仓库 / every repository」改成「往下三层」，代码未变；已发布并已装 |
 | 1.7.2 | 工作区总纲写入后的反馈：成功提示、失败消息、以及「打开 / 复制路径」按钮；已发布并已装 |
-| 1.7.3 | **[代码完成，待发布]** 主题语言策略：`language:` 字段、选择器、`lang` 合规原因、注入块一行 `Subject language:` |
+| 1.7.3 | 主题语言策略：`language:` 字段、选择器、`lang` 合规原因、注入块一行 `Subject language:`；随 1.8.0 一起发布 |
+| 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -231,7 +232,7 @@ node scripts/preview-tab.mjs \
 - 框架卡片保持 `--dsw-alias-bg-layer-2`（卡片不是按钮）；虚线面板与「强约束」药丸改用 `--dsh-gg-ctl-bd`。
 - `scripts/preview-tab.mjs` 的静态页 shell 里同步补上这三个变量（亮色 / 深色两处），否则预览页会白底浅字。
 
-## 7.4 1.7.3 的改动（主题语言策略）
+## 7.4 主题语言策略（1.7.3 的改动，随 1.8.0 发布）
 
 ### 7.4.1 host：字段、解析与注入（`src/host/conventions.js`）
 
@@ -267,6 +268,75 @@ node scripts/preview-tab.mjs \
 - `build-lib.mjs` 的 GitApi 注入不能只靠 `includes(guard)`：改了签名后 guard 变、旧方法留下，**对象字面量里后定义的旧方法赢**（`conventionOptions` 4 参数盖住 5 参数）。现在实现是 `stripMethod()`（连带删除前面的文档注释，收尾标记 `
 			}` 是 5 个字符）+ 按序插回 `API_ANCHOR` 之后。
 
+## 7.5 1.8.0 的改动（扫描成本）
+
+目标：让「工作区里仓库很多」不再等于「每次刷新都等好几秒」。改完的效果可以用 `/git/repos` 返回的
+`timings` 自己核对，不用猜。
+
+### 7.5.1 每个仓库一次 refs 探针（`src/host/branches.js`）
+
+以前 `repoAugment()` 对每个仓库跑三条命令：`log -1 --format=%ct`、`rev-parse … @{upstream}`、
+`rev-list --left-right --count HEAD...@{u}`。现在只有一条：
+
+```js
+const summaryRowsArgv = () => [
+	"for-each-ref", "refs/heads",
+	"--format=%(refname:short)%00%(committerdate:unix)%00%(upstream:short)%00%(upstream:track)"
+];
+```
+
+`%(upstream:track)` 直接给出 `[ahead 3, behind 1]`，由 `parseUpstreamTrack()` 手写解析（不用正则，
+免得源码穿过 shell 时被吃掉反斜杠）。`parseSummaryRows()` 出 `{name, lastCommit, upstream, ahead, behind}`，
+`repoSummaryOf(service, root, branch)` 挑出「当前分支 → 第一个有上游的分支 → 第一个分支」，返回
+`{activity, upstream}`（`activity` 取该分支 tip 时间，取不到时退回全仓最新）。`REPO_AUGMENT_CONCURRENCY` 4 → 8。
+
+### 7.5.2 每仓指纹缓存
+
+`repoSummaryFingerprint(root)` = `<gitDir>/HEAD` 的内容 + `<gitDir>/logs/HEAD` 的 `mtimeMs`。
+**故意不看 `.git/index`**：`git status` 可能改写它，而状态探针每轮都跑，把 index 算进指纹会让缓存每轮失效。
+`logs/HEAD` 在每次提交、切分支、建分支时都会被重写，正好是「refs 动没动」的信号。
+命中就整条探针不 spawn（`repoProbeCounters.hits += 1`），未命中才跑并把 `{fingerprint, activity, upstream}`
+存进 `repoSummaryCache`（上限 `REPO_SUMMARY_CACHE_LIMIT = 400`，超了删最旧）。
+`.git` 是文件的工作树（submodule / worktree）由 `repoGitDirOf()` 读 `gitdir:` 解开。
+
+### 7.5.3 计数窗口与 `timings`
+
+`repoScan()` 里：扫描一开始 `repoTakeProbeCounters()` 清空窗口，`await repoAugment(...)` 之后再取一次，
+所以 `timings` 报的是**这一轮**花的探针数（第一版在 augment 之前取，永远报 0，靠 `console.error` 才看出来）。
+返回对象新增：
+
+```js
+timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
+```
+
+`scannedAt` 改用同一次 `finishedAt`，不再多取一次 `Date.now()`。
+
+### 7.5.4 规范文档并发批读（`lib/index.js` 的 repos region）
+
+原来是串行 `for (const entry of entries) entry.conventions = await repoConventionState(...)`，
+等于 N 次文件读排队；现在按 `REPO_SCAN_CONCURRENCY` 分批 `Promise.all`。同一段还改了
+`REPO_SCAN_STATUS_TIMEOUT_MS` 5000 → 2500、`REPO_SCAN_CONCURRENCY` 4 → 8。
+
+**这一段没有 `src/` 副本**（repos region 手工维护）。因此 `scripts/patch-host.mjs` 里原先给
+`repoScan()` 打补丁的三段（`repo-scan-conventions`、`repo-scan-view`、`repo-scan-augment`）已删除：
+它们的锚点就在这次改写的行上，留着只会「每次运行重插一遍」。现在补丁数 22。
+
+### 7.5.5 客户端少一次图谱重读
+
+`src/client/graph/SidebarTab.js` 的 20 秒轮询以前同时 `runScan(false, true)` 和 `loadGraph(void 0, true)`；
+变更流（SSE）本来就在推「图谱该重读了」，所以轮询只留 `runScan`，依赖数组改成 `[active, runScan]`。
+
+### 7.5.6 测试（`scripts/test-host.mjs` 第 [14] 段）
+
+`scan-cost/alpha`、`scan-cost/beta` 两个真仓库，四次 `/git/repos`（都带 `refresh: true`）：
+
+1. 首次扫描 `probeSpawns === 2`、`probeHits === 0`，四个阶段耗时都是数字；
+2. 紧接着再扫 `probeSpawns === 0`、`probeHits === 2`，`activity` 与上一轮完全一致；
+3. 造一个未跟踪文件 `scratch.txt`：`status.untrackedFiles >= 1`（状态永远新鲜），`probeSpawns === 0`（摘要仍走缓存）；
+4. 在 beta 提交一次：`probeSpawns === 1`、`probeHits === 1`，且 beta 的 `activity` 变大。
+
+比较仓库路径必须走 `rootKeyOf()`（小写 + 反斜杠换斜杠），Windows 会把同一个目录以另一种大小写还回来。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -283,39 +353,42 @@ node scripts/preview-tab.mjs \
    ```
    （先 `--check` 看状态；脚本自带门禁，通过后自动开 PR，head = `Athosoo:add/athosoo-dsh-git-graph-sidebar`，只含 `data/plugins/Athosoo__dsh-git-graph-sidebar.yml` 8 行。）
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
-5. 可选打磨：总览虚拟滚动；总览里标出「比发现深度更深」的仓库；`activity` 改用 `status.head` 的提交时间以省掉一次 `log -1`；升级预览目前重建整份文档，未来可只替换变化的小节。
+5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
+6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
 
-1. **绝对不要用 `link:` 装工作区目录做插件。** `remove_bundle` 会把软链目标目录**清空**（曾把整个工作副本删掉）。一律 `npm pack` 到 `dsh-git-graph-dist/<ver>/` 后按 `file:...tgz` 安装。
-2. **Python 写文件必须 `newline="\n"`**，否则 CRLF 会让 build-lib 的 `\n//#endregion` 标记匹配失败。
-3. **不要在 shell 字符串里写含反引号/`$`的 payload**：一次 `echo` 里的 `` `git init` `` 被执行，在工作区根建了一个假 `.git`。payload 一律先写文件再 `--data-binary @file`。
-4. **GitHub Release API 只吃 JSON**（`--data-binary`），`-F` multipart 报 `Problems parsing JSON`；创建前先用 `POST /git/refs` 建 tag 更稳；资产名必须**无版本**。
-5. **`desktop` profile 被 Electron 独占**：`dsh plugin --profile desktop add ...` 会报 `managed exclusively`；装 tgz 只能用 `plugin_manager` 或应用内插件页。
-6. **host 半边不热更**：新路由/`systemPrompt` 注入必须重启 DSH；`/git/*` 在未加载时返回 405/404。
-7. **better-sidebar 关闭 tab 会卸载组件**（`split-pane.tsx` 注释明说），所以重开必须靠 `SIDEBAR_TAB_CACHE` 模块级缓存（按 `sessionId|cwd`，保留 6 个会话）。
-8. **`preview-tab.mjs` 的假运行时**：`mount.tree` 只在 `render()` 时刷新——点击后必须 `await mount.render()` 才能找到新节点；`setInterval` 要 `unref()` 否则进程挂住；`<select value>` 要序列化成 `selected`；受控 `<input value>` 需要序列化 `value`。
-9. **`validate-lib.mjs` 是标配**：它抓「t() 用了但字典没有」和「分叉标识符没定义」——只有 `node --check` 抓不到的自由变量错误靠它。
-10. **`test-host.mjs` 的 `equal()` 第三参是 detail 不是期望值**，判断要用 `check()`；`git()` 辅助不返回 stdout。
-11. **gh-proxy.com 对认证 API 会伪装成别人**（返回代理账号身份），认证请求直连 `api.github.com`。
-12. **端口会变**：每次 DSH 重启 GUI 端口都不同，探测 `/git/repos` 前先读 runtime context，且 curl 超时要给足（冷启动 3 秒会 000）。
-13. **`lib/*.js` 的 region 内永手改**：手改会在下次 `build-lib.mjs` 被覆盖；要改就改 `src/**` 或 `scripts/patch-host.mjs`。
-14. **`build-lib.mjs` 的字典插入是按字典块判定的**（zh/en 各自），早期版本曾因为「全文件查 key」导致 en 漏插 4 个键。
-15. **长命令会被截断**：`ops_bash` 一次塞太长的 `cat > x <<'PY' … PY` 会被砍掉尾部（heredoc 未闭合，写出的脚本只剩前若干行）。长脚本要分块 `python - <<'PY'` 追加写。
-16. **多层引号里的反斜杠会掉一层**：Python 三引号里的 `\\n` 生成出来是真换行（`out.join("` + 换行 → `SyntaxError: Invalid or unexpected token`），正则 `[\\/]` 也会退化成 `[\/]`（匹配不到反斜杠）。写这类字符用 `chr(92)`/`chr(10)` 拼，别依赖转义层数。
+1. **性能计时，先取窗口再取数。** 计数/计时用的快照必须在「被测工作结束之后」取；1.8.0 第一版把 `repoTakeProbeCounters()` 放在 `await repoAugment()` 之前，`timings.probeSpawns` 永远是 0，靠临时 `console.error` 打了两轮才看出来。
+2. **锚点在被手工维护的 region 里，补丁迟早变成地雷。** `scripts/patch-host.mjs` 里给 `repoScan()` 打的三段补丁（`repo-scan-conventions` / `repo-scan-view` / `repo-scan-augment`）锚点就落在后来重写的行上：改完代码后每次 `patch-host` 都会重插一遍或直接抛 `anchor not found`。repos region 没有 `src/` 副本，改动就该直接改 `lib/index.js` 并删掉对应补丁。
+3. **绝对不要用 `link:` 装工作区目录做插件。** `remove_bundle` 会把软链目标目录**清空**（曾把整个工作副本删掉）。一律 `npm pack` 到 `dsh-git-graph-dist/<ver>/` 后按 `file:...tgz` 安装。
+4. **Python 写文件必须 `newline="\n"`**，否则 CRLF 会让 build-lib 的 `\n//#endregion` 标记匹配失败。
+5. **不要在 shell 字符串里写含反引号/`$`的 payload**：一次 `echo` 里的 `` `git init` `` 被执行，在工作区根建了一个假 `.git`。payload 一律先写文件再 `--data-binary @file`。
+6. **GitHub Release API 只吃 JSON**（`--data-binary`），`-F` multipart 报 `Problems parsing JSON`；创建前先用 `POST /git/refs` 建 tag 更稳；资产名必须**无版本**。
+7. **`desktop` profile 被 Electron 独占**：`dsh plugin --profile desktop add ...` 会报 `managed exclusively`；装 tgz 只能用 `plugin_manager` 或应用内插件页。
+8. **host 半边不热更**：新路由/`systemPrompt` 注入必须重启 DSH；`/git/*` 在未加载时返回 405/404。
+9. **better-sidebar 关闭 tab 会卸载组件**（`split-pane.tsx` 注释明说），所以重开必须靠 `SIDEBAR_TAB_CACHE` 模块级缓存（按 `sessionId|cwd`，保留 6 个会话）。
+10. **`preview-tab.mjs` 的假运行时**：`mount.tree` 只在 `render()` 时刷新——点击后必须 `await mount.render()` 才能找到新节点；`setInterval` 要 `unref()` 否则进程挂住；`<select value>` 要序列化成 `selected`；受控 `<input value>` 需要序列化 `value`。
+11. **`validate-lib.mjs` 是标配**：它抓「t() 用了但字典没有」和「分叉标识符没定义」——只有 `node --check` 抓不到的自由变量错误靠它。
+12. **`test-host.mjs` 的 `equal()` 第三参是 detail 不是期望值**，判断要用 `check()`；`git()` 辅助不返回 stdout。
+13. **gh-proxy.com 对认证 API 会伪装成别人**（返回代理账号身份），认证请求直连 `api.github.com`。
+14. **端口会变**：每次 DSH 重启 GUI 端口都不同，探测 `/git/repos` 前先读 runtime context，且 curl 超时要给足（冷启动 3 秒会 000）。
+15. **`lib/*.js` 的 region 内永手改**：手改会在下次 `build-lib.mjs` 被覆盖；要改就改 `src/**` 或 `scripts/patch-host.mjs`。
+16. **`build-lib.mjs` 的字典插入是按字典块判定的**（zh/en 各自），早期版本曾因为「全文件查 key」导致 en 漏插 4 个键。
+17. **长命令会被截断**：`ops_bash` 一次塞太长的 `cat > x <<'PY' … PY` 会被砍掉尾部（heredoc 未闭合，写出的脚本只剩前若干行）。长脚本要分块 `python - <<'PY'` 追加写。
+18. **多层引号里的反斜杠会掉一层**：Python 三引号里的 `\\n` 生成出来是真换行（`out.join("` + 换行 → `SyntaxError: Invalid or unexpected token`），正则 `[\\/]` 也会退化成 `[\/]`（匹配不到反斜杠）。写这类字符用 `chr(92)`/`chr(10)` 拼，别依赖转义层数。
 
-17. **新路由/新方法先 grep 上游有没有同名**：`/git/branches` 和 `GitApi.branches()` 都是上游已有的，同名会让 `switch` 只命中前一个 case、`API_METHODS` 的 guard 误判「已存在」而跳过注入。最终用 `/git/cleanup` + `/git/health`、`cleanupBranches()` + `repoHealth()`。
-18. **region 头归 build-lib 所有**：patch-host 若也插 `//#region src/host/branches.ts`，第二次 build 会留下一个空 region（实测重复出现两次）。现在 build-lib 发现缺头时自己插 `region + //#endregion` 再 splice，patch-host 只负责路由与扫描挂载（21 处）。
-19. **按锚点切文件后立刻 `node --check`**：一次用 `s.index(...)` 切 patch-host 的新增段，把相邻两个 `patch(` 调用一起吞掉，`node --check` 报 `missing ) after argument list`——切完先查语法再往下做。
-20. **`git count-objects -v` 的 KB 会四舍五入成 0**：小仓库 `size: 0`，别断言 `gitBytes > 0`，用对象数（`count` + `in-pack`）判断 `.git` 是否读到。
+19. **新路由/新方法先 grep 上游有没有同名**：`/git/branches` 和 `GitApi.branches()` 都是上游已有的，同名会让 `switch` 只命中前一个 case、`API_METHODS` 的 guard 误判「已存在」而跳过注入。最终用 `/git/cleanup` + `/git/health`、`cleanupBranches()` + `repoHealth()`。
+20. **region 头归 build-lib 所有**：patch-host 若也插 `//#region src/host/branches.ts`，第二次 build 会留下一个空 region（实测重复出现两次）。现在 build-lib 发现缺头时自己插 `region + //#endregion` 再 splice，patch-host 只负责路由与扫描挂载（21 处）。
+21. **按锚点切文件后立刻 `node --check`**：一次用 `s.index(...)` 切 patch-host 的新增段，把相邻两个 `patch(` 调用一起吞掉，`node --check` 报 `missing ) after argument list`——切完先查语法再往下做。
+22. **`git count-objects -v` 的 KB 会四舍五入成 0**：小仓库 `size: 0`，别断言 `gitBytes > 0`，用对象数（`count` + `in-pack`）判断 `.git` 是否读到。
 
-21. **locale 键的引号会被外层吃掉**：用 python heredoc 写 `['"sidebar.x"', '"值"']` 时容易生成 `["sidebar.x", "值"]`，build-lib 插出 `sidebar.compliance: 提交合规`（无引号）→ `lib/client.js:1714 SyntaxError: Unexpected token '.'`。可靠写法：`Q = chr(34); OPEN = chr(39) + Q; CLOSE = Q + chr(39)`；已损坏的行用 `re.compile(r"^[ \t]*sidebar\.(compliance|preview|workspaceDoc)[A-Za-z]*: .*,$", re.M)` 删掉再重跑 build-lib。
-22. **python 字符串里的 Windows 路径会语法报错**：`"...\Users\18316\..."` 触发 `SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes ... truncated \UXXXXXXXX escape`，`\d`/`\s` 则被吞成 `d`/`s`。用 `chr(92)` 拼、写 raw string，或把长文本先 `cat > .tmp.md <<'MD'`（单引号 heredoc 不解析反斜杠）再让 python 读文件插入。
-23. **给预览页做「浅色变体」前先确认 CSS 支持**：`.html.replace("<body>", '<body data-theme="light">')` 只对含 `body[data-theme="light"]` 覆盖的页面（hero/overview）有效；states 页没有这些覆盖（`grep -c light preview/graph-tab-states.html` = 0），硬写出来是假的浅色页，已删。
-24. **截图单面板要拼独立 HTML**：Chrome 传相对路径会 `net::ERR_HTTP_RESPONSE_CODE_FAILURE`，必须 `file:///C:/...` 绝对 URL；只想拍某一段时用 python 从生成页里 `s.index("<h2>Upgrade preview")` 切片，套上 shell 的 head/style 另存 `.demo/preview-only.html`。
+23. **locale 键的引号会被外层吃掉**：用 python heredoc 写 `['"sidebar.x"', '"值"']` 时容易生成 `["sidebar.x", "值"]`，build-lib 插出 `sidebar.compliance: 提交合规`（无引号）→ `lib/client.js:1714 SyntaxError: Unexpected token '.'`。可靠写法：`Q = chr(34); OPEN = chr(39) + Q; CLOSE = Q + chr(39)`；已损坏的行用 `re.compile(r"^[ \t]*sidebar\.(compliance|preview|workspaceDoc)[A-Za-z]*: .*,$", re.M)` 删掉再重跑 build-lib。
+24. **python 字符串里的 Windows 路径会语法报错**：`"...\Users\18316\..."` 触发 `SyntaxError: (unicode error) 'unicodeescape' codec can't decode bytes ... truncated \UXXXXXXXX escape`，`\d`/`\s` 则被吞成 `d`/`s`。用 `chr(92)` 拼、写 raw string，或把长文本先 `cat > .tmp.md <<'MD'`（单引号 heredoc 不解析反斜杠）再让 python 读文件插入。
+25. **给预览页做「浅色变体」前先确认 CSS 支持**：`.html.replace("<body>", '<body data-theme="light">')` 只对含 `body[data-theme="light"]` 覆盖的页面（hero/overview）有效；states 页没有这些覆盖（`grep -c light preview/graph-tab-states.html` = 0），硬写出来是假的浅色页，已删。
+26. **截图单面板要拼独立 HTML**：Chrome 传相对路径会 `net::ERR_HTTP_RESPONSE_CODE_FAILURE`，必须 `file:///C:/...` 绝对 URL；只想拍某一段时用 python 从生成页里 `s.index("<h2>Upgrade preview")` 切片，套上 shell 的 head/style 另存 `.demo/preview-only.html`。
 
-25. **`git checkout -- lib/*.js` 会把换行变成 CRLF**：仓库 `core.autocrlf=true`，blob 是 LF、检出成 CRLF，而 build-lib 的 `REGION_END = "\n\t\t//#endregion\n//#region src/client/index.ts"` 是 LF 字面量 → 直接报 `region end marker not found in lib/client.js`。恢复 `lib/` 后先 `python` 把 `\r\n` 换成 `\n` 再 build（提交时 git 会自己转回 LF，不会产生差异）。
-26. **同一个 `switch` 里的多处补丁要各自带 guard**：`patch()` 的幂等判定是 `source.includes(replacement)`，可一旦后一个补丁把新 case 插进前一个补丁的「块 + 锚点行」之间，replacement 就再也不是连续文本 → 每次运行都重复插入（实测 `case "/git/init"` 累积到 7 份、`lib/index.js` 从 3743 涨到 4636 行）。现在 `patch(label, anchor, replacement, guard)` 支持第四参，第 9/13 段分别用 `'\t\t\tcase "/git/init": {'`、`'\t\t\tcase "/git/compliance": {'` 判定，连跑两次稳定输出 `applied 0, already present 22`。
+27. **`git checkout -- lib/*.js` 会把换行变成 CRLF**：仓库 `core.autocrlf=true`，blob 是 LF、检出成 CRLF，而 build-lib 的 `REGION_END = "\n\t\t//#endregion\n//#region src/client/index.ts"` 是 LF 字面量 → 直接报 `region end marker not found in lib/client.js`。恢复 `lib/` 后先 `python` 把 `\r\n` 换成 `\n` 再 build（提交时 git 会自己转回 LF，不会产生差异）。
+28. **同一个 `switch` 里的多处补丁要各自带 guard**：`patch()` 的幂等判定是 `source.includes(replacement)`，可一旦后一个补丁把新 case 插进前一个补丁的「块 + 锚点行」之间，replacement 就再也不是连续文本 → 每次运行都重复插入（实测 `case "/git/init"` 累积到 7 份、`lib/index.js` 从 3743 涨到 4636 行）。现在 `patch(label, anchor, replacement, guard)` 支持第四参，第 9/13 段分别用 `'\t\t\tcase "/git/init": {'`、`'\t\t\tcase "/git/compliance": {'` 判定，连跑两次稳定输出 `applied 0, already present 22`。
 
 ## 10. 下一步照做即可（最短路径）
 
@@ -326,8 +399,8 @@ node scripts/build-lib.mjs && node scripts/patch-host.mjs
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs --repos ../.demo/data/repos.json   --graph ../.demo/data/graph-graph-demo.json --graph ../.demo/data/graph-dsh-git-graph-src.json --focus graph-demo
-# 2) 升 1.6.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.7.3"
+# 2) 升 1.8.0 后打包
+npm pack --pack-destination "../dsh-git-graph-dist/1.8.0"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

@@ -635,6 +635,76 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("the inherited block names the document", inherited.includes(".dsh") && inherited.includes("GIT_CONVENTIONS.md"), inherited.slice(0, 240));
 	check("the inherited block names the container", inherited.includes(wsContainer), inherited.slice(0, 240));
 
+	console.log("\n[14] scan cost: one ref probe per repository, none while the refs sit still");
+
+	const scanRoot = join(workspace, "scan-cost");
+	const scanA = join(scanRoot, "alpha");
+	const scanB = join(scanRoot, "beta");
+	await mkdir(scanA, { recursive: true });
+	await mkdir(scanB, { recursive: true });
+	/** Windows hands the same directory back in another case and separator. */
+	const rootKeyOf = (value) => String(value ?? "").toLowerCase().split(String.fromCharCode(92)).join("/");
+	const entryAt = (payload, root) => (payload?.value?.repos ?? []).find((entry) => rootKeyOf(entry.root) === rootKeyOf(root)) ?? {};
+	await git(scanA, "init", "-b", "main");
+	await writeFile(join(scanA, "README.md"), "# alpha\n", "utf8");
+	await git(scanA, "add", ".");
+	await git(scanA, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: seed alpha");
+	await git(scanB, "init", "-b", "main");
+	await writeFile(join(scanB, "README.md"), "# beta\n", "utf8");
+	await git(scanB, "add", ".");
+	await git(scanB, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: seed beta");
+
+	const scanFirst = await call("/git/repos", {
+		path: scanRoot,
+		refresh: true
+	});
+	equal("the scan lists both repositories", (scanFirst.json?.value?.repos ?? []).length, 2);
+	const firstTimings = scanFirst.json?.value?.timings ?? {};
+	equal("one ref probe per repository, not three", firstTimings.probeSpawns, 2);
+	equal("nothing comes from the cache on a cold scan", firstTimings.probeHits, 0);
+	check("the scan reports every phase", [
+		firstTimings.statusMs,
+		firstTimings.augmentMs,
+		firstTimings.conventionsMs,
+		firstTimings.totalMs
+	].every((value) => typeof value === "number" && value >= 0), JSON.stringify(firstTimings));
+	const activityFirst = {};
+	for (const entry of scanFirst.json?.value?.repos ?? []) activityFirst[rootKeyOf(entry.root)] = entry.activity;
+	check("every repository reports activity", Object.values(activityFirst).every((value) => typeof value === "number" && value > 0), JSON.stringify(activityFirst));
+
+	const scanSecond = await call("/git/repos", {
+		path: scanRoot,
+		refresh: true
+	});
+	const secondTimings = scanSecond.json?.value?.timings ?? {};
+	equal("a second scan spawns no ref probe", secondTimings.probeSpawns, 0);
+	equal("a second scan answers from the cache", secondTimings.probeHits, 2);
+	const activitySecond = {};
+	for (const entry of scanSecond.json?.value?.repos ?? []) activitySecond[rootKeyOf(entry.root)] = entry.activity;
+	check("the cached activity matches", JSON.stringify(activitySecond) === JSON.stringify(activityFirst), JSON.stringify(activitySecond));
+
+	await writeFile(join(scanA, "scratch.txt"), "dirty\n", "utf8");
+	const scanDirty = await call("/git/repos", {
+		path: scanRoot,
+		refresh: true
+	});
+	const dirtyEntry = entryAt(scanDirty.json, scanA);
+	check("an untracked file is seen while the summary stays cached", (dirtyEntry.status?.untrackedFiles ?? 0) >= 1, JSON.stringify(dirtyEntry.status));
+	equal("a dirty worktree does not re-probe the refs", (scanDirty.json?.value?.timings ?? {}).probeSpawns, 0);
+
+	await writeFile(join(scanB, "README.md"), "# beta again\n", "utf8");
+	await git(scanB, "add", ".");
+	await git(scanB, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: second beta");
+	const scanMoved = await call("/git/repos", {
+		path: scanRoot,
+		refresh: true
+	});
+	const movedTimings = scanMoved.json?.value?.timings ?? {};
+	equal("only the repository that moved is re-probed", movedTimings.probeSpawns, 1);
+	equal("the untouched repository stays cached", movedTimings.probeHits, 1);
+	const movedB = entryAt(scanMoved.json, scanB);
+	check("the moved repository reports newer activity", typeof movedB.activity === "number" && movedB.activity >= (activityFirst[rootKeyOf(scanB)] ?? 0), JSON.stringify(movedB.activity));
+
 	await rm(workspace, { recursive: true, force: true });
 
 	const failed = checks.filter((entry) => !entry.ok);
