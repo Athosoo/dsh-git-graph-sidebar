@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-一个给 DeepSeek Harness（DSH）用的 Git 浏览插件：输入框旁的**分支徽章**，以及 [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) 里的**仓库图谱**页——把当前工作区目录往下发现的每个 Git 仓库列出来，并把选中仓库的提交图渲染成 SVG 泳道画布。
+一个给 DeepSeek Harness（DSH）用的 Git 浏览插件：输入框旁的**分支徽章**，以及 [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) 里的**仓库图谱**页——把当前工作区目录往下三层内发现的 Git 仓库列出来，并把选中仓库的提交图渲染成 SVG 泳道画布。
 
 ![仓库图谱页，深色主题](assets/shot-dark.png)
 
@@ -10,7 +10,7 @@
 
 ### 仓库图谱页（better-sidebar）
 
-它把会话的工作目录当作一个容器：目录下面所有 Git 仓库都能直接访问，不需要把每个仓库单独注册成 DSH 工作区。
+它把会话的工作目录当作一个容器：目录下面三层以内的 Git 仓库都能直接访问，不需要把每个仓库单独注册成 DSH 工作区。
 
 - **多级仓库发现**——工作区根目录本身，加上最多 3 层以内的嵌套仓库。每个条目带当前分支、短 head、脏文件数与冲突数。
 - **仓库树**——根目录、中间目录、每个仓库按层级排开，层级关系直接看得见，而不是靠路径去猜。

@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-A Git browsing plugin for DeepSeek Harness (DSH): a branch chip in the composer, plus a **Repository graph** tab inside [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) that lists every Git repository below the current workspace directory and draws the selected repository's commit graph as an SVG lane canvas.
+A Git browsing plugin for DeepSeek Harness (DSH): a branch chip in the composer, plus a **Repository graph** tab inside [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) that lists the Git repositories found up to three levels below the current workspace directory and draws the selected repository's commit graph as an SVG lane canvas.
 
 ![Repository graph tab, dark theme](assets/shot-dark.png)
 
@@ -10,7 +10,7 @@ A Git browsing plugin for DeepSeek Harness (DSH): a branch chip in the composer,
 
 ### Repository graph tab (better-sidebar)
 
-The tab works from the session's working directory and treats that directory as a container: everything Git-shaped below it is reachable without registering each repository as a separate DSH workspace.
+The tab works from the session's working directory and treats that directory as a container: Git repositories up to three levels below it are reachable without registering each repository as a separate DSH workspace.
 
 - **Multi-repository discovery** — the workspace root itself, plus repositories nested up to 3 levels below it. Each entry carries its current branch, short head, dirty-file count and conflict count.
 - **Repository tree** — the root, the intermediate directories and each repository, so the level relationship between them is visible rather than implied by a path.
