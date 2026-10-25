@@ -292,6 +292,18 @@ language: zh           # zh | en | mixed
 
 `conventionWithLanguage()` and `conventionWithStrict()` only replace the line, so the comment survives - and a reader that compares the raw value against `zh` sees `zh           # zh | en | mixed` and falls back to `mixed`. `conventionFieldValue()` therefore cuts at the first `#` and strips paired quotes, and `conventionDocLanguageOf()` matches by containment (mix/混 first, then Chinese tokens, then English ones). The `repos/langzh` fixture in `test-host.mjs` keeps its comments on purpose: if the strip ever regresses, `rules.language` turns into `mixed` and the suite fails.
 
+## Ref chips: one per branch (1.9.0)
+
+The filter row is built from `refGroups`, not from the raw refs, so a branch and its remote twin are one chip and one mute.
+
+* `remoteNames` derives remote names from the refs: a ref ending in `/<local branch>` contributes the single-segment prefix in front of it. Fallback: if nothing can be derived and some ref starts with `origin/`, treat `origin` as a remote.
+* `refGroups` folds refs into `{key, refs, local, remote, tag}`, drops `HEAD` / `HEAD -> …` / `<remote>/HEAD`, keeps `tag: …` apart, and sorts by `rank` (current branch, other local, remote-only, tags) then by name.
+* `refGroupOf` (`ref -> key`) drives the visibility filter, the row badges and the export, so muting a chip mutes both twins.
+* The row shows at most `SIDEBAR_TAB_FILTER_REFS_MAX` chips plus a `data-gitgraph-refs-toggle` `+N`, and a `data-gitgraph-refs-clear` chip whenever anything is muted.
+* Row badges map `HEAD -> main` to `main` and reuse the chip labels; `sidebarTabExportSvg()` takes the same map as its `refLabels` option.
+
+Tests live in the refs section of `scripts/preview-tab.mjs` (synthetic repo + its own `GRAPH_BY_ROOT` entry, restored afterwards) and the page it writes is `preview/graph-tab-refs.html`.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.

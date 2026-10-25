@@ -116,6 +116,9 @@ const EXTRA_KEYS = [
 			['"sidebar.rollbackConfirm"', '"请先确认用哪一种，并说明会丢失哪些提交。"'],
 			['"sidebar.search"', '"搜索提交（主题 / 作者 / SHA / 引用）"'],
 			['"sidebar.refFilter"', '"点击切换该引用的提交"'],
+			['"sidebar.refsClear"', '"清除筛选"'],
+			['"sidebar.refsMore"', '"展开其余引用"'],
+			['"sidebar.refsLess"', '"收起"'],
 			['"sidebar.filtered"', '"{shown} / {total} 条匹配"'],
 			['"sidebar.noMatch"', '"没有匹配的提交"'],
 		]
@@ -212,6 +215,9 @@ const EXTRA_KEYS = [
 			['"sidebar.rollbackConfirm"', '"Confirm which one to use first, and say which commits would be lost."'],
 			['"sidebar.search"', '"Filter commits (subject / author / SHA / ref)"'],
 			['"sidebar.refFilter"', '"Click to toggle the commits of this ref"'],
+			['"sidebar.refsClear"', '"Clear filters"'],
+			['"sidebar.refsMore"', '"Show every ref"'],
+			['"sidebar.refsLess"', '"Fewer"'],
 			['"sidebar.filtered"', '"{shown} of {total} matched"'],
 			['"sidebar.noMatch"', '"No commits match the filter"'],
 		]

@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 16:45 (+08)。
+> 最后更新：2026-10-25 17:20 (+08)。
 
 ## 0. 一句话状态
 
@@ -14,6 +14,8 @@
 **1.8.1 已发布、已推送、已装进 `desktop`**：修「设置了却不生效」——新 `conventionSettings()` 与 `/git/convention/settings`（工作区侧用 `action: "settings"`）只改文档前置的 `strict` / `language` 而不重建正文，`repoConventionState()` / `workspaceConventionState()` 把这两个字段读出来，选择列表据此显示文档里的值，点开关即刻落盘；容器（不是仓库）的 cwd 现在会读 `<工作区>/.dsh/GIT_CONVENTIONS.md` 并把它（含语言行、strict 段、可机检规则与正文）连同子仓索引注入提示块。`patch-host` 23 处、host **186/186**。
 **1.8.2 已发布、已推送、已装进 `desktop`**：规范条不再统计「最近 N 个提交里有几个不符合」（那些提交在面板上改不了，看了也没用），改成把**文档自己写明、并且真的会注入给助手的规则**列成小标签（`type: feat / fix / docs`、`标题 ≤ 72 字`、`小写开头`、`不加句号`、`祈使句`、`中文`、`强约束`），容器改成横向换行；选择列表底部的「取消」改成「关闭」。`build-lib` spliced 2707 行、163 个 locale 键、host 186/186、客户端预览全过。
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
+
+**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
 
 ## 1. 这个插件是什么（读懂需求演进）
 
@@ -70,11 +72,11 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "C:/Users/18316/Documents/deepseek-harness/default-workspace/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (5 blocks) + spliced 2670 / 1455 / 329 lines（tab / conventions / branches）
-node scripts/patch-host.mjs     # → applied 0, already present 25（幂等）
+node scripts/build-lib.mjs      # → synced GitApi additions (6 blocks) + spliced 2838 / 1560 / 449 lines（tab / conventions / branches）
+node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 161/161 checks passed
+node scripts/test-host.mjs      # → 186/186 checks passed
 node scripts/preview-tab.mjs \
   --repos ../.demo/data/repos.json \
   --graph ../.demo/data/graph-graph-demo.json \
@@ -144,6 +146,7 @@ node scripts/preview-tab.mjs \
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.9.0 | 引用筛选改成一个分支一枚标签（本地与远程同名合并、符号引用不再出现、标签单独灰色、超 12 枚折 `+N`、静音时给「清除筛选」），行内徽章与导出 SVG 复用同一套标签；已发布并已装 |
 | 1.8.3 | 修「文档里的行内注释把字段值污染」：`conventionFieldValue()` 现在去掉 `#` 之后的注释与首尾引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese」这类写法、先认 mix/混 再认中英，模板自带的 `status: draft   # draft | settled` 不再让 `language: zh   # zh | en | mixed` 被读成 mixed；已发布并已装 |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
@@ -410,6 +413,26 @@ timings: { statusMs, augmentMs, conventionsMs, totalMs, probeSpawns, probeHits }
 * 工作区那份 `<workspace>/.dsh/GIT_CONVENTIONS.md` 的前置字段换成 `status: settled` / `strict: true` / `language: zh` / `framework: conventional-commits`（备份在 `.tmp/GIT_CONVENTIONS.workspace.bak`）。
 
 **教训**：自己写进文档的行要能被自己读回——写入端保留注释、读取端就必须剥注释；`test-host` 的 fixture 要故意用带注释的写法。
+
+## 7.9 1.9.0 的改动（引用标签：一个分支一枚）
+
+**症状**（用户原话：「它有点乱，能不能搞一个方案解决一下」）：筛选那一排是「一个 ref 一枚标签」——`main`、`origin/main`、`origin/HEAD`、`feat/x`、`origin/feat/x`、`tag: v1.8.2` 各占一枚，同一个分支出现两次，符号引用也混在里面；超过 `SIDEBAR_TAB_FILTER_REFS_MAX`（12）后的部分被 `slice` 直接切掉，看不见也点不到；行内徽章显示 `HEAD -> main` 加一个 `+4`，比筛选排更吵。
+
+**改法**（全部在 `src/client/graph/SidebarTab.js`；host、路由、locale 之外的构建脚本都没动）：
+
+* `remoteNames`：远程名从 refs 自己推——某 ref 以 `/<本地分支>` 结尾时，前面那段就是远程名；只接受单段，所以 `origin/feat/x` 不会被误认成远程 `origin/feat`；一个都推不出来但有 `origin/` 开头的 ref 时兜底认 `origin`。
+* `refGroups`：一枚标签一个分支。`feat/x` 与 `origin/feat/x` 合成一枚（`refs` 数组两条、`title` 两个都写出来），`HEAD`、`HEAD -> …`、`origin/HEAD` 不成为标签，`tag: …` 单独一类；`rank` = 当前分支 0、其他本地分支 1、只有远程的分支 2、标签 3，同级按名字比较。
+* `refGroupOf`：`ref -> 标签键` 的 Map。可见性过滤改用它（`mutedRefs[key]`），于是静音一枚等于同时关掉本地与远程两边；行内徽章与导出 SVG 也用它。
+* 折叠与清空：默认只画前 `SIDEBAR_TAB_FILTER_REFS_MAX` 枚，多出来的给 `data-gitgraph-refs-toggle` 的 `+N`（点开变「收起」）；任何一枚静音时旁边出现 `data-gitgraph-refs-clear`「清除筛选」，一键把 `mutedRefs` 清空。
+* 视觉区分：本地或本地+远程合并 = 实心青蓝（`SIDEBAR_TAB_CHIP`），只有远程 = 虚线（`SIDEBAR_TAB_CHIP_MORE`），标签 = 灰底（`SIDEBAR_TAB_CHIP_TAG`）；静音仍是删除线（`SIDEBAR_TAB_CHIP_OFF`）。
+* 行内徽章：`refLabels` 先把 ref 映射成标签键再去重，`HEAD -> x` 直接取 `x`，所以行首节点显示 `main` 而不是 `HEAD -> main`，计数也从 `+4` 变成 `+2`。
+* 导出 SVG：`sidebarTabExportSvg()` 新增选项 `refLabels`（组件传 `refGroupOf`），refs 行用同一套标签；没有传 map 时退回旧行为（丢掉 `HEAD -> …`）。
+
+**测试**：`scripts/preview-tab.mjs` 新增一节（合成仓库 `repos-refs/branchy` + `GRAPH_BY_ROOT` 里注册一份自己的 `/git/graph`，跑完还原 `REPOS` 与 `GRAPH_BY_ROOT`），断言标签顺序恰好 `main, feat/x, feat/y, tag: v1.0.0`、没有带 `origin/` 的标签、`data-gitgraph-ref-kind` 分别是 `branch / branch / remote / tag`、合并那枚的 `title` 含 `origin/feat/x`、四枚时不出现 `+N`、静音 `feat/y` 后行数减少且出现清除按钮、点清除后行数恢复；同时把这一屏写成 `preview/graph-tab-refs.html`（上半是初始态、下半是静音态）。
+
+**locale**：新增 `sidebar.refsClear`（清除筛选 / Clear filters）、`sidebar.refsMore`（展开其余引用 / Show every ref）、`sidebar.refsLess`（收起 / Fewer），键数 163 → 166。
+
+**教训**：标签的语义要跟着「用户在想什么」走，而不是跟着 Git 的字符串走——同一个分支的本地与远程两个名字、符号引用、行里的别名，都是同一个东西的三种写法，分开显示就只是噪音。`Map`/`Set` 走一遍就能合并，代价可以忽略。
 
 ## 8. 待办清单（按优先级）
 
