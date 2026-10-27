@@ -1732,6 +1732,12 @@ function conventionSourceOf(kind, owner, docPath) {
 	};
 }
 
+/**
+ * Prose documents that state commit rules without being one of ours: agent
+ * notes, contributor guides, editor rule files. They are read, never written.
+ */
+const CONVENTION_FOREIGN_DOCS = ["AGENTS.md", "CLAUDE.md", ".cursorrules", "CONTRIBUTING.md"];
+
 /** Every document that governs the same commits, in priority order. */
 function conventionsSources(cwd, docName) {
 	const doc = conventionDocName(docName);
@@ -1747,11 +1753,24 @@ function conventionsSources(cwd, docName) {
 			sources.push(conventionSourceOf("ancestor", ancestor, join(ancestor, doc)));
 		}
 	}
+	const foreign = [];
+	const seen = new Set(sources.map((source) => resolve(source.docPath)));
+	for (const owner of [workspace, root]) {
+		if (owner === void 0) continue;
+		for (const name of CONVENTION_FOREIGN_DOCS) {
+			const docPath = join(owner, name);
+			const key = resolve(docPath);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			foreign.push(conventionSourceOf("foreign", name, docPath));
+		}
+	}
 	return {
 		doc,
 		root,
 		workspace,
-		sources
+		sources,
+		foreign
 	};
 }
 
@@ -1759,7 +1778,9 @@ function conventionsSources(cwd, docName) {
 function conventionsOriginLabel(kind) {
 	if (kind === "workspace") return "workspace";
 	if (kind === "repo") return "this repository";
-	return "parent repository";
+	if (kind === "foreign") return "another document";
+	if (kind === "ancestor") return "parent repository";
+	return String(kind);
 }
 
 /** The union of the rule sets: the strictest cap, every type, any boolean set. */
@@ -1791,10 +1812,13 @@ function conventionsUnionRules(live) {
 function conventionsConflicts(cwd, docName) {
 	const scan = conventionsSources(cwd, docName);
 	const live = scan.sources.filter((source) => source.exists === true && source.pointer !== true);
+	const foreign = scan.foreign.filter((source) => source.exists === true);
+	const allSources = live.concat(foreign);
+	const union = conventionsUnionRules(allSources);
 	const fields = [];
 	for (const key of ["status", "framework", "strict", "language", "ai"]) {
 		const values = live.filter((source) => source.fields[key] !== "").map((source) => ({
-			origin: source.kind,
+			origin: source.kind === "foreign" ? source.owner : source.kind,
 			docPath: source.docPath,
 			value: source.fields[key]
 		}));
@@ -1805,43 +1829,62 @@ function conventionsConflicts(cwd, docName) {
 		});
 	}
 	const rules = [];
-	const lengths = live.filter((source) => source.rules.maxSubject !== null);
+	const lengths = allSources.filter((source) => source.rules.maxSubject !== null);
 	if (new Set(lengths.map((source) => source.rules.maxSubject)).size > 1) rules.push({
 		key: "maxSubject",
 		values: lengths.map((source) => ({
-			origin: source.kind,
+			origin: source.kind === "foreign" ? source.owner : source.kind,
 			docPath: source.docPath,
 			value: source.rules.maxSubject
 		}))
 	});
-	const typed = live.filter((source) => source.rules.types !== null);
+	const typed = allSources.filter((source) => source.rules.types !== null);
 	if (typed.length > 1) {
 		let common = typed[0].rules.types.slice();
 		for (const source of typed.slice(1)) common = common.filter((type) => source.rules.types.includes(type));
 		if (common.length === 0) rules.push({
 			key: "types",
 			values: typed.map((source) => ({
-				origin: source.kind,
+				origin: source.kind === "foreign" ? source.owner : source.kind,
 				docPath: source.docPath,
 				value: source.rules.types.join(", ")
 			}))
 		});
 	}
 	for (const key of ["lowercase", "noPeriod", "imperative"]) {
-		const stated = live.filter((source) => conventionStatesRule(source.body, key) === true);
+		const stated = allSources.filter((source) => conventionStatesRule(source.body, key) === true);
 		if (stated.length < 2) continue;
 		if (new Set(stated.map((source) => source.rules[key])).size > 1) rules.push({
 			key,
 			values: stated.map((source) => ({
-				origin: source.kind,
+				origin: source.kind === "foreign" ? source.owner : source.kind,
 				docPath: source.docPath,
 				value: source.rules[key]
 			}))
 		});
 	}
-	const count = fields.length + rules.length;
+	const governedUnion = conventionsUnionRules(live);
+	const extra = [];
+	for (const source of foreign) {
+		const declared = [];
+		if (source.rules.maxSubject !== null && (governedUnion.maxSubject === null || source.rules.maxSubject !== governedUnion.maxSubject)) declared.push("subject at most " + String(source.rules.maxSubject) + " characters");
+		if (source.rules.types !== null) {
+			const missing = source.rules.types.filter((type) => governedUnion.types === null || !governedUnion.types.includes(type));
+			if (missing.length > 0) declared.push("types " + missing.join(", "));
+		}
+		for (const key of ["lowercase", "noPeriod", "imperative"]) {
+			if (conventionStatesRule(source.body, key) === true && governedUnion[key] !== source.rules[key]) declared.push(key + " " + String(source.rules[key]));
+		}
+		if (declared.length > 0) extra.push({
+			origin: source.owner,
+			docPath: source.docPath,
+			keys: declared
+		});
+	}
+	const count = fields.length + rules.length + extra.length;
 	const digest = createHash("sha256").update(JSON.stringify({
 		sources: live.map((source) => [source.docPath, source.fields, source.rules]),
+		foreign: foreign.map((source) => [source.docPath, source.rules]),
 		count
 	})).digest("hex").slice(0, 16);
 	return {
@@ -1870,9 +1913,10 @@ function conventionsConflicts(cwd, docName) {
 		})),
 		fields,
 		rules,
+		foreign: extra,
 		count,
 		digest,
-		union: conventionsUnionRules(live)
+		union
 	};
 }
 
@@ -1882,6 +1926,7 @@ function conventionsConflictPromptBlock(report) {
 	const lines = ["Git conventions conflict across " + String(report.live) + " documents; the settings below disagree:"];
 	for (const field of report.fields) lines.push("- " + field.key + ": " + field.values.map((entry) => String(entry.value) + " (" + conventionsOriginLabel(entry.origin) + ")").join(" vs "));
 	for (const rule of report.rules) lines.push("- " + rule.key + ": " + rule.values.map((entry) => String(entry.value) + " (" + conventionsOriginLabel(entry.origin) + ")").join(" vs "));
+	for (const entry of report.foreign === void 0 ? [] : report.foreign) lines.push("- " + entry.origin + " also states " + entry.keys.join("; ") + " - it is not rewritten by a merge, so ask the user whether those rules should move into the document first");
 	lines.push("Do not pick a side silently: ask the user which document should govern. To merge them into one workspace document, call the git_conventions tool with action consolidate and write false first, show the plan, and only then repeat with write true.");
 	return lines.join("\n");
 }
@@ -1943,7 +1988,8 @@ async function conventionsConsolidate(cwd, docName, options) {
 	const report = conventionsConflicts(cwd, docName);
 	const scan = conventionsSources(cwd, docName);
 	const live = scan.sources.filter((source) => source.exists === true && source.pointer !== true);
-	if (live.length < 2) return {
+	const foreign = scan.foreign.filter((source) => source.exists === true);
+	if (live.length < 1 || (live.length < 2 && foreign.length === 0)) return {
 		ok: false,
 		error: {
 			code: "convention-single-source",
@@ -1971,6 +2017,7 @@ async function conventionsConsolidate(cwd, docName, options) {
 		target,
 		primary: primary.docPath,
 		absorbed: others.map((source) => source.docPath),
+		leftInPlace: foreign.map((source) => source.docPath),
 		bytes: Buffer.byteLength(merged, "utf8"),
 		conflicts: report.count,
 		union: report.union,

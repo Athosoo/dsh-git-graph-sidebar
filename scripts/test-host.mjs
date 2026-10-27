@@ -886,6 +886,54 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("the prompt stops warning after the merge", !section.text(cwdOf(childRepo)).includes("conflict"), section.text(cwdOf(childRepo)).slice(-300));
 
 
+	console.log("\n[20] rules written in AGENTS.md are detected and merged into the document");
+
+	const prose = join(workspace, "ws-prose");
+	const proseRepo = join(prose, "repo");
+	await mkdir(join(prose, ".dsh"), { recursive: true });
+	await mkdir(proseRepo, { recursive: true });
+	await git(proseRepo, "init", "-b", "main");
+	await writeFile(join(prose, ".dsh", "GIT_CONVENTIONS.md"), [
+		"status: settled",
+		"strict: true",
+		"language: zh",
+		"",
+		"## 1. Subject",
+		"",
+		"标题不超过 72 字符。",
+		"",
+	].join(NL), "utf8");
+	await writeFile(join(proseRepo, "AGENTS.md"), [
+		"# Agent notes",
+		"",
+		"## Commits",
+		"",
+		"Keep the subject under 50 characters.",
+		"",
+		"Type prefix must be one of `feat` `fix` `docs`.",
+		"",
+	].join(NL), "utf8");
+	await writeFile(join(proseRepo, "a.txt"), "a\n", "utf8");
+	await git(proseRepo, "add", ".");
+	await git(proseRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+	const proseReport = (await call("/git/conventions/conflicts", { path: proseRepo })).json?.value ?? {};
+	check("the conventions document stays the only governing one", proseReport.live === 1, JSON.stringify(proseReport.live));
+	check("the prose document is reported as a foreign source", (proseReport.foreign ?? []).some((entry) => entry.origin === "AGENTS.md"), JSON.stringify(proseReport.foreign));
+	check("its length rule tightens the union", proseReport.union?.maxSubject === 50, JSON.stringify(proseReport.union));
+	const prosePrompt = section.text(cwdOf(proseRepo));
+	check("the prompt names the prose document", prosePrompt.includes("AGENTS.md"), prosePrompt.slice(-500));
+	const prosePlan = (await call("/git/conventions/consolidate", { path: proseRepo })).json?.value ?? {};
+	check("the plan lists the document it leaves in place", (prosePlan.leftInPlace ?? []).some((entry) => String(entry).replace(/\\/g, "/").endsWith("/AGENTS.md")), JSON.stringify(prosePlan.leftInPlace));
+	check("the plan still writes nothing", prosePlan.written === false, JSON.stringify(prosePlan.written));
+	const proseWrite = (await call("/git/conventions/consolidate", { path: proseRepo, write: true, force: true })).json ?? {};
+	check("one governing document plus a prose document is mergeable", proseWrite.ok === true, JSON.stringify(proseWrite).slice(0, 300));
+	const mergedProse = await readFile(join(prose, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
+	check("the merged document carries the tighter rule", mergedProse.includes("subject at most 50 characters"), mergedProse.slice(0, 400));
+	const agentsLeft = await readFile(join(proseRepo, "AGENTS.md"), "utf8");
+	check("the prose document is never rewritten", agentsLeft.includes("Keep the subject under 50 characters"), agentsLeft.slice(0, 200));
+	const proseAfter = (await call("/git/conventions/conflicts", { path: proseRepo })).json?.value ?? {};
+	check("nothing is outstanding after the merge", proseAfter.count === 0, JSON.stringify(proseAfter.count));
+
 	console.log("\n[19] the git_conventions tool lets an agent check the documents and merge them");
 
 	const toolWorkspace = join(workspace, "ws-tool");

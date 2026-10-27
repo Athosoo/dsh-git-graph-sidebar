@@ -2585,6 +2585,17 @@ const SIDEBAR_TAB_COMPLIANCE = {
 								}, docPath)]));
 						});
 						parts.push(h("div", {
+							key: "left",
+							style: SIDEBAR_TAB_CONVENTIONS_NOTE
+						}, t("sidebar.consolidateLeft")));
+						(Array.isArray(value.leftInPlace) ? value.leftInPlace : []).slice(0, 6).forEach((docPath) => {
+							parts.push(h("div", {
+								key: "left-" + docPath,
+								"data-gitgraph-left": docPath,
+								style: SIDEBAR_TAB_PREVIEW_ROW
+							}, t("sidebar.consolidateKeep") + " " + docPath));
+						});
+						parts.push(h("div", {
 							key: "actions",
 							style: SIDEBAR_TAB_PREVIEW_ROW
 						}, [h("button", {

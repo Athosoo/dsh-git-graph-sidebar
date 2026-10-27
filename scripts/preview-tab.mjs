@@ -577,6 +577,7 @@ const fakeFetch = async (path, init) => {
 			exists: true,
 			bytes: write ? 2400 : 0,
 			absorbed: [String(payload.path) + "/GIT_CONVENTIONS.md"],
+			leftInPlace: [String(payload.path) + "/AGENTS.md"],
 			backups: write ? [String(payload.path) + "/GIT_CONVENTIONS.md.bak-20261027-120000"] : [],
 			pointers: write ? [String(payload.path) + "/GIT_CONVENTIONS.md"] : [],
 			conflicts: write ? 0 : 2,
@@ -1380,6 +1381,7 @@ let tier4Html = "";
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf('data-gitgraph-consolidate="ready"') < 0) throw new Error("the merge plan did not render");
 	if (tierHtml.indexOf("GIT_CONVENTIONS.md") < 0) throw new Error("the merge plan lists no absorbed document");
+	if (tierHtml.indexOf("data-gitgraph-left=\"" + TIER4_PATH + "/AGENTS.md\"") < 0) throw new Error("the merge plan does not list the document it leaves in place");
 	const mergeButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate")[0];
 	if (mergeButton === undefined) throw new Error("the merge plan has no confirm button");
 	click(mergeButton, "confirm merge");

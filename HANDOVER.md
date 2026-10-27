@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.10.1：规范面板加了「合并规范」按钮；`desktop` 装完需重启 DSH）。
+> 最后更新：2026-10-27（1.11.0：`AGENTS.md` 这类散文文档里的规则也能检出并整合；`desktop` 装完需重启 DSH）。
 
 ## 0. 一句话状态
 
@@ -77,7 +77,7 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "E:/git-graph/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (6 blocks) + spliced 2843 / 1560 / 449 lines（tab / conventions / branches）
+node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3079 / 2149 / 449 lines（tab / conventions / branches）
 node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
@@ -147,6 +147,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.11.0 | 把 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md` 里的规则也读进来（`foreign` 来源、参与冲突与并集、合并时只读保留）、locale 185 键、host 242/242 |
 | 1.10.1 | 规范面板标题行加「合并规范」按钮（不必先有冲突条）、只有一份规范时改为提示而非报错、tab 3068 行 / locale 183 键 |
 | 1.10.0 | AI 署名政策（`ai: required/optional/forbidden`，读正文 trailer）、排他性检测（工作区 / 本仓库 / 祖先逐字段逐规则比对，冲突写进注入提示）、一键整合（并集规则 + `## Unified rules` 分节 + 时间戳备份 + 仓库文档改指针）、`git_conventions` 工具；已发布并已装 |
 | 1.9.2 | 补上 1.9.1 漏掉的 host 那一行（`parseDecoration` 保留 `tag: ` 前缀），标签与分支终于真的能区分；`test-host` 增加第 [16] 段真标签断言（189/189）；已发布并已装 |
@@ -521,6 +522,19 @@ return part.replace(/^HEAD -> /, "").trim();
 - 顺手修了一处体验：只有一份规范在生效时（`live < 2`），主机返回 `code: "convention-single-source"`，原来会把它当错误红字显示；现在 `previewConsolidate` 认这个 code，改成提示 `sidebar.consolidateSingle`（`data-gitgraph-conventions-single`）并清掉计划面板。
 - 发布信息：commit `1c02dbf`、tag `v1.10.1`、release id **425292315**、资产 `dsh-git-graph-sidebar.tgz` **901665** 字节（sha256 `fe3ce6f628aaa24c6957d8c1bce37a714adb112e76ef07882aa047f504d2d16e`，`releases/latest/download/` 校验一致）、`desktop` 已装 1.10.1（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.10.1.tgz`，锁文件 5 处全部指向 1.10.1、无 1.10.0 残留）。
 - 代价很小：locale 键 181 → **183**（`sidebar.consolidateOpen`、`sidebar.consolidateSingle`），tab 源码 3049 → **3068** 行，`scripts/build-lib.mjs` 的 `EXTRA_KEYS` 加 4 条；`preview-tab` 的 tier-4 补一段断言（面板按钮出计划但不写盘、取消后计划面板消失）。
+## 7.12 1.11.0 的改动（`AGENTS.md` 这类散文文档里的规则也能检出）
+
+- 用户问（原话）：「规范写在 AGENTS.md 或其他文件里，能不能检测？」1.10.x 的答案是**不能**：`conventionsSources()` 只找 `<ws>/.dsh/<doc>`、`<root>/<doc>` 与祖先目录的同名文档，`AGENTS.md` 完全不看；实测「规范写 72 字符 + `AGENTS.md` 写 50 字符」的仓库回 `live 1 / count 0`。
+- 但检出**不需要调模型**：把 `AGENTS.md` 直接喂给现成的 `parseConventionRules()` 就能得到 `{maxSubject: 50, types: ["feat","fix","docs"]}` —— 它本来就是全文正则扫描，散文里的「Keep the subject under 50 characters.」照样命中。所以 1.11.0 只是补上「哪些文件也算规范」，判定仍然确定性、可复现。
+- `CONVENTION_FOREIGN_DOCS = ["AGENTS.md", "CLAUDE.md", ".cursorrules", "CONTRIBUTING.md"]`：`conventionsSources()` 在工作区根与本仓库根各扫一遍，产出 `kind: "foreign"` 的 source，**单独放进返回值的 `foreign`，不混进 `sources`** —— 否则 `total` / `live`（「有几份规范在治理这批提交」）的含义会被稀释，1.10.0 测试里 `total === 2` 的断言也会破。
+- 冲突与并集：`conventionsConflicts()` 用 `allSources = live.concat(foreign)` 做规则三段（长度 / type / 三个布尔）与并集，散文里的规则因此参与「谁更严」。新增 `report.foreign`（每份 `{origin: 文件名, docPath, keys}`）并计入 `count`；`digest` 也纳入 foreign 的 rules，`AGENTS.md` 一改提示缓存就失效。
+- 关键口径：foreign 与 **`governedUnion`（只看真正的规范文档）** 比，而不是与最终并集比 —— 否则并集早已把它的规则吃进去，永远算「没差异」，等于白检。
+- 注入提示：`conventionsConflictPromptBlock()` 为每份 foreign 追加一行「`AGENTS.md` also states … - it is not rewritten by a merge, so ask the user whether those rules should move into the document first」。模型因此能说出「你的规范没写这条，但 `AGENTS.md` 要求了」。
+- 合并：`conventionsConsolidate()` 的准入从 `live < 2` 放宽成 `live < 1 || (live < 2 && foreign.length === 0)` —— 只有一份规范但旁边有 `AGENTS.md` 时也允许整合；计划里新增 `leftInPlace`（这些文件**只读不写**，工作区里别的工具在读它们，改写会伤到别人），合并只把它们的规则写进并集，于是 `count` 归零。
+- 客户端：计划面板在「并入」列表后多一段「保留原地：AGENTS.md」（`data-gitgraph-left`），locale 键 183 → **185**（`sidebar.consolidateLeft`、`sidebar.consolidateKeep`），tab 3068 → **3079** 行。
+- 测试：`test-host` 增第 [20] 段（10 项）—— 散文文档被报成 foreign、长度规则把并集收紧到 50、提示里出现 `AGENTS.md`、计划列 `leftInPlace`、只读文件合并后原文未变、合并后 `count 0`；总数 232 → **242/242**。`preview-tab` 的 consolidate 假响应补 `leftInPlace` 并断言 `data-gitgraph-left`。
+- 边界（有意不做）：不改写 `AGENTS.md`，也不把它的散文整段搬进规范文档（只搬规则，落在并集一节）；`README.md` 等任意文件名不扫 —— 名单硬编码四个最常见的，宁可少扫也不误读。
+
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -542,7 +556,8 @@ return part.replace(/^HEAD -> /, "").trim();
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
-7. ~~发 1.10.0~~ **已完成**（commit `8cad121`、tag `v1.10.0`、release id `425076679`、资产 `dsh-git-graph-sidebar.tgz` 900982 字节、`desktop` 已装 1.10.0）。发布内容：AI 署名三态、排他性检测、一键整合、`git_conventions` 工具。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；自检结果：`spliced 2843 / 3049 / 2102 / 449`、`already present 25`、`181 locale keys`、`232/232`、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新面板与新路由。** 下一步候选：市场条目文案还没跟上 1.10.0（描述里仍写「flags the last 20 commit subjects」），以及「明确说明本插件依托 dsh-better-sidebar」的独立一句，两件事一起提一个 PR。
+7. ~~发 1.10.0~~ **已完成**（commit `8cad121`、tag `v1.10.0`、release id `425076679`、资产 `dsh-git-graph-sidebar.tgz` 900982 字节、`desktop` 已装 1.10.0）。发布内容：AI 署名三态、排他性检测、一键整合、`git_conventions` 工具。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；自检结果：`spliced 2843 / 3049 / 2102 / 449`、`already present 25`、`181 locale keys`、`232/232`、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新面板与新路由。** 下一步候选：市场条目文案还没跟上 1.10.0（描述里仍写「flags the last 20 commit subjects」），以及「明确说明本插件依托 dsh-better-sidebar」的独立一句，两件事一起提一个 PR。**已完成**：分支 `update/athosoo-dsh-git-graph-sidebar-1100`、commit `e7da492d2`、PR [#9767](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/9767)，两项检查均已通过。
+8. ~~发 1.11.0~~ **已完成实现与自检**（散文文档检测）：`spliced 2843 / 3079 / 2149 / 449`、`patch-host` 25 处、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；装完**必须重启 DSH**。
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
