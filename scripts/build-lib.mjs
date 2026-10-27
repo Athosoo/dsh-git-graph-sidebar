@@ -98,6 +98,22 @@ const EXTRA_KEYS = [
 			['"sidebar.workspaceDocWritten"', '"工作区规范已写入。"'],
 			['"sidebar.workspaceDocCopy"', '"复制路径"'],
 			['"sidebar.conventionsSwitch"', '"更换框架"'],
+			['"sidebar.ai"', '"AI 署名"'],
+			['"sidebar.aiHint"', '"提交正文里的署名尾行，例如 Assisted-by: Claude Code。规范只决定它是否必须出现。"'],
+			['"sidebar.aiRequired"', '"必须注明"'],
+			['"sidebar.aiOptional"', '"可选"'],
+			['"sidebar.aiForbidden"', '"禁止注明"'],
+			['"sidebar.ruleAiRequired"', '"需要 AI 署名"'],
+			['"sidebar.ruleAiOptional"', '"AI 署名可选"'],
+			['"sidebar.ruleAiForbidden"', '"禁止 AI 署名"'],
+			['"sidebar.conflicts"', '"{count} 处规范冲突"'],
+			['"sidebar.conflictsReview"', '"查看并合并"'],
+			['"sidebar.consolidateTitle"', '"整合工作区规范"'],
+			['"sidebar.consolidateWarn"', '"合并会改写下面这些文件，原文件先备份为 .bak-<时间>："'],
+			['"sidebar.consolidateConfirm"', '"写入并备份"'],
+			['"sidebar.consolidateMerge"', '"并入"'],
+			['"sidebar.consolidateCancel"', '"取消"'],
+			['"sidebar.consolidateMerged"', '"已合并到工作区规范。"'],
 			['"sidebar.initRepo"', '"初始化 Git 仓库"'],
 			['"sidebar.initRepoHint"', '"这个文件夹还不是 Git 仓库。可以直接在这里初始化，工作区里的其它仓库不受影响。"'],
 			['"sidebar.initBranch"', '"初始分支"'],
@@ -197,6 +213,22 @@ const EXTRA_KEYS = [
 			['"sidebar.workspaceDocWritten"', '"Workspace document written."'],
 			['"sidebar.workspaceDocCopy"', '"Copy path"'],
 			['"sidebar.conventionsSwitch"', '"Switch framework"'],
+			['"sidebar.ai"', '"AI attribution"'],
+			['"sidebar.aiHint"', '"A trailer line in the message body, such as Assisted-by: Claude Code. The document only decides whether it must be there."'],
+			['"sidebar.aiRequired"', '"required"'],
+			['"sidebar.aiOptional"', '"optional"'],
+			['"sidebar.aiForbidden"', '"forbidden"'],
+			['"sidebar.ruleAiRequired"', '"AI attribution required"'],
+			['"sidebar.ruleAiOptional"', '"AI attribution optional"'],
+			['"sidebar.ruleAiForbidden"', '"AI attribution forbidden"'],
+			['"sidebar.conflicts"', '"{count} convention conflicts"'],
+			['"sidebar.conflictsReview"', '"Review and merge"'],
+			['"sidebar.consolidateTitle"', '"Consolidate into the workspace document"'],
+			['"sidebar.consolidateWarn"', '"Merging rewrites these files; each original is backed up as .bak-<timestamp> first:"'],
+			['"sidebar.consolidateConfirm"', '"Write and back up"'],
+			['"sidebar.consolidateMerge"', '"merge"'],
+			['"sidebar.consolidateCancel"', '"Cancel"'],
+			['"sidebar.consolidateMerged"', '"Merged into the workspace document."'],
 			['"sidebar.initRepo"', '"Initialize Git repository"'],
 			['"sidebar.initRepoHint"', '"This folder is not a Git repository yet. Initialize it here; other repositories in the workspace are untouched."'],
 			['"sidebar.initBranch"', '"Initial branch"'],
@@ -243,26 +275,28 @@ const API_METHODS = [{
 				return post("git/convention", payload);
 			}`
 }, {
-	guard: "conventionOptions(path, framework, force, strict, language)",
+	guard: "conventionOptions(path, framework, force, strict, language, ai)",
 	code: `
-			/** Write a convention document with an explicit strict flag and subject language. */
-			conventionOptions(path, framework, force, strict, language) {
+			/** Write a convention document with explicit strict, language and AI-attribution flags. */
+			conventionOptions(path, framework, force, strict, language, ai) {
 				const payload = { path };
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
 				if (force === true) payload.force = true;
 				if (typeof strict === "boolean") payload.strict = strict;
 				if ("zh" === language || "en" === language || "mixed" === language) payload.language = language;
+				if ("required" === ai || "optional" === ai || "forbidden" === ai) payload.ai = ai;
 				return post("git/convention", payload);
 			}`
 }, {
 	guard: "conventionSettings(path, payload)",
 	code: `
-			/** Update only the subject language and strict switch of an existing document. */
+			/** Update only the subject language, strict switch and AI policy of an existing document. */
 			conventionSettings(path, payload) {
 				const body = payload !== null && typeof payload === "object" ? payload : {};
 				const request = { path };
 				if (typeof body.strict === "boolean") request.strict = body.strict;
 				if ("zh" === body.language || "en" === body.language || "mixed" === body.language) request.language = body.language;
+				if ("required" === body.ai || "optional" === body.ai || "forbidden" === body.ai) request.ai = body.ai;
 				return post("git/convention/settings", request);
 			}`
 }, {
@@ -281,12 +315,13 @@ const API_METHODS = [{
 			commitCompliance(path) {
 				return post("git/compliance", { path });
 			}
-			/** What choosing a framework would change in the existing document. */
-			conventionPreview(path, framework, strict, language) {
+			/** What choosing a framework would change in the existing document, AI policy included. */
+			conventionPreview(path, framework, strict, language, ai) {
 				const payload = { path };
 				if (typeof framework === "string" && framework !== "") payload.framework = framework;
 				if (typeof strict === "boolean") payload.strict = strict;
 				if ("zh" === language || "en" === language || "mixed" === language) payload.language = language;
+				if ("required" === ai || "optional" === ai || "forbidden" === ai) payload.ai = ai;
 				return post("git/convention/preview", payload);
 			}
 			/** Workspace-wide document at a container root: state, preview or write. */
@@ -298,7 +333,8 @@ const API_METHODS = [{
 					framework: typeof body.framework === "string" ? body.framework : void 0,
 					force: body.force === true ? true : void 0,
 					strict: typeof body.strict === "boolean" ? body.strict : void 0,
-					language: typeof body.language === "string" ? body.language : void 0
+					language: typeof body.language === "string" ? body.language : void 0,
+				ai: typeof body.ai === "string" ? body.ai : void 0
 				});
 			}`
 }, {
@@ -311,6 +347,21 @@ const API_METHODS = [{
 			/** The read-only health report: detached HEAD, branches without upstream, stash, objects. */
 			repoHealth(path) {
 				return post("git/health", { path });
+			}`
+}, {
+	guard: "conventionConflicts(path)",
+	code: `
+			/** Every convention document that governs this repository, and where they disagree. */
+			conventionConflicts(path) {
+				return post("git/conventions/conflicts", { path });
+			}
+			/** Merge the conflicting documents into the workspace one; a dry run unless write is true. */
+			conventionsConsolidate(path, payload) {
+				const body = payload !== null && typeof payload === "object" ? payload : {};
+				const request = { path };
+				if (body.write === true) request.write = true;
+				if (body.force === true) request.force = true;
+				return post("git/conventions/consolidate", request);
 			}`
 }];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";

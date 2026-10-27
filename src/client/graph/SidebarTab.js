@@ -623,6 +623,20 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			lineHeight: "16px"
 		};
 		/** The upgrade preview: what a write would add, rewrite or drop. */
+		/** The cross-document conflict banner: it never guesses, it reports and offers the merge. */
+		const SIDEBAR_TAB_CONFLICTS = {
+			display: "flex",
+			flexDirection: "row",
+			flexWrap: "wrap",
+			alignItems: "center",
+			gap: 6,
+			marginTop: 4,
+			padding: "4px 6px",
+			borderRadius: 6,
+			fontSize: 12,
+			lineHeight: "16px",
+			background: "var(--dsw-alias-bg-layer-2)"
+		};
 		const SIDEBAR_TAB_PREVIEW = {
 			display: "flex",
 			flexDirection: "column",
@@ -1259,6 +1273,12 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [strictMode, setStrictMode] = react.useState(false);
 			/** The subject language the document asks for: zh, en or mixed. */
 			const [conventionLang, setConventionLang] = react.useState("mixed");
+			/** The AI-attribution policy the document states: required, optional or forbidden. */
+			const [conventionAi, setConventionAi] = react.useState("optional");
+			/** Where the documents that govern this repository disagree, as read from the host. */
+			const [conflicts, setConflicts] = react.useState(null);
+			/** The pending consolidation: a dry-run plan, written only on confirm. */
+			const [consolidate, setConsolidate] = react.useState(null);
 			/** Whether a convention document is being written right now. */
 			const [conventionBusy, setConventionBusy] = react.useState(false);
 			/** The last successful write, so the strip can confirm it. */
@@ -1471,7 +1491,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const writeConvention = react.useCallback((repoPath, frameworkId) => {
 				setConventionBusy(true);
 				setConventionError(null);
-				return sidebarTabGit().conventionOptions(repoPath, frameworkId, true, strictMode, conventionLang).then((result) => {
+				return sidebarTabGit().conventionOptions(repoPath, frameworkId, true, strictMode, conventionLang, conventionAi).then((result) => {
 					setConventionBusy(false);
 					if (!result.ok) {
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
@@ -1486,7 +1506,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setConventionError(t("sidebar.error.conventions"));
 					return false;
 				});
-			}, [conventionLang, runScan, strictMode, t]);
+			}, [conventionAi, conventionLang, runScan, strictMode, t]);
 			/** The selected repository's path, as an effect dependency. */
 			const selectedKey = selected !== void 0 ? selected.path : void 0;
 			/** The workspace whose shared document strip is shown, as a dependency. */
@@ -1505,7 +1525,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					path: repoPath,
 					framework: frameworkId
 				});
-				return sidebarTabGit().conventionPreview(repoPath, frameworkId, strictMode, conventionLang).then((result) => {
+				return sidebarTabGit().conventionPreview(repoPath, frameworkId, strictMode, conventionLang, conventionAi).then((result) => {
 					if (!result.ok || result.value === null || result.value === void 0) {
 						setUpgrade(null);
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
@@ -1523,7 +1543,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setConventionError(t("sidebar.error.conventions"));
 					return false;
 				});
-			}, [conventionLang, strictMode, t, writeConvention]);
+			}, [conventionAi, conventionLang, strictMode, t, writeConvention]);
 			/** Write the previewed framework, replacing the document on purpose. */
 			const confirmUpgrade = react.useCallback(() => {
 				if (upgrade === null || upgrade.phase !== "ready") return;
@@ -1534,6 +1554,66 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					if (ok) setPickerOpen(false);
 				});
 			}, [upgrade, writeConvention]);
+			/**
+			 * Re-read the conflict report. The merge changes it without changing the
+			 * repository scan, so waiting for the scan to move would leave a stale strip.
+			 */
+			const reloadConflicts = react.useCallback((repoPath) => {
+				return sidebarTabGit().conventionConflicts(repoPath).then((result) => {
+					if (result.ok && result.value !== null && result.value !== void 0) setConflicts(result.value);
+					return result;
+				}).catch(() => void 0);
+			}, []);
+			/**
+			 * Ask the host what consolidating would change: every document that governs
+			 * this repository merged into the workspace one. Nothing is written yet.
+			 */
+			const previewConsolidate = react.useCallback((repoPath) => {
+				setConsolidate({
+					phase: "loading",
+					path: repoPath
+				});
+				return sidebarTabGit().conventionsConsolidate(repoPath, {}).then((result) => {
+					if (!result.ok || result.value === null || result.value === void 0) {
+						setConsolidate(null);
+						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						return false;
+					}
+					setConsolidate({
+						phase: "ready",
+						path: repoPath,
+						value: result.value
+					});
+					return true;
+				}).catch(() => {
+					setConsolidate(null);
+					setConventionError(t("sidebar.error.conventions"));
+					return false;
+				});
+			}, [t]);
+			/** Write the merged document; the absorbed ones become pointers, originals kept as backups. */
+			const confirmConsolidate = react.useCallback(() => {
+				if (consolidate === null || consolidate.phase !== "ready") return;
+				const repoPath = consolidate.path;
+				setConventionBusy(true);
+				sidebarTabGit().conventionsConsolidate(repoPath, {
+					write: true,
+					force: true
+				}).then((result) => {
+					setConventionBusy(false);
+					if (!result.ok || result.value === null || result.value === void 0) {
+						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
+						return;
+					}
+					setConsolidate(null);
+					setConventionNotice("merged");
+					reloadConflicts(repoPath);
+					runScan(true);
+				}).catch(() => {
+					setConventionBusy(false);
+					setConventionError(t("sidebar.error.conventions"));
+				});
+			}, [consolidate, reloadConflicts, runScan, t]);
 			/** Read the workspace document once per scan, so the strip stays honest. */
 			react.useEffect(() => {
 				if (workspaceKey === void 0) return void 0;
@@ -1557,7 +1637,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				sidebarTabGit().workspaceConvention(workspaceKey, {
 					action: "write",
 					strict: strictMode,
-					language: conventionLang
+					language: conventionLang,
+					ai: conventionAi
 				}).then((result) => {
 					setWorkspaceBusy(false);
 					if (!result.ok || result.value === null || result.value === void 0) {
@@ -1577,7 +1658,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setWorkspaceBusy(false);
 					setWorkspaceError(t("sidebar.error.conventions"));
 				});
-			}, [conventionLang, runScan, strictMode, t, workspaceBusy, workspaceDoc, workspaceKey]);
+			}, [conventionAi, conventionLang, runScan, strictMode, t, workspaceBusy, workspaceDoc, workspaceKey]);
 
 		/** A switch clicked on an existing document is stored right away, not on the next framework pick. */
 		const applyConventionSettings = react.useCallback((next) => {
@@ -1596,6 +1677,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			if (state === null) return;
 			setStrictMode(state.strict === true);
 			setConventionLang(state.languageStated === true && (state.language === "zh" || state.language === "en" || state.language === "mixed") ? state.language : "mixed");
+		setConventionAi(state.aiStated === true && (state.ai === "required" || state.ai === "optional" || state.ai === "forbidden") ? state.ai : "optional");
 		}, [selectedKey, scan]);
 			/** The confirmation fades out on its own; the chip keeps the new state. */
 			react.useEffect(() => {
@@ -1610,6 +1692,19 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				sidebarTabGit().commitCompliance(selectedKey).then((result) => {
 					if (!alive || !result.ok || result.value === null || result.value === void 0) return;
 					setCompliance(result.value);
+				}).catch(() => void 0);
+				return () => {
+					alive = false;
+				};
+			}, [selectedKey, scan]);
+
+			/** Read where the documents that govern this repository disagree. */
+			react.useEffect(() => {
+				if (selectedKey === void 0) return void 0;
+				let alive = true;
+				sidebarTabGit().conventionConflicts(selectedKey).then((result) => {
+					if (!alive || !result.ok || result.value === null || result.value === void 0) return;
+					setConflicts(result.value);
 				}).catch(() => void 0);
 				return () => {
 					alive = false;
@@ -2400,6 +2495,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						if (rules.noPeriod === true) push("period", "period", t("sidebar.rulePeriod"));
 						if (rules.imperative === true) push("mood", "mood", t("sidebar.ruleMood"));
 						if (rules.languageStated === true) push("language", "language", rules.language === "zh" ? t("sidebar.langZh") : rules.language === "en" ? t("sidebar.langEn") : t("sidebar.langMixed"));
+						if (rules.aiStated === true) push("ai", "ai", rules.ai === "required" ? t("sidebar.ruleAiRequired") : rules.ai === "forbidden" ? t("sidebar.ruleAiForbidden") : t("sidebar.ruleAiOptional"));
 					}
 					if (shown === 0) parts.push(h("span", {
 						key: "text",
@@ -2419,8 +2515,88 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						style: SIDEBAR_TAB_COMPLIANCE
 					}, parts);
 				})();
+
+				/**
+				 * The exclusivity check: the documents that govern this repository do
+				 * not always agree, and silently picking one would be wrong. The banner
+				 * states how many documents disagree; merging is previewed first.
+				 */
+				const conflictLine = conflicts === null || typeof conflicts.count !== "number" || conflicts.count === 0 ? null : h("div", {
+					key: "conflicts",
+					"data-gitgraph-conflicts": conflicts.count,
+					style: SIDEBAR_TAB_CONFLICTS
+				}, [h("span", {
+						key: "count",
+						style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_CHIP, {
+							color: "var(--dsw-alias-state-warn-primary, #b45309)"
+						})
+					}, t("sidebar.conflicts", {
+						count: conflicts.count
+					})), h("button", {
+						key: "review",
+						type: "button",
+						"data-gitgraph-action": "conventions-conflicts-review",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						disabled: conventionBusy,
+						onClick: () => previewConsolidate(selected.path)
+					}, t("sidebar.conflictsReview"))]);
+				/** The consolidation plan: which files merge, and which become pointers. */
+				const consolidatePanel = (() => {
+					if (consolidate === null || consolidate.path !== selected.path) return null;
+					const value = consolidate.phase === "ready" ? consolidate.value : null;
+					const parts = [h("span", {
+						key: "title",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.consolidateTitle"))];
+					if (value === null) parts.push(h("span", {
+						key: "wait",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.loading")));
+					else {
+						parts.push(h("span", {
+							key: "warn",
+							style: SIDEBAR_TAB_CONVENTIONS_NOTE
+						}, t("sidebar.consolidateWarn")));
+						const names = (Array.isArray(value.absorbed) ? value.absorbed : []).slice(0, 6);
+						names.forEach((docPath) => {
+							parts.push(h("div", {
+								key: "absorbed-" + docPath,
+								style: SIDEBAR_TAB_PREVIEW_ROW
+							}, [h("span", {
+									key: "badge",
+									style: SIDEBAR_TAB_CONVENTIONS_CHIP
+								}, t("sidebar.consolidateMerge")), h("span", {
+									key: "path",
+									style: SIDEBAR_TAB_PREVIEW_SNIPPET
+								}, docPath)]));
+						});
+						parts.push(h("div", {
+							key: "actions",
+							style: SIDEBAR_TAB_PREVIEW_ROW
+						}, [h("button", {
+								key: "confirm",
+								type: "button",
+								"data-gitgraph-action": "conventions-consolidate",
+								style: SIDEBAR_TAB_DETAIL_BUTTON,
+								disabled: conventionBusy,
+								onClick: confirmConsolidate
+							}, t("sidebar.consolidateConfirm")), h("button", {
+								key: "dismiss",
+								type: "button",
+								"data-gitgraph-action": "conventions-consolidate-cancel",
+								style: SIDEBAR_TAB_DETAIL_BUTTON,
+								onClick: () => setConsolidate(null)
+							}, t("sidebar.consolidateCancel"))]));
+					}
+					return h("div", {
+						key: "consolidate",
+						"data-gitgraph-consolidate": consolidate.phase,
+						style: SIDEBAR_TAB_PREVIEW
+					}, parts);
+				})();
 				const children = [head];
 				if (complianceLine !== null) children.push(complianceLine);
+				if (conflictLine !== null) children.push(conflictLine);
 				if (conventionError !== null) children.push(h("span", {
 					key: "error",
 					"data-gitgraph-conventions-error": true,
@@ -2434,6 +2610,11 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					key: "notice",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, t("sidebar.conventionsApplied")));
+				else if (conventionNotice === "merged") children.push(h("span", {
+					key: "notice",
+					"data-gitgraph-conventions-merged": true,
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.consolidateMerged")));
 				else if (!exists) children.push(h("span", {
 					key: "missing",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
@@ -2512,6 +2693,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					}, parts);
 				})();
 				if (upgradePanel !== null) children.push(upgradePanel);
+				if (consolidatePanel !== null) children.push(consolidatePanel);
 				if (pickerOpen) {
 					const cards = (catalog !== null ? catalog : []).map((framework) => h("button", {
 						key: "framework-" + framework.id,
@@ -2548,7 +2730,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 							setStrictMode(next);
 							applyConventionSettings({
 								strict: next,
-								language: conventionLang
+								language: conventionLang,
+								ai: conventionAi
 							});
 						}
 					}, (strictMode === true ? "☑ " : "☐ ") + t("sidebar.strict")), h("span", {
@@ -2571,11 +2754,34 @@ const SIDEBAR_TAB_COMPLIANCE = {
 								setConventionLang(value);
 								applyConventionSettings({
 									strict: strictMode,
-									language: value
+									language: value,
+									ai: conventionAi
 								});
 							}
 						}, value === "zh" ? t("sidebar.langZh") : value === "en" ? t("sidebar.langEn") : t("sidebar.langMixed")))));
 					children.push(langRow);
+					/** The AI-attribution switch: three explicit choices, never inferred. */
+					const aiRow = h("div", {
+						key: "ai-row",
+						style: SIDEBAR_TAB_STRICT_ROW
+					}, [h("span", {key: "ai-label", style: SIDEBAR_TAB_STRICT_NOTE}, t("sidebar.ai"))].concat(["required", "optional", "forbidden"].map((value) => h("button", {
+							key: value,
+							type: "button",
+							"data-gitgraph-ai": value,
+							"aria-pressed": conventionAi === value ? "true" : "false",
+							title: t("sidebar.aiHint"),
+							style: conventionAi === value ? SIDEBAR_TAB_STRICT_ON : SIDEBAR_TAB_STRICT_OFF,
+							disabled: conventionBusy,
+							onClick: () => {
+								setConventionAi(value);
+								applyConventionSettings({
+									strict: strictMode,
+									language: conventionLang,
+									ai: value
+								});
+							}
+						}, value === "required" ? t("sidebar.aiRequired") : value === "forbidden" ? t("sidebar.aiForbidden") : t("sidebar.aiOptional")))));
+					children.push(aiRow);
 					children.push(h("div", {
 						key: "picker",
 						"data-gitgraph-conventions-picker": true,

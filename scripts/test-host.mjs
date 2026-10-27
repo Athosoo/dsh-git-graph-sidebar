@@ -781,6 +781,167 @@ const noRules = await call("/git/compliance", { path: docless });
 	const workspaceBody = await readFile(join(wsContainer, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
 	check("the workspace switches update in place", workspaceSwitches.json?.ok === true && /\nlanguage: zh/.test(workspaceBody) && /\nstrict: true/.test(workspaceBody), workspaceBody.slice(0, 200));
 	check("the container prompt follows a switch update", section.text(cwdOf(wsContainer)).includes("Subject language: Chinese only"), section.text(cwdOf(wsContainer)).slice(0, 300));
+
+	console.log("\n[17] the AI attribution policy is checked in the message body");
+
+	const aiRepo = join(workspace, "repos", "ai-required");
+	await mkdir(aiRepo, { recursive: true });
+	await git(aiRepo, "init", "-b", "main");
+	await writeFile(join(aiRepo, "GIT_CONVENTIONS.md"), [
+		"status: settled",
+		"strict: true",
+		"language: zh",
+		"ai: required",
+		""
+	].join(NL), "utf8");
+	await writeFile(join(aiRepo, "a.txt"), "a\n", "utf8");
+	await git(aiRepo, "add", ".");
+	await git(aiRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: 新增功能", "-m", "Assisted-by: Claude Code");
+	await writeFile(join(aiRepo, "b.txt"), "b\n", "utf8");
+	await git(aiRepo, "add", ".");
+	await git(aiRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "fix: 修复问题");
+	const aiState = await call("/git/conventions", { path: aiRepo });
+	check("the state reports the AI policy", aiState.json?.value?.ai === "required" && aiState.json?.value?.aiStated === true, JSON.stringify(aiState.json?.value?.ai) + "/" + JSON.stringify(aiState.json?.value?.aiStated));
+	const aiRequired = await call("/git/compliance", { path: aiRepo });
+	check("/git/compliance ok for an AI-required document", aiRequired.json?.ok === true, aiRequired.raw.slice(0, 200));
+	const requiredReasons = (aiRequired.json?.value?.offenders ?? []).map((entry) => entry.subject + ":" + (entry.reasons ?? []).join("+")).join(" | ");
+	check("a message without a trailer breaks the AI rule", requiredReasons.includes("fix: 修复问题:ai"), requiredReasons);
+	check("a message that carries one passes", !requiredReasons.includes("feat: 新增功能"), requiredReasons);
+	check("the report names the policy it applied", aiRequired.json?.value?.ai === "required" && aiRequired.json?.value?.enforced === true, JSON.stringify(aiRequired.json?.value?.ai));
+	await call("/git/convention/settings", { path: aiRepo, ai: "forbidden" });
+	const aiForbidden = await call("/git/compliance", { path: aiRepo });
+	const forbiddenReasons = (aiForbidden.json?.value?.offenders ?? []).map((entry) => entry.subject + ":" + (entry.reasons ?? []).join("+")).join(" | ");
+	check("a forbidden policy flags the trailer", forbiddenReasons.includes("feat: 新增功能:ai"), forbiddenReasons);
+	check("a forbidden policy lets a plain message pass", !forbiddenReasons.includes("fix: 修复问题"), forbiddenReasons);
+	await call("/git/convention/settings", { path: aiRepo, ai: "optional" });
+	const aiOptional = await call("/git/compliance", { path: aiRepo });
+	check("an optional policy never flags the trailer", (aiOptional.json?.value?.offenders ?? []).every((entry) => !(entry.reasons ?? []).includes("ai")), JSON.stringify((aiOptional.json?.value?.offenders ?? []).map((entry) => entry.reasons)));
+	check("the AI policy reaches the prompt", /AI attribution| Assisted-by/.test(section.text(cwdOf(aiRepo))), section.text(cwdOf(aiRepo)).slice(0, 300));
+
+
+	console.log("\n[18] conflicting documents are reported, and merging is previewed before it writes");
+
+	const consolidable = join(workspace, "ws-consolidate");
+	const childRepo = join(consolidable, "repo");
+	await mkdir(join(consolidable, ".dsh"), { recursive: true });
+	await mkdir(childRepo, { recursive: true });
+	await git(childRepo, "init", "-b", "main");
+	await writeFile(join(consolidable, ".dsh", "GIT_CONVENTIONS.md"), [
+		"status: settled",
+		"strict: true",
+		"language: zh",
+		"ai: required",
+		"",
+		"## 1. Subject",
+		"",
+		"标题不超过 72 字符。",
+		"",
+	].join(NL), "utf8");
+	await writeFile(join(childRepo, "GIT_CONVENTIONS.md"), [
+		"status: settled",
+		"strict: false",
+		"language: en",
+		"ai: forbidden",
+		"",
+		"## 1. Subject",
+		"",
+		"Keep the subject under 50 characters.",
+		"",
+	].join(NL), "utf8");
+	await writeFile(join(childRepo, "a.txt"), "a\n", "utf8");
+	await git(childRepo, "add", ".");
+	await git(childRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+	const conflicts = await call("/git/conventions/conflicts", { path: childRepo });
+	check("/git/conventions/conflicts ok", conflicts.json?.ok === true, conflicts.raw.slice(0, 200));
+	const report = conflicts.json?.value ?? {};
+	check("both documents are counted", report.live === 2 && report.total === 2, JSON.stringify([report.live, report.total]));
+	const conflictKeys = (report.fields ?? []).map((entry) => entry.key);
+	check("the field conflicts are named", conflictKeys.includes("strict") && conflictKeys.includes("language") && conflictKeys.includes("ai"), JSON.stringify(conflictKeys));
+	check("the rule conflict is named", (report.rules ?? []).some((entry) => entry.key === "maxSubject"), JSON.stringify((report.rules ?? []).map((entry) => entry.key)));
+	check("the report carries a digest", typeof report.digest === "string" && report.digest.length > 0, String(report.digest));
+	check("the union keeps the stricter side", report.union?.maxSubject === 50 && report.union?.strict === true && report.union?.ai === "required", JSON.stringify(report.union));
+	const noticeText = section.text(cwdOf(childRepo));
+	check("the prompt tells the agent the documents disagree", noticeText.includes("conflict"), noticeText.slice(-400));
+	check("the prompt asks before picking a side", /Ask the user|ask the user/.test(noticeText), noticeText.slice(-400));
+	const dryRun = await call("/git/conventions/consolidate", { path: childRepo });
+	check("/git/conventions/consolidate dry run ok", dryRun.json?.ok === true, dryRun.raw.slice(0, 200));
+	check("a dry run writes nothing", dryRun.json?.value?.written === false, JSON.stringify(dryRun.json?.value?.written));
+	check("the dry run names the document it would absorb", (dryRun.json?.value?.absorbed ?? []).some((entry) => String(entry).replace(/\\/g, "/").endsWith("/repo/GIT_CONVENTIONS.md")), JSON.stringify(dryRun.json?.value?.absorbed));
+	const stillLoose = await readFile(join(childRepo, "GIT_CONVENTIONS.md"), "utf8");
+	check("the dry run leaves the repository document alone", stillLoose.includes("Keep the subject under 50 characters"), stillLoose.slice(0, 120));
+	const forced = await call("/git/conventions/consolidate", { path: childRepo, write: true, force: true });
+	check("/git/conventions/consolidate write ok", forced.json?.ok === true, forced.raw.slice(0, 300));
+	check("the write reports what it wrote", forced.json?.value?.written === true && typeof forced.json?.value?.docPath === "string", JSON.stringify(forced.json?.value?.docPath));
+	check("every absorbed file is backed up", (forced.json?.value?.backups ?? []).length >= 1, JSON.stringify(forced.json?.value?.backups));
+	const mergedBody = await readFile(join(consolidable, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
+	check("the merged document carries the union section", mergedBody.includes("Unified rules (merged by dsh-git-graph)"), mergedBody.slice(0, 200));
+	check("the merged document keeps the stricter length", mergedBody.includes("subject at most 50 characters"), mergedBody.slice(0, 400));
+	check("the merged document keeps both bodies", mergedBody.includes("标题不超过 72 字符") && mergedBody.includes("Keep the subject under 50 characters"), mergedBody.slice(0, 400));
+	const pointerBody = await readFile(join(childRepo, "GIT_CONVENTIONS.md"), "utf8");
+	check("the absorbed document becomes a pointer", pointerBody.includes("<!-- dsh-git-graph: inherited from"), pointerBody);
+	const pointerState = await call("/git/conventions", { path: childRepo });
+	check("the pointer is reported as inherited", pointerState.json?.value?.pointer === true, JSON.stringify(pointerState.json?.value?.pointer));
+	const afterMerge = await call("/git/conventions/conflicts", { path: childRepo });
+	check("nothing conflicts after the merge", afterMerge.json?.value?.count === 0, JSON.stringify(afterMerge.json?.value?.count));
+	check("the prompt stops warning after the merge", !section.text(cwdOf(childRepo)).includes("conflict"), section.text(cwdOf(childRepo)).slice(-300));
+
+
+	console.log("\n[19] the git_conventions tool lets an agent check the documents and merge them");
+
+	const toolWorkspace = join(workspace, "ws-tool");
+	const toolRepo = join(toolWorkspace, "repo");
+	await mkdir(join(toolWorkspace, ".dsh"), { recursive: true });
+	await mkdir(toolRepo, { recursive: true });
+	await git(toolRepo, "init", "-b", "main");
+	await writeFile(join(toolWorkspace, ".dsh", "GIT_CONVENTIONS.md"), ["status: settled", "strict: true", "language: zh", "", "## 1. Subject", "", "标题不超过 72 字符。", ""].join(NL), "utf8");
+	await writeFile(join(toolRepo, "GIT_CONVENTIONS.md"), ["status: settled", "strict: false", "language: en", "", "## 1. Subject", "", "Keep the subject under 50 characters.", ""].join(NL), "utf8");
+	await writeFile(join(toolRepo, "a.txt"), "a\n", "utf8");
+	await git(toolRepo, "add", ".");
+	await git(toolRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
+
+	const toolInjections = [];
+	const toolContext = {
+		logger: { info() {}, warn() {}, error() {}, debug() {} },
+		subprocess: fakeSubprocess(),
+		workspaceRegistry: { list: () => [{ path: workspace }] },
+		webServer: { register() { return () => {}; } },
+		effect(fn) { const disposer = fn(); return () => { if (typeof disposer === "function") disposer(); }; },
+		on() { return () => {}; },
+		inject(deps, callback) { toolInjections.push({ deps, callback }); return { dispose() {} }; },
+		get() { return undefined; }
+	};
+	/** The host hands apply() a schemastery config whose fields answer get(). */
+	/** apply() is mount-once per package, so the second mount needs a fresh slot. */
+	const mountedPlugins = globalThis[Symbol.for("dsh-web.mounted-plugins")];
+	if (mountedPlugins instanceof Set) mountedPlugins.delete("dsh-git-graph-sidebar");
+	apply(toolContext, { agentTool: { get: () => true } });
+	const toolEntry = toolInjections.find((entry) => Array.isArray(entry.deps) && entry.deps.includes("tools"));
+	check("the tool injection is requested", toolEntry !== undefined);
+	const registered = [];
+	if (toolEntry !== undefined) toolEntry.callback({
+		tools: { register(definition) { registered.push(definition); return () => {}; } },
+		effect(fn) { const disposer = fn(); return () => { if (typeof disposer === "function") disposer(); }; }
+	});
+	const conventionsTool = registered.find((definition) => definition.name === "git_conventions");
+	check("git_conventions is registered", conventionsTool !== undefined, JSON.stringify(registered.map((definition) => definition.name)));
+	check("git_conventions asks for one action", conventionsTool !== undefined && Array.isArray(conventionsTool.parameters?.required) && conventionsTool.parameters.required.join(",") === "action");
+	const toolExec = { agent: { session: { header: { cwd: toolRepo } } } };
+	const toolCheck = await conventionsTool.execute({ action: "check" }, toolExec);
+	check("check reports the conflict count", toolCheck.ok === true && toolCheck.count > 0, JSON.stringify(toolCheck.count));
+	check("check tells the model to ask first", /Ask the user/.test(String(toolCheck.guidance)), String(toolCheck.guidance));
+	const toolPlan = await conventionsTool.execute({ action: "consolidate" }, toolExec);
+	check("consolidate without write returns a plan only", toolPlan.ok === true && toolPlan.written === false, JSON.stringify(toolPlan.written));
+	check("the plan explains the next step", /repeat with write true/.test(String(toolPlan.guidance)), String(toolPlan.guidance));
+	const untouchedRepo = await readFile(join(toolRepo, "GIT_CONVENTIONS.md"), "utf8");
+	check("the plan writes nothing", untouchedRepo.includes("Keep the subject under 50 characters"), untouchedRepo.slice(0, 80));
+	const toolWrite = await conventionsTool.execute({ action: "consolidate", write: true, force: true }, toolExec);
+	check("consolidate with write merges", toolWrite.ok === true && toolWrite.written === true, JSON.stringify(toolWrite.written));
+	check("the write explains the backups and pointers", /backed up/.test(String(toolWrite.guidance)), String(toolWrite.guidance));
+	const toolUnknown = await conventionsTool.execute({ action: "nope" }, toolExec);
+	check("an unknown action is refused", toolUnknown.ok === false && toolUnknown.code === "internal", JSON.stringify(toolUnknown));
+	const toolNoCwd = await conventionsTool.execute({ action: "check" }, {});
+	check("without a session cwd the tool refuses", toolNoCwd.ok === false && toolNoCwd.code === "workspace-unknown", JSON.stringify(toolNoCwd));
+
 	await rm(workspace, { recursive: true, force: true });
 
 	const failed = checks.filter((entry) => !entry.ok);

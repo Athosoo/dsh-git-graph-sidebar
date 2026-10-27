@@ -496,6 +496,9 @@ const CONVENTION_CALLS = [];
 /** Every workspace document write, and the shared document's fake state. */
 const WORKSPACE_CALLS = [];
 const SETTINGS_CALLS = [];
+/** Every /git/conventions/consolidate call, and the fake conflict state behind it. */
+const CONSOLIDATE_CALLS = [];
+const CONFLICT_STATE = { count: 2 };
 const WORKSPACE_DOC = { exists: false, draft: false, size: 0 };
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
@@ -545,6 +548,41 @@ const fakeFetch = async (path, init) => {
 			gitBytes: 3670016,
 			checkedAt: Date.now()
 		};
+	} else if (path === "git/conventions/conflicts") {
+		value = {
+			doc: "GIT_CONVENTIONS.md",
+			root: payload.path,
+			workspace: WORKSPACE,
+			live: CONFLICT_STATE.count === 0 ? 1 : 2,
+			total: CONFLICT_STATE.count === 0 ? 1 : 2,
+			count: CONFLICT_STATE.count,
+			digest: "fake" + CONFLICT_STATE.count,
+			fields: CONFLICT_STATE.count === 0 ? [] : [{
+				key: "language",
+				values: [{ origin: "workspace", docPath: WORKSPACE + "/.dsh/GIT_CONVENTIONS.md", value: "zh" }, { origin: "repository", docPath: String(payload.path) + "/GIT_CONVENTIONS.md", value: "en" }]
+			}],
+			rules: [],
+			sources: [],
+			union: { maxSubject: 72, types: ["feat", "fix", "docs"], strict: true, language: "zh", languageStated: true, ai: "required", aiStated: true }
+		};
+	} else if (path === "git/conventions/consolidate") {
+		CONSOLIDATE_CALLS.push(Object.assign({}, payload));
+		const write = payload.write === true;
+		const target = WORKSPACE + "/.dsh/GIT_CONVENTIONS.md";
+		if (write) CONFLICT_STATE.count = 0;
+		value = {
+			written: write,
+			target,
+			docPath: target,
+			exists: true,
+			bytes: write ? 2400 : 0,
+			absorbed: [String(payload.path) + "/GIT_CONVENTIONS.md"],
+			backups: write ? [String(payload.path) + "/GIT_CONVENTIONS.md.bak-20261027-120000"] : [],
+			pointers: write ? [String(payload.path) + "/GIT_CONVENTIONS.md"] : [],
+			conflicts: write ? 0 : 2,
+			diff: { added: 2, changed: 0, removedTitles: [] },
+			union: { maxSubject: 72, types: ["feat", "fix", "docs"], strict: true, language: "zh", languageStated: true, ai: "required", aiStated: true }
+		};
 	} else if (path === "git/conventions") {
 		const entry = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path));
 		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null
@@ -560,7 +598,9 @@ const fakeFetch = async (path, init) => {
 			switchEntry.conventions = Object.assign({}, switchEntry.conventions, {
 				strict: payload.strict === true,
 				language: typeof payload.language === "string" ? payload.language : "mixed",
-				languageStated: typeof payload.language === "string"
+				languageStated: typeof payload.language === "string",
+				ai: typeof payload.ai === "string" ? payload.ai : "optional",
+				aiStated: typeof payload.ai === "string"
 			});
 		}
 		value = {
@@ -571,7 +611,9 @@ const fakeFetch = async (path, init) => {
 				docPath: String(payload.path) + "/GIT_CONVENTIONS.md",
 				bytes: 2400,
 				strict: payload.strict === true,
-				language: typeof payload.language === "string" ? payload.language : "mixed"
+				language: typeof payload.language === "string" ? payload.language : "mixed",
+				ai: typeof payload.ai === "string" ? payload.ai : "optional",
+				aiStated: typeof payload.ai === "string"
 			}
 		};
 	} else if (path === "git/convention") {
@@ -597,7 +639,7 @@ const fakeFetch = async (path, init) => {
 			strict: true,
 			checked: 5,
 			failing: exists ? 2 : 0,
-			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true, languageStated: true, language: "zh" },
+			rules: { maxSubject: 72, types: ["feat", "fix", "docs"], lowercase: true, noPeriod: true, imperative: true, languageStated: true, language: "zh", ai: state !== null && typeof state.ai === "string" ? state.ai : "optional", aiStated: state !== null && state.aiStated === true },
 			offenders: exists ? [
 				{ oid: "aaaaaaa", subject: "Fixed the parser crash.", reasons: ["case", "period"] },
 				{ oid: "bbbbbbb", subject: "chore: tidy the tree", reasons: ["type"] }
@@ -1274,6 +1316,92 @@ let pickerHtml = "";
 	if (tierHtml.indexOf("workspace-doc-create") >= 0) throw new Error("the create button stayed after the document exists");
 	REPOS = savedRepos;
 	console.log("preview-tab: compliance, upgrade preview and workspace document ok");
+// Tier 4: the AI attribution switch, the conflict strip and the merge panel. The
+// synthetic entry carries conflicting documents, so the strip has something to
+// report; the stubs keep the count until a write clears it.
+const TIER4_PATH = WORKSPACE + "/repos-tier4/conflicted";
+let tier4Html = "";
+{
+	const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+	/** Poll a render predicate: the merge notice arrives after a rescan. */
+	const until = async (predicate, limit = 2000) => {
+		const started = Date.now();
+		while (Date.now() - started < limit) {
+			if (await predicate()) return true;
+			await wait(50);
+		}
+		return false;
+	};
+	const htmlOf = async () => (await tierMount.render()).html;
+	const savedRepos = REPOS;
+	const injected = {
+		path: TIER4_PATH,
+		root: TIER4_PATH,
+		name: "conflicted",
+		relPath: "repos-tier4/conflicted",
+		kind: "nested",
+		outside: false,
+		conventions: {
+			doc: "GIT_CONVENTIONS.md",
+			docPath: TIER4_PATH + "/GIT_CONVENTIONS.md",
+			exists: true,
+			size: 1200,
+			draft: false,
+			strict: true,
+			language: "zh",
+			languageStated: true,
+			ai: "required",
+			aiStated: true
+		},
+		status: {
+			root: TIER4_PATH,
+			branch: "main",
+			head: "def5678",
+			dirtyFiles: 0,
+			untrackedFiles: 0,
+			conflicts: 0,
+			operationInProgress: false
+		}
+	};
+	REPOS = Object.assign({}, savedRepos, { repos: (savedRepos.repos || []).concat([injected]) });
+	const tierMount = await mountComponent(descriptor.component, tabProps(TIER4_PATH));
+	await wait(80);
+	let tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-conflicts="2"') < 0) throw new Error("the conflict strip did not report both conflicts");
+	if (tierHtml.indexOf('data-gitgraph-action="conventions-conflicts-review"') < 0) throw new Error("the conflict strip has no review button");
+	if (tierHtml.indexOf('data-gitgraph-rule="ai"') < 0) throw new Error("a required AI policy shows no rule chip");
+	tier4Html = tierHtml;
+	const reviewButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-conflicts-review")[0];
+	if (reviewButton === undefined) throw new Error("the conflict review button is not clickable");
+	click(reviewButton, "review conflicts");
+	await wait(80);
+	if (CONSOLIDATE_CALLS.length !== 1) throw new Error("reviewing the conflicts did not ask for a plan");
+	if (CONSOLIDATE_CALLS[0].write === true) throw new Error("reviewing the conflicts wrote the document");
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-consolidate="ready"') < 0) throw new Error("the merge plan did not render");
+	if (tierHtml.indexOf("GIT_CONVENTIONS.md") < 0) throw new Error("the merge plan lists no absorbed document");
+	const mergeButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate")[0];
+	if (mergeButton === undefined) throw new Error("the merge plan has no confirm button");
+	click(mergeButton, "confirm merge");
+	if (CONSOLIDATE_CALLS.length !== 2 || CONSOLIDATE_CALLS[1].write !== true) throw new Error("confirming the merge did not write");
+	if (!(await until(async () => (await htmlOf()).indexOf("data-gitgraph-conventions-merged") >= 0))) throw new Error("the merge wrote nothing to report");
+	if (!(await until(async () => (await htmlOf()).indexOf("data-gitgraph-conflicts") < 0))) throw new Error("the conflict strip survived the merge");
+	tierHtml = await htmlOf();
+	const switchButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "switch-conventions")[0];
+	if (switchButton === undefined) throw new Error("the AI switch needs the picker, which never opened");
+	click(switchButton, "switch framework");
+	await wait(80);
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf('data-gitgraph-ai="required"') < 0) throw new Error("the picker has no AI attribution switch");
+	if (tierHtml.indexOf('data-gitgraph-ai="optional"') < 0 || tierHtml.indexOf('data-gitgraph-ai="forbidden"') < 0) throw new Error("the AI switch offers fewer than three choices");
+	const forbiddenButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-ai"] === "forbidden")[0];
+	click(forbiddenButton, "forbid AI attribution");
+	await wait(80);
+	if (SETTINGS_CALLS.length === 0 || SETTINGS_CALLS[SETTINGS_CALLS.length - 1].ai !== "forbidden") throw new Error("the AI switch did not reach /git/convention/settings");
+	REPOS = savedRepos;
+	CONFLICT_STATE.count = 2;
+}
+	console.log("preview-tab: ai attribution, conflict strip and one-click merge ok");
 }
 
 // The one-click init flow: a workspace whose root is not a repository offers the

@@ -38,9 +38,17 @@ function routeCaseOf(anchor, replacement) {
 	return void 0;
 }
 
+/** A marker counts as present when it matches a whole line, whatever its indent. */
+function present(source, marker) {
+	if (source.includes(marker)) return true;
+	const flat = marker.replace(/[ \t]+/g, " ").trim();
+	if (flat.indexOf(String.fromCharCode(10)) >= 0) return false;
+	return source.split(String.fromCharCode(10)).some((line) => line.replace(/[ \t]+/g, " ").trim() === flat);
+}
+
 function patch(label, anchor, replacement, guard) {
 	const marker = guard !== undefined ? guard : routeCaseOf(anchor, replacement);
-	if (source.includes(marker === undefined ? replacement : marker)) {
+	if (present(source, marker === undefined ? replacement : marker)) {
 		skipped.push(label);
 		return;
 	}
@@ -356,14 +364,14 @@ patch(
 	"convention-preview-flags",
 	`				const preview = await conventionPreview(snapshot.root, feature.docName, framework);`,
 	`				const flags = payload !== null && typeof payload === "object" ? payload : {};
-				const preview = await conventionPreview(snapshot.root, feature.docName, framework, flags.strict, flags.language);`
+				const preview = await conventionPreview(snapshot.root, feature.docName, framework, flags.strict, flags.language, flags.ai);`
 );
 
 patch(
 	"convention-language-write",
 	`				const body = conventionBodyOf(framework, basename(snapshot.root), payload !== null && typeof payload === "object" ? payload.strict : void 0);`,
 	`				const policy = payload !== null && typeof payload === "object" ? payload : {};
-				const body = conventionBodyOf(framework, basename(snapshot.root), policy.strict, policy.language);`,
+				const body = conventionBodyOf(framework, basename(snapshot.root), policy.strict, policy.language, policy.ai);`,
 	"conventionBodyOf(framework, basename(snapshot.root), policy.strict"
 );
 
@@ -371,7 +379,7 @@ patch(
 	"workspace-language-write",
 	`				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, payload !== null && typeof payload === "object" ? payload.strict : void 0);`,
 	`				const policy = payload !== null && typeof payload === "object" ? payload : {};
-				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict, policy.language);`,
+				const result = await workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict, policy.language, policy.ai);`,
 	"workspaceConvention(gated.canonical, feature.docName, action, framework, force, policy.strict"
 );
 
@@ -394,7 +402,7 @@ patch(
 					return;
 				}
 				const policy = payload !== null && typeof payload === "object" ? payload : {};
-				const updated = await conventionSettings(snapshot.root, feature.docName, policy.strict, policy.language);
+				const updated = await conventionSettings(snapshot.root, feature.docName, policy.strict, policy.language, policy.ai);
 				if (!updated.ok) {
 					writeJson(res, 200, FAIL(updated.error));
 					return;
@@ -405,6 +413,54 @@ patch(
 			}
 			case "/git/convention": {`,
 	`			case "/git/convention/settings": {`
+);
+
+// 19. Exclusive detection: one route reports the disagreement, one merges the
+//     documents (a dry run unless the payload asks to write).
+patch(
+	"convention-conflict-routes",
+	'\t\tcase "/git/conventions": {',
+	`\t\tcase "/git/conventions/conflicts": {
+\t\t\tconst gated = await createWorkspaceGate(ctx)(path);
+\t\t\tif (!gated.ok) {
+\t\t\t\twriteJson(res, 200, FAIL(gated.error));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tconst feature = featureOf(config);
+\t\t\twriteJson(res, 200, OK(conventionsConflicts(gated.canonical, feature.docName)));
+\t\t\treturn;
+\t\t}
+\t\tcase "/git/conventions/consolidate": {
+\t\t\tconst gated = await createWorkspaceGate(ctx)(path);
+\t\t\tif (!gated.ok) {
+\t\t\t\twriteJson(res, 200, FAIL(gated.error));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tconst feature = featureOf(config);
+\t\t\tconst policy = payload !== null && typeof payload === "object" ? payload : {};
+\t\t\tconst merged = await conventionsConsolidate(gated.canonical, feature.docName, {
+\t\t\t\twrite: policy.write === true,
+\t\t\t\tforce: policy.force === true
+\t\t\t});
+\t\t\tif (!merged.ok) {
+\t\t\t\twriteJson(res, 200, FAIL(merged.error));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tif (merged.value.written === true) ctx.logger.info("dsh-git-graph: consolidated " + merged.value.docPath);
+\t\t\twriteJson(res, 200, OK(merged.value));
+\t\t\treturn;
+\t\t}
+\t\tcase "/git/conventions": {`,
+	'\t\t\tcase "/git/conventions/conflicts": {'
+);
+
+// 20. The same detection is reachable from a model step: the session's cwd is
+//     the only input, and the tool reports rather than decides.
+patch(
+	"conventions-tool",
+	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), "dsh-git-graph: git_worktree tool");',
+	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), "dsh-git-graph: git_worktree tool");' +
+	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildConventionsTool(featureConfig)), "dsh-git-graph: git_conventions tool");'
 );
 
 // A route case may appear exactly once: two copies mean an earlier run

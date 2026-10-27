@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-25 19:05 (+08)。
+> 最后更新：2026-10-27（1.10.0 已实现、未发布）。
 
 ## 0. 一句话状态
 
@@ -16,6 +16,8 @@
 **1.7.2 已发布、已推送、已装进 `desktop`**：工作区总纲条补上写入反馈——写成功后 `data-gitgraph-workspace-note="written"` 加「工作区规范已写入。」提示（8 秒淡出），写入失败的消息也改在这里显示（以前只落进选中仓库的规范条，工作区条静默）；文档已存在时按钮不再消失：有 `onOpenFile` 就给「打开」，否则给「复制路径」（`sidebar.workspaceDocCopy`）。`build-lib` spliced 2652 行、`patch-host` 24 处、`160` 个 locale 键、host 148/148。 **1.6.1 已发布、已推送、已装进 `desktop`**：工具栏去掉「总览」与「全屏查看」（客户端代码一并删除，只读路由 `/git/cleanup`、`/git/health` 保留），面板字号整体加大一号；commit `f077dd4`、tag `v1.6.1`、Release id `422709234`、资产 844839 字节；`build-lib` spliced 2561 行、`patch-host` 22 处、156 个 locale 键、host 132/132、客户端预览全过。 **1.7.0 已发布、已推送、已装进 `desktop`**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 852091 字节）：合规检查接受中文 / 英文 / 中英混排（type 中文别名、全角冒号、大小写与祈使句仅对拉丁首词生效），可选**强约束**模式（写入 `strict: true`，注入提示要求不合规提交先改写），框架选择列表选完自动收起，工具栏与操作按钮换成显式白色底 / 深色字的控制面板皮肤。`build-lib` spliced 2627 行、`patch-host` 24 处、158 个 locale 键、host 148/148。
 
 **1.9.2 已发布、已推送、已装进 `desktop`**：补上 1.9.1 漏掉的 host 那一行——`lib/index.js:616` 的 `parseDecoration()` 不再剥掉 `tag: ` 前缀，客户端才真的能把标签和分支分开。**这一行没改，1.9.1 在实机上等于没修**：预览的 fixture 是手写的、自带 `tag: ` 前缀，所以测试全绿，而真实主机一直把前缀剥掉。`test-host` 因此新增第 [16] 段（真建仓库 + 打 annotated tag，断言 `/git/graph` 的 refs 里有 `tag: v1.0.0`、`main` 没有前缀），现在 **189/189**。 发布信息：commit `71c6571`、tag `v1.9.2`、release id **423303272**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.9.2`）、资产 `dsh-git-graph-sidebar.tgz` **876179** 字节（`releases/latest/download/...` 校验一致）、`desktop` 已装 1.9.2（旧版 1.9.1 → 1.9.2，装前 `rm -rf node_modules/dsh-git-graph-sidebar`，否则 pnpm 复用 store 只报 `reused 1`）。安装后核对：`installed 1.9.2` / `host strips tag prefix: false` / `client ref-kind attr: 1`。**这次改的是主机半边，必须重启 DSH，`Ctrl+R` 不够。**
+
+**1.10.0（本次，待发布）**：规范从「能读」走到「能主编排」。三件事：① **AI 署名政策** `ai: required | optional | forbidden`（前置字段，默认 `optional`，向后兼容）；`commitCompliance()` 的 `git log` 格式改成 `--format=%H%x00%s%x00%b%x1e`——以前只读 subject，trailer 在正文里，所以必须读 body；`required` 要求 `Assisted-by:` / `Co-authored-by:` 任一，`forbidden` 只拦 AI 专用 trailer、放过人类 `Co-authored-by:`。② **排他性检测** `conventionsConflicts()`：把工作区 `.dsh/<doc>`、本仓库 `<doc>`、祖先仓库的 `<doc>` 三方逐字段（`status/framework/strict/language/ai`）与逐规则（标题长度 / type 词表 / 小写 / 句号 / 祈使）比对，**只有双方都显式写了同一个字段且取值不同才算冲突**（沉默不算冲突）；`conventionsPromptBlock()` 把冲突写进每一步注入的提示，并明确要求「不要默默选边，先问用户」。③ **一键整合** `conventionsConsolidate()`：并集语义而非「谁赢」——把并集规则按 `parseConventionRules` 认得的标准措辞追加成 `## Unified rules (merged by dsh-git-graph)` 一节，再把各文档 `## ` 分节（同名时加 `(from workspace / this repository / parent repository)` 后缀）拼进来；写盘前每个被替换的文件都留 `*.bak-<yyyymmdd-HHmmss>`，仓库文档改成指针 `<!-- dsh-git-graph: inherited from … -->`，`repoConventionState()` 认指针、`conventionsDocumentFor()` 跳过指针以免重复治理。配套：`/git/conventions/conflicts`、`/git/conventions/consolidate` 两条只读/可写路由，`ai` 透传到写入、预览、设置、工作区四条既有路由，以及 **opt-in 的 `git_conventions` 工具**（`check` / `consolidate`，不带 `write: true` 只出计划），让中途加入工作区的模型自己就能检出冲突并回头问人。`build-lib` spliced 2843 / 3038 / 2102 / 449 行、`patch-host` 25 处、**181 个 locale 键**、host **232/232**。
 
 **1.9.1 已发布、已推送、已装进 `desktop`（客户端半边）**：标签退出筛选排——一个标签只指向一个提交，静音它只能藏一行，所以它不再是筛选项，只留在提交行上作徽章；可筛分支少于 4 条时整排不显示；顺手删掉 1.6.1 遗留的两条死字典键 `sidebar.expandGraph`。`build-lib` spliced 2843 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键。**1.9.0 已发布、已推送、已装进 `desktop`**：引用筛选从「一个 ref 一枚标签」变成「一个分支一枚标签」——`feat/x` 与 `origin/feat/x` 合并成一枚并一起静音，`HEAD` / `origin/HEAD` 不再是标签，标签单独灰色一类，顺序是当前分支 → 其他本地分支 → 只有远程的分支 → 标签，超过 12 枚折成 `+N`，有静音时出现「清除筛选」；行内徽章与导出 SVG 用同一套标签（`HEAD -> main` 现在显示成 `main`）。`build-lib` spliced 2838 / 1560 / 449 行、`patch-host` 23 处、166 个 locale 键、host 186/186、客户端预览含新的 refs 一节全过。
 
@@ -145,6 +147,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.10.0 | AI 署名政策（`ai: required/optional/forbidden`，读正文 trailer）、排他性检测（工作区 / 本仓库 / 祖先逐字段逐规则比对，冲突写进注入提示）、一键整合（并集规则 + `## Unified rules` 分节 + 时间戳备份 + 仓库文档改指针）、`git_conventions` 工具；待发布 |
 | 1.9.2 | 补上 1.9.1 漏掉的 host 那一行（`parseDecoration` 保留 `tag: ` 前缀），标签与分支终于真的能区分；`test-host` 增加第 [16] 段真标签断言（189/189）；已发布并已装 |
 | 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键（只改了客户端，实机无效，见 1.9.2）；已发布并已装 |
 | 1.9.0 | 引用筛选改成一个分支一枚标签（本地与远程同名合并、符号引用不再出现、标签单独灰色、超 12 枚折 `+N`、静音时给「清除筛选」），行内徽章与导出 SVG 复用同一套标签；已发布并已装 |
@@ -473,6 +476,44 @@ return part.replace(/^HEAD -> /, "").trim();
 
 筛选排的分量要和它能筛掉的东西成正比。一个仓库只有 1 条分支 + 9 个发布标签时，这一排既筛不出内容又占掉三成首屏高度——那是纯装饰。判断标准很简单：**能不能从这一枚「顺藤摸瓜」走到别的提交**。能（分支、远程分支）就留，不能（标签、符号引用）就当行内标记。
 
+## 7.10 1.10.0 的改动（AI 署名政策、排他性检测、一键整合）
+
+用户诉求（原话）：「我希望这个 git 规范新增一个选项：是否注明 AI 贡献，怎么样？然后我希望 git 规范能够具备排他性检测，即当 git 规范文件和已有的规范冲突，需要能够提供解决方案。我设想的方案是：一键整合工作区规范」；追加约束：「排他性检测我还要为了中途加插件的做准备，避免中途加的规范和旧规范冲突，可以让 AI 方便地检出冲突，询问是否合并」——所以这一版的验收标准不只是「面板上能点」，而是**模型自己也能检出、并且必须先问人**。
+
+### 7.10.1 AI 署名政策（`src/host/conventions.js`）
+
+- 前置字段 `ai: required | optional | forbidden`；`CONVENTION_AI_MODES = ["required", "optional", "forbidden"]`，`conventionAiOf()` 用中英文正则辨识（`forbid|禁止|不允许|不得|never|none|off` / `require|must|必须|必填|要求|注明|需要|always`），空值回 `optional` —— **默认 optional，老文档不受影响**；`conventionAiStated()` 区分「没写」与「写了 optional」，只有写了才在界面与提示里出现。
+- `commitCompliance()` 的读法变了：`--format=%H%x00%s%x00%b%x1e`，按 `\u001e` 切记录、`\u0000` 切字段。**以前只读 subject，trailer 在正文里，所以 1.10.0 之前的合规检查根本看不到 AI 署名。**
+- `required` 认 `assisted-by` / `generated-by` / `ai-assisted` / `ai-generated` / `co-authored-by`；`forbidden` 只拦 **AI 专用** trailer（`CONVENTION_AI_TOOL_TRAILERS`），放过人类 `Co-authored-by:` —— 否则「禁止 AI 署名」会误伤结对提交。
+- 只有 `strict: true` 时才真的拒绝提交；否则只在面板标红（`reasons` 里多一个 `ai`）。`enforced` 现在也包含 ai 两个方向。
+
+### 7.10.2 排他性检测（`conventionsConflicts()`）
+
+- 参与比较的只有「管同一批提交」的三处：工作区 `<ws>/.dsh/<doc>`、本仓库 `<root>/<doc>`、祖先仓库 `<doc>`（`conventionsAncestorRoots()` 向上 3 层）。**子仓库文档不算冲突** —— 它们各自独立是合法的。
+- 字段级比 `status / framework / strict / language / ai`，规则级比 `maxSubject / types / lowercase / noPeriod / imperative`。三条判定口径：①② 字段与布尔规则**只有双方都显式写了同一个字段且取值不同才算冲突**（沉默不算冲突，避免「谁没写谁就该被覆盖」的误判）；③ `types` 只有**交集为空**才算冲突（部分重叠可以共存）。
+- `digest` = 参与比较的 `docPath + fields + rules` 与冲突数的 sha256 前 16 位，进了 `conventionsPromptText()` 的缓存 stamp —— 文档或冲突状态一变，提示立刻失效重算。
+- 有冲突时，注入的提示块末尾追加 `conventionsConflictPromptBlock()`：逐条列 `<字段>: <值> (workspace) vs <值> (this repository)`，并明确要求模型**不要默默选边、先问用户**，要合并就调 `git_conventions` 的 `consolidate` 先出计划。
+
+### 7.10.3 一键整合（`conventionsConsolidate()`）
+
+- **并集语义，不是「谁赢」**。理由：`parseConventionRules()` 是全文扫描的（长度取全文最小值、types 取全文反引号名的词表并集、布尔「全文任意处出现即为 true」），所以只要把并集规则按它认得的标准措辞追加成一节，解析结果天然就是并集，不需要脆弱地改写原文 prose。追加的那一节标题固定 `## Unified rules (merged by dsh-git-graph)`，正文英文（用中文会污染 `conventionDocLanguageOf()` 的语言判定）。
+- 各文档的 `## ` 分节一并搬过来；标题撞车时改写成 `## <原标题> (from workspace | this repository | parent repository)`，再撞就加序号 —— **早期实现直接跳过同名分节，会静默丢掉仓库文档的正文，已修**。
+- 写盘：目标是 `<ws>/.dsh/<doc>`；已存在且没给 `force` 就报 `convention-exists`；写之前每个被替换的文件都留 `<name>.bak-<yyyymmdd-HHmmss>`；仓库级文档不再复制正文，改成指针文件（`> 本仓库的 Git 规范由工作区统一维护：…` + `<!-- dsh-git-graph: inherited from … -->`）。
+- 指针的后继处理：`repoConventionState()` 认指针并回 `pointer: true / inherited`（避免 `conventionsAuto` 又给它铺一份模板）；`conventionsDocumentFor()` 跳过指针文件，让注入落到工作区文档上，不然同一个仓库会被两套文档各治理一次。
+- 写盘前先出计划（`write` 不给就只返回 `{written: false, diff, union, absorbed}`），面板与工具都先预览再落盘。
+
+### 7.10.4 路由、工具与客户端
+
+- 两条新路由（`scripts/patch-host.mjs` 的 `convention-conflict-routes`）：`/git/conventions/conflicts`、`/git/conventions/consolidate`。`ai` 透传到 `/git/convention`（写入）、`/git/convention/preview`、`/git/convention/settings`、`/git/workspace-convention` 四条既有路由。
+- **opt-in 的 `git_conventions` 工具**（`agentTool` 开着才注册，照 `buildWorktreeTool` 的形状写）：`action: check | consolidate`，另有 `write` / `force`；没给 `write: true` 时只出计划并把 guidance 写成「先给用户看，同意了再带 write true 重来」。这是「中途加入的插件/模型」场景的落地方式：模型每步都能从注入提示里看到冲突，也能主动查。
+- 客户端（`src/client/graph/SidebarTab.js`）：AI 三态选择器（`data-gitgraph-ai`）、规范条新增 AI 规则 chip、冲突条（`data-gitgraph-conflicts` + 「查看并合并」按钮）、整合面板（`data-gitgraph-consolidate` = `ready` / `written`，列前 6 个被并掉的文档 + 「写入并备份」/「关闭」）。
+- locale 键 166 → **181**（`sidebar.ai`、`aiHint`、`aiRequired/Optional/Forbidden`、`ruleAiRequired/Optional/Forbidden`、`conflicts`、`conflictsReview`、`consolidateTitle/Warn/Merge/Confirm/Cancel/Merged`）。
+
+### 7.10.5 测试与教训
+
+- `scripts/test-host.mjs` 增加三段，**232/232**：[17] AI 署名在正文里被检查（required / forbidden / optional 三态）；[18] 冲突被报告、合并先预览后写入（含备份、指针、合并后 `count 0`、提示里不再有冲突）；[19] `git_conventions` 工具（注册、check 出计划、consolidate 不带 write 不改盘、带 write 真合并、未知 action、无 cwd）。
+- **`apply()` 是 `mountOnce()` 包的，靠 `globalThis[Symbol.for("dsh-web.mounted-plugins")]` 全局去重** —— 同一进程里第二次 `apply` 是 no-op，只会进 waiters。测试里必须先 `mountedPlugins.delete("dsh-git-graph-sidebar")` 才能再挂。
+- 传给 `apply()` 的 config 必须是 schemastery 形态（字段带 `.get()`），例如 `{ agentTool: { get: () => true } }`；`featureConfig` 是 thunk，`buildConventionsTool(featureConfig)` 里 `readConfig()` 拿到的就是解包后的字符串。
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
@@ -494,6 +535,7 @@ return part.replace(/^HEAD -> /, "").trim();
 4. ~~发 1.7.0~~ **已完成**（commit `a1c4619`、tag `v1.7.0`、Release id `422753809`、资产 `dsh-git-graph-sidebar.tgz` 852091 字节、`desktop` 已装 1.7.0；`patch-host` 24 处、`148/148`、158 个 locale 键）。下一版（Tier 4，尚未在 ROADMAP 立项）候选：提交信息模板（按文档生成 `type(scope): 描述`）、合规结果接进 `systemPrompt` 让模型自己避免、把仓库体检的「大未跟踪文件」做成可点开列表。
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
+7. **发 1.10.0（本次，已实现未发布）**：当前 `main` 工作树上的改动（未提交）——AI 署名三态、排他性检测、一键整合、`git_conventions` 工具。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；发布前先跑 §10 全链路自检（应得 `spliced 2843 / 3038 / 2102 / 449`、`already present 25`、`181 locale keys`、`232/232`、预览全过）。**这次 host 与客户端都动了，装完必须重启 DSH。**
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
@@ -549,8 +591,9 @@ node scripts/build-lib.mjs && node scripts/patch-host.mjs
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs && node scripts/test-host.mjs
 node scripts/preview-tab.mjs
-# 2) 升 1.8.0 后打包
-npm pack --pack-destination "../dsh-git-graph-dist/1.8.2"
+# 2) 打包（版本号与目录名一致；cp 一份无版本名的给 Release 资产）
+npm pack --pack-destination "../dsh-git-graph-dist/1.10.0"
+cp "../dsh-git-graph-dist/1.10.0/dsh-git-graph-sidebar-1.10.0.tgz" "../dsh-git-graph-dist/1.10.0/dsh-git-graph-sidebar.tgz"
 # 3) commit + push，建 tag/Release（资产名无版本），换装，让用户重启
 # 4) 22:07 之后：bash ../.market-pr/open-pr.sh
 ```

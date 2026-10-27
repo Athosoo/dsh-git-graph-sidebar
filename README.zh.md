@@ -95,6 +95,10 @@
   | GitLab Flow | 在 `main` 与生产之间显式设置环境分支的团队 |
 
 - **绝不覆盖**——已存在的文档只有在请求带 `force` 时才会被替换，界面不会对已定稿的文档提供这个选项。文档是仓库根目录里的普通 Markdown，可以像源码一样评审和修改。
+- **AI 署名是明确的政策，不是默认假设**——前置字段新增 `ai: required | optional | forbidden`，默认 `optional`，老文档不受影响。`required` 要求每条信息带一个 AI 署名 trailer（`Assisted-by:` / `Generated-by:` / `Co-authored-by:` 都认），`forbidden` 只拦 AI 专用的那几个（人类结对提交的 `Co-authored-by:` 不算违规）。检查读的是**提交正文**——以前只看标题，所以根本看不到 trailer。和其它规则一样：面板始终标出，只有 `strict: true` 时才真的拒绝提交。
+- **冲突会被报出来，不会被悄悄投票**——插件把「管同一批提交」的文档三方对比（工作区 `<工作区>/.dsh/GIT_CONVENTIONS.md`、当前仓库自己的、以及祖先仓库的）：字段（`status` / `framework` / `strict` / `language` / `ai`）与规则（标题长度、type 词表、小写、句号、祈使句）都比，但**只有双方都明确写了同一个字段且取值不同才算冲突**，沉默不算。有冲突时，每一步注入给助手的提示里都会带上这份分歧清单，并明确要求它「不要自己选边，先问用户」——所以中途才加入工作区的插件、模型也不会闷头照旧规范写。
+- **一键整合到工作区文档**——面板上的「查看并合并」先把并集方案预览出来（新增几节、改写几节、哪些文档会被并掉），按「写入并备份」才落盘，落到 `<工作区>/.dsh/GIT_CONVENTIONS.md`。并集语义：长度取最严、type 取词表并集、布尔规则「任一方要求即生效」，各文档的正文小节都会搬过来（同名小节标注来源）。每一份被替换的文件都留一份 `<文件名>.bak-<年月日-时分秒>`，仓库级文档则改成指针文件（`inherited from …`）——想退回随时能退。
+- **助手自己也能查**——打开 `agentTool` 后会注册一个 `git_conventions` 工具（`action: check` 列冲突、`action: consolidate` 出合并计划），不带 `write: true` 时只出计划不动盘，于是模型可以「先查、再问、得到许可后合并」。
 - **智能体真的会读到**——宿主注册了一个 `systemPrompt` 段，在**每一次**模型调用前装配：它告诉智能体会话所在仓库的规范文档在哪，并把文档内容（最多 3000 字符）内联进去。整个工作区都没有任何仓库定义规范时不注入任何内容；文本按文件 mtime 缓存，因此不会每步重复读同一个未变文件。
 - **就近生效，可以继承**——查找顺序是三档：会话目录所在仓库自己的文档 → 最近的祖先仓库（monorepo 容器）的文档 → 其下已定义规范的仓库清单。继承来的文档会标注 `inherited Git conventions` 并写明来源仓库，所以 `packages/api` 在没写自己的文档之前会遵循容器根那份规则。清单最多向下扫三层，跳过点目录与 `node_modules`。
 
@@ -122,6 +126,8 @@
 | `/git/compliance` | 提交合规：最近 20 个提交对照文档规则的不合规清单与原因（只读接口；面板只列生效规则，不展示这些历史违规）（`{path}`） |
 | `/git/convention/preview` | 规范升级预览：写入前的新增/改写/移除小节计数与标题，只读不落盘（`{path}`, `framework`） |
 | `/git/workspace-convention` | 工作区总纲：`state` 读、`preview` 预览、`write` 写 `.dsh/GIT_CONVENTIONS.md`（`{path}`, `action`, `framework`, `force`） |
+| `/git/conventions/conflicts` | 文档冲突：工作区 / 本仓库 / 祖先仓库逐字段逐规则比对（`{path}`） |
+| `/git/conventions/consolidate` | 一键整合：不带 `write` 只出计划，带 `write` 才写工作区文档并留备份与指针（`{path}`, `{write?, force?}`） |
 | `/git/events` | 变更通知（界面轮询） |
 
 每个路由都会先 `realpath` 解析请求路径，只有在某个已注册工作区**内部**时才放行；嵌套仓库目录会被接受，工作区之外的路径返回 `workspace-unknown`。
