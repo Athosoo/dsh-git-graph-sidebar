@@ -548,8 +548,11 @@ return part.replace(/^HEAD -> /, "").trim();
 - 测试：`preview-tab.mjs` 的假 ctx 补了 `slots`（记录 `inject`/`register`）、`sessions`（`session` → `cwd: WORKSPACE`）和一份内存版 `localStorage`；新断言组覆盖「偏好关时**不**注册」「打开后注册进 `conversation.view`、`id: "git-graph"`、`order: 70`、标签本地化」「视图元素树含容器、侧栏本体且**不带** `tab` 描述符」「`×` 关掉后偏好变 `"0"` 且注册被 dispose」「再打开能重新注册」。注意这套测试 harness **不能渲染嵌套组件**（子组件的 hooks 会跑在 render 通道之外），因此断言落在元素树上而不是 `html` 上。
 - 文档：`README.md` / `README.zh.md` 开头新增 **Why this one / 为什么选它**（规范进提示、规范能被读回含散文、两份规范打架不会被悄悄投票、三个入口一套本体、全程本地只读），并在功能清单里补「可选的主区域视图」一条；`DEVELOPMENT.md` 加「The optional main-area View」一节记下偏好键、注册代码、`tab` 守卫、字面量 `t()` 的坑与测试限制；`package.json` 升 **1.12.0**。
 - 自检值：`build-lib` spliced **3189 / 2149 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **242/242**、`preview-tab` 全过（末行 `root 40067 / nested 24884 / pinned+zoomed 27231`）。
+- 发布信息：commit `4e1a38e`、tag `v1.12.0`、release id **425494454**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.12.0`）、资产 `dsh-git-graph-sidebar.tgz` **910380** 字节（asset id **681671318**，`releases/latest/download/...` 经镜像下载校验 sha256 `2963b69addc0646ad46abdd9d15c508fe026742766ffc861974d3cbe1797f5d7` 一致、154 条目、包内 version 1.12.0）、`desktop` 已装 1.12.0（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.12.0.tgz`，lockfile `:41-43` / `:1198-1199` / `:3291` 全指 1.12.0，1.11.0 残留 0 处）。
 
 ## 8. 待办清单（按优先级）
+
+0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。
 2. ~~发 1.6.0~~ **已完成**（commit `92f15a1`、tag `v1.6.0`、Release id `422695343`、资产 `dsh-git-graph-sidebar.tgz` 854388 字节、`desktop` 已装 1.6.0）；用户需重启 DSH 才能用上三条新路由。原始步骤留档：
