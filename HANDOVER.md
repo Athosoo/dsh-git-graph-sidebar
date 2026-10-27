@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.13.0：合并改成由智能体读文档、判冲突与重复、自己写一份；程序化并集降级为草稿路径；`desktop` 装完需重启 DSH）。
+> 最后更新：2026-10-27（1.13.1：把机械合并整条删掉——插件自己不再合并，只由智能体读文档后写；`desktop` 装完需重启 DSH）。
 
 ## 0. 一句话状态
 
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.13.1 | 删掉机械合并：`conventionsConsolidate` / `conventionsUnionSection` / `conventionsMergedBody`、`/git/conventions/consolidate` 路由、工具 `draft` 动作、客户端合并面板与 11 个 locale 键全部移除；合并只能由智能体读完全部文档后自己写（`read` → `write`）。locale 180 键、host 232/232 |
 | 1.13.0 | 合并改由智能体主导：`git_conventions` 新增 `read`（每份文档完整正文）与 `write`（写入模型写的合并稿，带备份与指针），`consolidate` 退为 `draft`；提示词在无冲突但多文档时也提示查重；面板「AI 合并」把请求复制到剪贴板（客户端无法直接发起模型回合），机械并集降级为通知里的「先看机械并集草稿」；locale 189 键、host 252/252 |
 | 1.12.1 | 主区域布局修正（提交卡片移到图谱右侧、整列高度减掉宿主发布的 composer 高度）、被并入的仓库文档在指针下面保留合并前原文、locale 187 键、host 243/243 |
 | 1.11.0 | 把 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md` 里的规则也读进来（`foreign` 来源、参与冲突与并集、合并时只读保留）、locale 185 键、host 242/242 |
@@ -559,12 +560,12 @@ return part.replace(/^HEAD -> /, "").trim();
 
 1.10.0 的 `conventionsConsolidate()` 是确定性的并集：把各文档 `##` 小节搬过来、追加一节命中解析正则的 `## Unified rules`。它只能合并「正则看得见的东西」——**读不出两段话在说同一件事**，读不出「每节都写待定」的脚手架没有信息量，也不能把人话改写得更短。用户的判断是这种机械合并不够用，于是合并搬到模型侧，代码只留真正机械的部分（发现文档、备份、指针、落盘）。
 
-### 7.15.2 工具面：`read` / `check` / `draft` / `write`
+### 7.15.2 工具面：`read` / `check` / `write`（`draft` 已在 1.13.1 删除）
 
 - `read` → `conventionsReadDocuments(cwd, docName)` 返回 `{doc, root, workspace, target, documents}`；每份文档带 `origin`（`workspace` / `this repository` / `parent repository` / 散文文件名）、`docPath`、`bytes`、`pointer`、`inherited`、`truncated`、`text`（上限 `CONVENTION_READ_MAX_CHARS = 20000`）。**要点是模型看到原文件，而不是解析出来的规则列表。**
 - `write` → `conventionsWriteMerged(cwd, docName, body, {force, absorb})`：空正文拒绝（`convention-empty`）；目标已存在且无 `force` 拒绝（`convention-exists`）；旧目标先复制成 `<名>.bak-<yyyymmdd-HHmmss>`；`absorb`（默认 true）时每份非工作区的规范文档备份后改写成指针，且**指针下面保留合并前原文**。读写都过 `conventionReadText` / `conventionWriteText`，失败返回 `{ok:false, error:{code:"internal"}}` 而不是抛异常。
-- `draft` = 旧的 `consolidate`（`write` 仍可强制走机械并集，作为退路），`check` 不变。
-- 参数：`action`（required）+ `body` / `write` / `force` / `absorb`。
+- `check` 不变；`draft` 在 1.13.1 已删除（见 §7.16）。
+- 参数：`action`（required）+ `body` / `force` / `absorb`。
 
 ### 7.15.3 提示词改了谁来做合并
 
@@ -614,6 +615,39 @@ return part.replace(/^HEAD -> /, "").trim();
 - `preview-tab` 新增一段 `main-area layout keeps the commit card off the composer ok`：挂载 `mainView: true` 的 tab，断言根节点 `height`/`maxHeight` 都含 `--dsh-conversation-viewport-height` 与 `--dsh-composer-height`、未选中提交时没有 `data-gitgraph-main-split`、点行后 split 恰好两个 pane（左 `data-gitgraph-sidebar-body`、右 `data-gitgraph-detail-aside` 且内含唯一 `data-gitgraph-detail`）、根节点直接子级里不再有 `data-gitgraph-detail`。
 - 自检值：`build-lib` spliced **2843 / 3223 / 2153 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **243/243**、`preview-tab` 全过。
 
+## 7.16 1.13.1 的改动（只有智能体合并，插件不再合并）
+
+### 7.16.1 用户的话与执行口径
+
+用户看完 1.13.0 后的指示是「搞成只有 AI 整理这个功能」。因此不是「机械合并降级」，而是**整条删掉**：插件此后没有任何路径能自己合成一份规范，唯一写盘入口是 `git_conventions` 的 `write`，而它的正文必须由模型读过全部原文后写出。
+
+保留的是「发现与报告」——它不产出规范，只回答「有哪些文档、它们在哪、哪里不一致」，正是触发智能体动手的那一步。
+
+### 7.16.2 删了什么
+
+- `src/host/conventions.js`（2303 → 2156 行）：`conventionsUnionSection`、`conventionsMergedBody`、`conventionsConsolidate` 三块整体删除；工具里删 `draft` 分支与 `write` 参数，`action` 枚举变为 `read | check | write`，未知动作文案改为 `action must be one of 'read', 'check', 'write'`。
+- `scripts/patch-host.mjs`：`convention-conflict-routes` 只留只读的 `/git/conventions/conflicts`，并注明「Merging is the model's job, so there is no write route」。
+- `lib/index.js`：删掉 `case "/git/conventions/consolidate"` 整个分支；现在打这个路由得到 **404 空 body**（走 `default: res.writeHead(404); res.end();`）。
+- `scripts/build-lib.mjs`：GitApi 去掉 `conventionsConsolidate`，locale 去掉 11 个键 × 2 语言（`consolidateTitle/Warn/Confirm/Merge/Left/Keep/Draft/Cancel/Merged/Open/Single`），189 → **180**。
+- `src/client/graph/SidebarTab.js`（→ 3104 行）：删掉 `consolidate` 状态、`reloadConflicts`、`previewConsolidate`、`confirmConsolidate`、`consolidatePanel` 及其挂载、`merged` 与 `single` 两个通知分支；「AI 合并」通知里的「先看机械并集草稿」退路按钮一并去掉。冲突条计数改用独立键 `sidebar.conventionsConflicts`（旧 `sidebar.conflicts` 被 git status 的「{count} 个冲突」占用），按钮文案改为 `sidebar.conflictsReview` = **交给 AI 合并 / Merge with AI**。
+
+### 7.16.3 测试怎么改的
+
+- 删掉的不再断言，改成断言**它不存在**：`test-host` [18] 与 [20] 各加一条 `POST /git/conventions/consolidate` 期望 `ok !== true`（实际 404 空 body），并顺手断言报告本身不写盘（原文档一字未变）。
+- [19] 只走 `read` → `write`；`draft` 的三条断言删除。
+- `preview-tab` tier-4 删掉机械并集整段，改为两条守卫：任何时刻 HTML 里都不许出现 `data-gitgraph-consolidate=`，且 `CONSOLIDATE_CALLS` 必须保持 0；头部也不再有 `conventions-consolidate-open`。
+- 自检值：`build-lib` spliced **2843 / 3104 / 2156 / 449**、`patch-host` `already present 25`、`validate-lib` **180 键**、`test-host` **232/232**、`preview-tab` 8 组全过。
+
+### 7.16.4 坑
+
+- 删区间用注释行当边界时，**边界前一行常挂着还要用的常量**：第一刀把 `const CONVENTION_READ_MAX_CHARS = 20000;` 一起删了，`test-host` 直接 `ReferenceError`。删完要 grep 一遍关键标识符。
+- 工具调用的 JSON 层会把 `\\t` 再折一次，所以脚本里要匹配 `patch-host.mjs` 那种字面 `\t` 转义的源码，必须用 `chr(92)` + `t` 拼。
+- 以 `find("\n}];")` 当尾部锚点会吃掉模板字面量的收尾反引号。改 `scripts/build-lib.mjs` 一律先 `git show HEAD:scripts/build-lib.mjs > 临时文件`，在临时文件上改、`node --check` 过了再覆盖。
+
+### 7.16.5 发布
+
+版本 **1.13.1**，包名 `dsh-git-graph-sidebar.tgz`（不带版本号，市场条目 `latest/download` 自动跟随）。
+
 ## 8. 待办清单（按优先级）
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
@@ -641,6 +675,8 @@ return part.replace(/^HEAD -> /, "").trim();
 8. ~~发 1.11.0~~ **已完成**（commit `14e2e72`、tag `v1.11.0`、release id `425422415`、资产 `dsh-git-graph-sidebar.tgz` 904153 字节、`desktop` 已装 1.11.0）。发布内容：散文文档（`AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md`）里的规则也能检出并整合。自检：`spliced 2843 / 3079 / 2149 / 449`、`already present 25`、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新行为（注入提示里的 `AGENTS.md` 一行与面板的「保留原地」）。**
 9. ~~发 1.13.0~~ **已完成**（commit `9534f1e`、tag `v1.13.0`、release id `425545057`、资产 `dsh-git-graph-sidebar.tgz` 919392 字节、`desktop` 已装 1.13.0）。发布内容：合并改由智能体读文档后自己写（`git_conventions` 增 `read` / `write`，旧的 `consolidate` 退为 `draft`）、提示词改口、面板改为把请求复制到剪贴板。自检：`spliced 2843 / 3253 / 2303 / 449`、`already present 25`、`189 locale keys`、host **252/252**、`preview-tab` 8 组全过。**用户需重启 DSH。** 下一步候选：市场条目文案仍是 1.11.0 口径（写的是一键整合），要与 1.13.0 的「智能体自己读自己写」对齐可再提一次 PR。
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
+
+10. ~~发 1.13.1~~ **已完成**（按用户指示删掉机械合并：`conventionsConsolidate` / `conventionsUnionSection` / `conventionsMergedBody`、`/git/conventions/consolidate` 路由、工具 `draft`、客户端合并面板与 11 个 locale 键全部移除；合并只剩智能体读文档后自己写。自检：`spliced 2843 / 3104 / 2156 / 449`、`already present 25`、`180 locale keys`、host **232/232**、`preview-tab` 8 组全过。**用户需重启 DSH。**）
 
 ## 9. 坑与教训（每条都真踩过）
 

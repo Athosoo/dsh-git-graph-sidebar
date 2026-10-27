@@ -106,25 +106,14 @@ const EXTRA_KEYS = [
 			['"sidebar.ruleAiRequired"', '"需要 AI 署名"'],
 			['"sidebar.ruleAiOptional"', '"AI 署名可选"'],
 			['"sidebar.ruleAiForbidden"', '"禁止 AI 署名"'],
-			['"sidebar.conflicts"', '"{count} 处规范冲突"'],
-			['"sidebar.conflictsReview"', '"查看并合并"'],
-			['"sidebar.consolidateTitle"', '"整合工作区规范"'],
-			['"sidebar.consolidateWarn"', '"合并会改写下面这些文件，原文件先备份为 .bak-<时间>："'],
-			['"sidebar.consolidateConfirm"', '"写入并备份"'],
-			['"sidebar.consolidateMerge"', '"并入"'],
-			['"sidebar.consolidateLeft"', '"这些文件只被读取，不会被改写："'],
-			['"sidebar.consolidateKeep"', '"保留原地"'],
+			['"sidebar.conventionsConflicts"', '"{count} 处规范冲突"'],
+			['"sidebar.conflictsReview"', '"交给 AI 合并"'],
 			['"sidebar.consolidateAi"', '"AI 合并"'],
 			['"sidebar.consolidateAiNotice"', '"已把合并请求复制到剪贴板，粘贴到对话里发送即可（AI 会读文档、判断冲突与重复，再合并进 GIT_CONVENTIONS.md）。"'],
-			['"sidebar.consolidateDraft"', '"先看机械并集草稿"'],
 			['"view.title"', '"仓库图谱"'],
 			['"sidebar.mainViewOpen"', '"在主区域打开"'],
 			['"sidebar.mainViewOn"', '"主区域已打开"'],
 			['"sidebar.mainViewClose"', '"关闭主区域视图"'],
-			['"sidebar.consolidateCancel"', '"取消"'],
-			['"sidebar.consolidateMerged"', '"已合并到工作区规范。"'],
-			['"sidebar.consolidateOpen"', '"合并规范"'],
-			['"sidebar.consolidateSingle"', '"只有一份规范，无需合并。"'],
 			['"sidebar.initRepo"', '"初始化 Git 仓库"'],
 			['"sidebar.initRepoHint"', '"这个文件夹还不是 Git 仓库。可以直接在这里初始化，工作区里的其它仓库不受影响。"'],
 			['"sidebar.initBranch"', '"初始分支"'],
@@ -232,25 +221,14 @@ const EXTRA_KEYS = [
 			['"sidebar.ruleAiRequired"', '"AI attribution required"'],
 			['"sidebar.ruleAiOptional"', '"AI attribution optional"'],
 			['"sidebar.ruleAiForbidden"', '"AI attribution forbidden"'],
-			['"sidebar.conflicts"', '"{count} convention conflicts"'],
-			['"sidebar.conflictsReview"', '"Review and merge"'],
-			['"sidebar.consolidateTitle"', '"Consolidate into the workspace document"'],
-			['"sidebar.consolidateWarn"', '"Merging rewrites these files; each original is backed up as .bak-<timestamp> first:"'],
-			['"sidebar.consolidateConfirm"', '"Write and back up"'],
-			['"sidebar.consolidateMerge"', '"merge"'],
-			['"sidebar.consolidateLeft"', '"These files are only read, never rewritten:"'],
-			['"sidebar.consolidateKeep"', '"kept in place"'],
+			['"sidebar.conventionsConflicts"', '"{count} convention conflicts"'],
+			['"sidebar.conflictsReview"', '"Merge with AI"'],
 			['"sidebar.consolidateAi"', '"Merge with AI"'],
 			['"sidebar.consolidateAiNotice"', '"The merge request is on your clipboard: paste it into the conversation, and the agent reads every document, judges the duplicates and merges them into GIT_CONVENTIONS.md."'],
-			['"sidebar.consolidateDraft"', '"Preview the mechanical union"'],
 			['"view.title"', '"Repository graph"'],
 			['"sidebar.mainViewOpen"', '"Open in the main view"'],
 			['"sidebar.mainViewOn"', '"Shown in the main view"'],
 			['"sidebar.mainViewClose"', '"Close the main view"'],
-			['"sidebar.consolidateCancel"', '"Cancel"'],
-			['"sidebar.consolidateMerged"', '"Merged into the workspace document."'],
-			['"sidebar.consolidateOpen"', '"Merge conventions"'],
-			['"sidebar.consolidateSingle"', '"Only one document, so there is nothing to merge."'],
 			['"sidebar.initRepo"', '"Initialize Git repository"'],
 			['"sidebar.initRepoHint"', '"This folder is not a Git repository yet. Initialize it here; other repositories in the workspace are untouched."'],
 			['"sidebar.initBranch"', '"Initial branch"'],
@@ -377,14 +355,7 @@ const API_METHODS = [{
 			conventionConflicts(path) {
 				return post("git/conventions/conflicts", { path });
 			}
-			/** Merge the conflicting documents into the workspace one; a dry run unless write is true. */
-			conventionsConsolidate(path, payload) {
-				const body = payload !== null && typeof payload === "object" ? payload : {};
-				const request = { path };
-				if (body.write === true) request.write = true;
-				if (body.force === true) request.force = true;
-				return post("git/conventions/consolidate", request);
-			}`
+`
 }];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";
 

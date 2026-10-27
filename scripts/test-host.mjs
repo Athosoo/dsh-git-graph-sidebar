@@ -819,7 +819,7 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("the AI policy reaches the prompt", /AI attribution| Assisted-by/.test(section.text(cwdOf(aiRepo))), section.text(cwdOf(aiRepo)).slice(0, 300));
 
 
-	console.log("\n[18] conflicting documents are reported, and merging is previewed before it writes");
+	console.log("\n[18] conflicting documents are reported to the agent, which owns the merge");
 
 	const consolidable = join(workspace, "ws-consolidate");
 	const childRepo = join(consolidable, "repo");
@@ -863,31 +863,12 @@ const noRules = await call("/git/compliance", { path: docless });
 	const noticeText = section.text(cwdOf(childRepo));
 	check("the prompt tells the agent the documents disagree", noticeText.includes("conflict"), noticeText.slice(-400));
 	check("the prompt asks before picking a side", /Do not pick a side silently/.test(noticeText) && /action read/.test(noticeText), noticeText.slice(-400));
-	const dryRun = await call("/git/conventions/consolidate", { path: childRepo });
-	check("/git/conventions/consolidate dry run ok", dryRun.json?.ok === true, dryRun.raw.slice(0, 200));
-	check("a dry run writes nothing", dryRun.json?.value?.written === false, JSON.stringify(dryRun.json?.value?.written));
-	check("the dry run names the document it would absorb", (dryRun.json?.value?.absorbed ?? []).some((entry) => String(entry).replace(/\\/g, "/").endsWith("/repo/GIT_CONVENTIONS.md")), JSON.stringify(dryRun.json?.value?.absorbed));
-	const stillLoose = await readFile(join(childRepo, "GIT_CONVENTIONS.md"), "utf8");
-	check("the dry run leaves the repository document alone", stillLoose.includes("Keep the subject under 50 characters"), stillLoose.slice(0, 120));
-	const forced = await call("/git/conventions/consolidate", { path: childRepo, write: true, force: true });
-	check("/git/conventions/consolidate write ok", forced.json?.ok === true, forced.raw.slice(0, 300));
-	check("the write reports what it wrote", forced.json?.value?.written === true && typeof forced.json?.value?.docPath === "string", JSON.stringify(forced.json?.value?.docPath));
-	check("every absorbed file is backed up", (forced.json?.value?.backups ?? []).length >= 1, JSON.stringify(forced.json?.value?.backups));
-	const mergedBody = await readFile(join(consolidable, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
-	check("the merged document carries the union section", mergedBody.includes("Unified rules (merged by dsh-git-graph)"), mergedBody.slice(0, 200));
-	check("the merged document keeps the stricter length", mergedBody.includes("subject at most 50 characters"), mergedBody.slice(0, 400));
-	check("the merged document keeps both bodies", mergedBody.includes("标题不超过 72 字符") && mergedBody.includes("Keep the subject under 50 characters"), mergedBody.slice(0, 400));
-	const pointerBody = await readFile(join(childRepo, "GIT_CONVENTIONS.md"), "utf8");
-	check("the absorbed document becomes a pointer", pointerBody.includes("<!-- dsh-git-graph: inherited from"), pointerBody);
-	check("the pointer keeps the pre-merge text so a clone still reads it", pointerBody.includes("50 characters"), pointerBody);
-	const pointerState = await call("/git/conventions", { path: childRepo });
-	check("the pointer is reported as inherited", pointerState.json?.value?.pointer === true, JSON.stringify(pointerState.json?.value?.pointer));
-	const afterMerge = await call("/git/conventions/conflicts", { path: childRepo });
-	check("nothing conflicts after the merge", afterMerge.json?.value?.count === 0, JSON.stringify(afterMerge.json?.value?.count));
-	check("the prompt stops warning after the merge", !section.text(cwdOf(childRepo)).includes("conflict"), section.text(cwdOf(childRepo)).slice(-300));
+	const noRoute = await call("/git/conventions/consolidate", { path: childRepo });
+	check("there is no mechanical merge route any more", noRoute.json === void 0 || noRoute.json?.ok !== true, noRoute.raw);
+	const conflictDoc = await readFile(join(consolidable, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
+	check("reporting a conflict writes nothing", conflictDoc.includes("标题不超过 72 字符"), conflictDoc.slice(0, 120));
 
-
-	console.log("\n[20] rules written in AGENTS.md are detected and merged into the document");
+	console.log("\n[20] rules written in prose files such as AGENTS.md are detected");
 
 	const prose = join(workspace, "ws-prose");
 	const proseRepo = join(prose, "repo");
@@ -923,17 +904,10 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("its length rule tightens the union", proseReport.union?.maxSubject === 50, JSON.stringify(proseReport.union));
 	const prosePrompt = section.text(cwdOf(proseRepo));
 	check("the prompt names the prose document", prosePrompt.includes("AGENTS.md"), prosePrompt.slice(-500));
-	const prosePlan = (await call("/git/conventions/consolidate", { path: proseRepo })).json?.value ?? {};
-	check("the plan lists the document it leaves in place", (prosePlan.leftInPlace ?? []).some((entry) => String(entry).replace(/\\/g, "/").endsWith("/AGENTS.md")), JSON.stringify(prosePlan.leftInPlace));
-	check("the plan still writes nothing", prosePlan.written === false, JSON.stringify(prosePlan.written));
-	const proseWrite = (await call("/git/conventions/consolidate", { path: proseRepo, write: true, force: true })).json ?? {};
-	check("one governing document plus a prose document is mergeable", proseWrite.ok === true, JSON.stringify(proseWrite).slice(0, 300));
-	const mergedProse = await readFile(join(prose, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
-	check("the merged document carries the tighter rule", mergedProse.includes("subject at most 50 characters"), mergedProse.slice(0, 400));
+	const proseNoRoute = await call("/git/conventions/consolidate", { path: proseRepo });
+	check("a prose document is not merged mechanically", proseNoRoute.json === void 0 || proseNoRoute.json?.ok !== true, proseNoRoute.raw);
 	const agentsLeft = await readFile(join(proseRepo, "AGENTS.md"), "utf8");
 	check("the prose document is never rewritten", agentsLeft.includes("Keep the subject under 50 characters"), agentsLeft.slice(0, 200));
-	const proseAfter = (await call("/git/conventions/conflicts", { path: proseRepo })).json?.value ?? {};
-	check("nothing is outstanding after the merge", proseAfter.count === 0, JSON.stringify(proseAfter.count));
 
 	console.log("\n[19] the git_conventions tool lets an agent check the documents and merge them");
 
@@ -983,11 +957,6 @@ const noRules = await call("/git/compliance", { path: docless });
 	const toolCheck = await conventionsTool.execute({ action: "check" }, toolExec);
 	check("check reports the conflict count", toolCheck.ok === true && toolCheck.count > 0, JSON.stringify(toolCheck.count));
 	check("check hands the merge back to the model", /action read/.test(String(toolCheck.guidance)) && /action write/.test(String(toolCheck.guidance)), String(toolCheck.guidance));
-	const toolDraft = await conventionsTool.execute({ action: "draft" }, toolExec);
-	check("draft without write returns a plan only", toolDraft.ok === true && toolDraft.written === false, JSON.stringify(toolDraft.written));
-	check("the draft explains the next step", /call action write with body/.test(String(toolDraft.guidance)), String(toolDraft.guidance));
-	const untouchedRepo = await readFile(join(toolRepo, "GIT_CONVENTIONS.md"), "utf8");
-	check("the draft writes nothing", untouchedRepo.includes("Keep the subject under 50 characters"), untouchedRepo.slice(0, 80));
 	const authored = ["status: settled", "strict: true", "language: zh", "", "## 1. Subject", "", "标题不超过 72 字符，且用祈使句。", ""].join(NL);
 	const toolWrite = await conventionsTool.execute({ action: "write", body: authored, force: true }, toolExec);
 	check("write stores the authored body", toolWrite.ok === true && toolWrite.written === true, JSON.stringify(toolWrite.ok === true ? toolWrite.written : toolWrite));

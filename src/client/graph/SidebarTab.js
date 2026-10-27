@@ -1400,7 +1400,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			/** Follow the flag: the sidebar button and the View's close button both write it. */
 			react.useEffect(() => sidebarTabMainViewSubscribe(() => setMainViewOpen(sidebarTabMainViewEnabled())), []);
 			/** The pending consolidation: a dry-run plan, written only on confirm. */
-			const [consolidate, setConsolidate] = react.useState(null);
 			/** Whether a convention document is being written right now. */
 			const [conventionBusy, setConventionBusy] = react.useState(false);
 			/** The last successful write, so the strip can confirm it. */
@@ -1679,16 +1678,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				});
 			}, [upgrade, writeConvention]);
 			/**
-			 * Re-read the conflict report. The merge changes it without changing the
-			 * repository scan, so waiting for the scan to move would leave a stale strip.
-			 */
-			const reloadConflicts = react.useCallback((repoPath) => {
-				return sidebarTabGit().conventionConflicts(repoPath).then((result) => {
-					if (result.ok && result.value !== null && result.value !== void 0) setConflicts(result.value);
-					return result;
-				}).catch(() => void 0);
-			}, []);
-			/**
 			 * Hand the merge to the model. The agent reads every document itself and judges
 			 * the duplicates, so the request is copied for the conversation.
 			 */
@@ -1706,61 +1695,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				setConventionNotice("ai");
 				return true;
 			}, []);
-			/**
-			 * Ask the host what consolidating would change: every document that governs
-			 * this repository merged into the workspace one. Nothing is written yet.
-			 */
-			const previewConsolidate = react.useCallback((repoPath) => {
-				setConsolidate({
-					phase: "loading",
-					path: repoPath
-				});
-				return sidebarTabGit().conventionsConsolidate(repoPath, {}).then((result) => {
-					if (!result.ok || result.value === null || result.value === void 0) {
-						if (result.error !== void 0 && result.error !== null && result.error.code === "convention-single-source") {
-							setConsolidate(null);
-							setConventionNotice("single");
-							return false;
-						}
-						setConsolidate(null);
-						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
-						return false;
-					}
-					setConsolidate({
-						phase: "ready",
-						path: repoPath,
-						value: result.value
-					});
-					return true;
-				}).catch(() => {
-					setConsolidate(null);
-					setConventionError(t("sidebar.error.conventions"));
-					return false;
-				});
-			}, [t]);
-			/** Write the merged document; the absorbed ones become pointers, originals kept as backups. */
-			const confirmConsolidate = react.useCallback(() => {
-				if (consolidate === null || consolidate.phase !== "ready") return;
-				const repoPath = consolidate.path;
-				setConventionBusy(true);
-				sidebarTabGit().conventionsConsolidate(repoPath, {
-					write: true,
-					force: true
-				}).then((result) => {
-					setConventionBusy(false);
-					if (!result.ok || result.value === null || result.value === void 0) {
-						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
-						return;
-					}
-					setConsolidate(null);
-					setConventionNotice("merged");
-					reloadConflicts(repoPath);
-					runScan(true);
-				}).catch(() => {
-					setConventionBusy(false);
-					setConventionError(t("sidebar.error.conventions"));
-				});
-			}, [consolidate, reloadConflicts, runScan, t]);
 			/** Read the workspace document once per scan, so the strip stays honest. */
 			react.useEffect(() => {
 				if (workspaceKey === void 0) return void 0;
@@ -2686,7 +2620,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				/**
 				 * The exclusivity check: the documents that govern this repository do
 				 * not always agree, and silently picking one would be wrong. The banner
-				 * states how many documents disagree; merging is previewed first.
+				 * states how many documents disagree; the merge itself is the model's job.
 				 */
 				const conflictLine = conflicts === null || typeof conflicts.count !== "number" || conflicts.count === 0 ? null : h("div", {
 					key: "conflicts",
@@ -2697,7 +2631,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						style: Object.assign({}, SIDEBAR_TAB_CONVENTIONS_CHIP, {
 							color: "var(--dsw-alias-state-warn-primary, #b45309)"
 						})
-					}, t("sidebar.conflicts", {
+					}, t("sidebar.conventionsConflicts", {
 						count: conflicts.count
 					})), h("button", {
 						key: "review",
@@ -2707,71 +2641,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						disabled: conventionBusy,
 						onClick: () => requestAiMerge()
 					}, t("sidebar.conflictsReview"))]);
-				/** The consolidation plan: which files merge, and which become pointers. */
-				const consolidatePanel = (() => {
-					if (consolidate === null || consolidate.path !== selected.path) return null;
-					const value = consolidate.phase === "ready" ? consolidate.value : null;
-					const parts = [h("span", {
-						key: "title",
-						style: SIDEBAR_TAB_CONVENTIONS_NOTE
-					}, t("sidebar.consolidateTitle"))];
-					if (value === null) parts.push(h("span", {
-						key: "wait",
-						style: SIDEBAR_TAB_CONVENTIONS_NOTE
-					}, t("sidebar.loading")));
-					else {
-						parts.push(h("span", {
-							key: "warn",
-							style: SIDEBAR_TAB_CONVENTIONS_NOTE
-						}, t("sidebar.consolidateWarn")));
-						const names = (Array.isArray(value.absorbed) ? value.absorbed : []).slice(0, 6);
-						names.forEach((docPath) => {
-							parts.push(h("div", {
-								key: "absorbed-" + docPath,
-								style: SIDEBAR_TAB_PREVIEW_ROW
-							}, [h("span", {
-									key: "badge",
-									style: SIDEBAR_TAB_CONVENTIONS_CHIP
-								}, t("sidebar.consolidateMerge")), h("span", {
-									key: "path",
-									style: SIDEBAR_TAB_PREVIEW_SNIPPET
-								}, docPath)]));
-						});
-						parts.push(h("div", {
-							key: "left",
-							style: SIDEBAR_TAB_CONVENTIONS_NOTE
-						}, t("sidebar.consolidateLeft")));
-						(Array.isArray(value.leftInPlace) ? value.leftInPlace : []).slice(0, 6).forEach((docPath) => {
-							parts.push(h("div", {
-								key: "left-" + docPath,
-								"data-gitgraph-left": docPath,
-								style: SIDEBAR_TAB_PREVIEW_ROW
-							}, t("sidebar.consolidateKeep") + " " + docPath));
-						});
-						parts.push(h("div", {
-							key: "actions",
-							style: SIDEBAR_TAB_PREVIEW_ROW
-						}, [h("button", {
-								key: "confirm",
-								type: "button",
-								"data-gitgraph-action": "conventions-consolidate",
-								style: SIDEBAR_TAB_DETAIL_BUTTON,
-								disabled: conventionBusy,
-								onClick: confirmConsolidate
-							}, t("sidebar.consolidateConfirm")), h("button", {
-								key: "dismiss",
-								type: "button",
-								"data-gitgraph-action": "conventions-consolidate-cancel",
-								style: SIDEBAR_TAB_DETAIL_BUTTON,
-								onClick: () => setConsolidate(null)
-							}, t("sidebar.consolidateCancel"))]));
-					}
-					return h("div", {
-						key: "consolidate",
-						"data-gitgraph-consolidate": consolidate.phase,
-						style: SIDEBAR_TAB_PREVIEW
-					}, parts);
-				})();
 				const children = [head];
 				if (complianceLine !== null) children.push(complianceLine);
 				if (conflictLine !== null) children.push(conflictLine);
@@ -2788,28 +2657,11 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					key: "notice",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, t("sidebar.conventionsApplied")));
-				else if (conventionNotice === "merged") children.push(h("span", {
-					key: "notice",
-					"data-gitgraph-conventions-merged": true,
-					style: SIDEBAR_TAB_CONVENTIONS_NOTE
-				}, t("sidebar.consolidateMerged")));
 				else if (conventionNotice === "ai") children.push(h("span", {
 					key: "notice",
 					"data-gitgraph-conventions-ai": true,
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
-				}, t("sidebar.consolidateAiNotice"), h("button", {
-					key: "draft",
-					type: "button",
-					"data-gitgraph-action": "conventions-consolidate-open",
-					style: SIDEBAR_TAB_DETAIL_BUTTON,
-					disabled: conventionBusy,
-					onClick: () => previewConsolidate(selected.path)
-				}, t("sidebar.consolidateDraft"))));
-				else if (conventionNotice === "single") children.push(h("span", {
-					key: "notice",
-					"data-gitgraph-conventions-single": true,
-					style: SIDEBAR_TAB_CONVENTIONS_NOTE
-				}, t("sidebar.consolidateSingle")));
+				}, t("sidebar.consolidateAiNotice")));
 				else if (!exists) children.push(h("span", {
 					key: "missing",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
@@ -2888,7 +2740,6 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					}, parts);
 				})();
 				if (upgradePanel !== null) children.push(upgradePanel);
-				if (consolidatePanel !== null) children.push(consolidatePanel);
 				if (pickerOpen) {
 					const cards = (catalog !== null ? catalog : []).map((framework) => h("button", {
 						key: "framework-" + framework.id,

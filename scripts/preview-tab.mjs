@@ -1359,9 +1359,9 @@ let pickerHtml = "";
 	if (tierHtml.indexOf("workspace-doc-create") >= 0) throw new Error("the create button stayed after the document exists");
 	REPOS = savedRepos;
 	console.log("preview-tab: compliance, upgrade preview and workspace document ok");
-// Tier 4: the AI attribution switch, the conflict strip and the merge panel. The
-// synthetic entry carries conflicting documents, so the strip has something to
-// report; the stubs keep the count until a write clears it.
+// Tier 4: the AI attribution switch and the conflict strip. The synthetic entry
+// carries conflicting documents, so the strip has something to report; every
+// merge action must be a handover to the model, never a write of its own.
 const TIER4_PATH = WORKSPACE + "/repos-tier4/conflicted";
 let tier4Html = "";
 {
@@ -1426,23 +1426,8 @@ let tier4Html = "";
 	if (CONSOLIDATE_CALLS.length !== 0) throw new Error("the review button still merged by itself");
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf("data-gitgraph-conventions-ai") < 0) throw new Error("the panel does not confirm the copied request");
-	const draftLink = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
-	if (draftLink === undefined) throw new Error("the mechanical union is unreachable");
-	click(draftLink, "preview the mechanical union");
-	await wait(80);
-	if (CONSOLIDATE_CALLS.length !== 1) throw new Error("the union link did not ask for a plan");
-	if (CONSOLIDATE_CALLS[0].write === true) throw new Error("the union link wrote the document");
-	tierHtml = (await tierMount.render()).html;
-	if (tierHtml.indexOf('data-gitgraph-consolidate="ready"') < 0) throw new Error("the merge plan did not render");
-	if (tierHtml.indexOf("GIT_CONVENTIONS.md") < 0) throw new Error("the merge plan lists no absorbed document");
-	if (tierHtml.indexOf("data-gitgraph-left=\"" + TIER4_PATH + "/AGENTS.md\"") < 0) throw new Error("the merge plan does not list the document it leaves in place");
-	const mergeButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate")[0];
-	if (mergeButton === undefined) throw new Error("the merge plan has no confirm button");
-	click(mergeButton, "confirm merge");
-	if (CONSOLIDATE_CALLS.length !== 2 || CONSOLIDATE_CALLS[1].write !== true) throw new Error("confirming the merge did not write");
-	if (!(await until(async () => (await htmlOf()).indexOf("data-gitgraph-conventions-merged") >= 0))) throw new Error("the merge wrote nothing to report");
-	if (!(await until(async () => (await htmlOf()).indexOf("data-gitgraph-conflicts") < 0))) throw new Error("the conflict strip survived the merge");
-	tierHtml = await htmlOf();
+	if ((await htmlOf()).indexOf("data-gitgraph-consolidate=") >= 0) throw new Error("the panel still opens a mechanical merge plan");
+	if (CONSOLIDATE_CALLS.length !== 0) throw new Error("the panel still asked the host to merge");
 	const switchButton = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "switch-conventions")[0];
 	if (switchButton === undefined) throw new Error("the AI switch needs the picker, which never opened");
 	click(switchButton, "switch framework");
@@ -1463,19 +1448,11 @@ let tier4Html = "";
 	click(headerMerge, "merge from the panel header");
 	if (COPIED.length !== beforeHeader + 1) throw new Error("the panel merge button copied nothing");
 	if ((await htmlOf()).indexOf("data-gitgraph-consolidate=") >= 0) throw new Error("the panel merge button still merged by itself");
-	const headerDraft = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
-	if (headerDraft === undefined) throw new Error("the panel header lost the union link");
-	click(headerDraft, "open the union from the panel header");
-	if (!(await until(async () => (await htmlOf()).indexOf('data-gitgraph-consolidate="ready"') >= 0))) throw new Error("the union link asked for no plan");
-	if (CONSOLIDATE_CALLS[CONSOLIDATE_CALLS.length - 1].write === true) throw new Error("the union link wrote without a confirmation");
-	const headerCancel = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-cancel")[0];
-	click(headerCancel, "cancel merge");
-	await wait(80);
-	if ((await htmlOf()).indexOf('data-gitgraph-consolidate=') >= 0) throw new Error("cancelling the header merge left the plan open");
+	if (findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0] !== undefined) throw new Error("the panel header still offers a mechanical union");
 	REPOS = savedRepos;
 	CONFLICT_STATE.count = 2;
 }
-	console.log("preview-tab: ai attribution, conflict strip and one-click merge ok");
+	console.log("preview-tab: ai attribution and the conflict strip hand the merge to the agent ok");
 }
 
 // The main-area View is an opt-in: nothing is registered until the sidebar tab

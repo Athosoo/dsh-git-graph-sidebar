@@ -415,8 +415,8 @@ patch(
 	`			case "/git/convention/settings": {`
 );
 
-// 19. Exclusive detection: one route reports the disagreement, one merges the
-//     documents (a dry run unless the payload asks to write).
+// 19. Exclusive detection: one read-only route reports the disagreement. Merging is
+//     the model's job (the git_conventions tool), so there is no write route.
 patch(
 	"convention-conflict-routes",
 	'\t\tcase "/git/conventions": {',
@@ -428,26 +428,6 @@ patch(
 \t\t\t}
 \t\t\tconst feature = featureOf(config);
 \t\t\twriteJson(res, 200, OK(conventionsConflicts(gated.canonical, feature.docName)));
-\t\t\treturn;
-\t\t}
-\t\tcase "/git/conventions/consolidate": {
-\t\t\tconst gated = await createWorkspaceGate(ctx)(path);
-\t\t\tif (!gated.ok) {
-\t\t\t\twriteJson(res, 200, FAIL(gated.error));
-\t\t\t\treturn;
-\t\t\t}
-\t\t\tconst feature = featureOf(config);
-\t\t\tconst policy = payload !== null && typeof payload === "object" ? payload : {};
-\t\t\tconst merged = await conventionsConsolidate(gated.canonical, feature.docName, {
-\t\t\t\twrite: policy.write === true,
-\t\t\t\tforce: policy.force === true
-\t\t\t});
-\t\t\tif (!merged.ok) {
-\t\t\t\twriteJson(res, 200, FAIL(merged.error));
-\t\t\t\treturn;
-\t\t\t}
-\t\t\tif (merged.value.written === true) ctx.logger.info("dsh-git-graph: consolidated " + merged.value.docPath);
-\t\t\twriteJson(res, 200, OK(merged.value));
 \t\t\treturn;
 \t\t}
 \t\tcase "/git/conventions": {`,
