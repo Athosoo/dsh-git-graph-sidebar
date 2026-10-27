@@ -693,6 +693,29 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			color: "var(--dsw-alias-text-2)",
 			background: "transparent"
 		};
+		/** Same tab filling the main area: the host publishes both numbers, so nothing hides under the composer. */
+		const SIDEBAR_TAB_MAIN_VIEW_ROOT = Object.assign({}, SIDEBAR_TAB_ROOT, {
+			height: "calc(var(--dsh-conversation-viewport-height, 100vh) - var(--dsh-composer-height, 96px))",
+			maxHeight: "calc(var(--dsh-conversation-viewport-height, 100vh) - var(--dsh-composer-height, 96px))",
+			overflow: "hidden"
+		});
+		/** Graph left, pinned commit right: the main area is wide, and the card leaves the bottom alone. */
+		const SIDEBAR_TAB_MAIN_VIEW_SPLIT = {
+			display: "flex",
+			flexDirection: "row",
+			flex: "1 1 auto",
+			minHeight: 0,
+			gap: 8
+		};
+		const SIDEBAR_TAB_MAIN_VIEW_ASIDE = {
+			flex: "0 0 320px",
+			minWidth: 240,
+			maxWidth: 420,
+			display: "flex",
+			flexDirection: "column",
+			minHeight: 0,
+			overflowY: "auto"
+		};
 		const SIDEBAR_TAB_CONFLICTS = {
 			display: "flex",
 			flexDirection: "row",
@@ -1260,7 +1283,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 		}, react.createElement(GitGraphSidebarTab, {
 			ctx,
 			scope,
-			visible: true
+			visible: true,
+			mainView: true
 		}), react.createElement("button", {
 			type: "button",
 			"data-gitgraph-action": "main-view-close",
@@ -1275,6 +1299,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const ctx = props.ctx;
 			const scope = props.scope !== void 0 && props.scope !== null ? props.scope : {};
 			const tab = props.tab;
+			const inMainView = props.mainView === true;
 			const active = props.visible !== false;
 			const t = react.useCallback((key, params) => sidebarTabT(ctx, key, params), [ctx]);
 			const [, setLocaleTick] = react.useState(0);
@@ -3169,8 +3194,13 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, workspaceError !== null ? workspaceError : workspaceNote === true ? t("sidebar.workspaceDocWritten") + "  " + docName : exists !== true ? t("sidebar.workspaceDocMissing") : t("sidebar.workspaceDocExists"))]);
 			})();
+			const bodyWrap = h("div", {
+				key: "body-wrap",
+				style: SIDEBAR_TAB_BODY,
+				"data-gitgraph-sidebar-body": true
+			}, body);
 			return h("div", {
-				style: SIDEBAR_TAB_ROOT,
+				style: inMainView ? SIDEBAR_TAB_MAIN_VIEW_ROOT : SIDEBAR_TAB_ROOT,
 				"data-gitgraph-sidebar-tab": true
 			}, [h("div", {
 				key: "toolbar",
@@ -3181,9 +3211,13 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			}, t("sidebar.truncated", { limit: SIDEBAR_TAB_REPO_LIMIT })) : null, selected !== void 0 ? h("div", {
 				key: "status",
 				style: SIDEBAR_TAB_STATUS
-			}, statusChildren) : null, conventionsBar, initBar, filterBar, h("div", {
-				key: "body-wrap",
-				style: SIDEBAR_TAB_BODY,
-				"data-gitgraph-sidebar-body": true
-			}, body), detail, moreChild]);
+			}, statusChildren) : null, conventionsBar, initBar, filterBar, inMainView && pinned !== void 0 ? h("div", {
+				key: "split",
+				style: SIDEBAR_TAB_MAIN_VIEW_SPLIT,
+				"data-gitgraph-main-split": true
+			}, [bodyWrap, h("div", {
+				key: "aside",
+				style: SIDEBAR_TAB_MAIN_VIEW_ASIDE,
+				"data-gitgraph-detail-aside": true
+			}, detail)]) : bodyWrap, inMainView ? null : detail, moreChild]);
 		}

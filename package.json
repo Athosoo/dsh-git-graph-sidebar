@@ -1,6 +1,6 @@
 {
   "name": "dsh-git-graph-sidebar",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "description": "Git commit graph chip plus a better-sidebar repository tab (SVG lane canvas, zoom, pinned commit card) that discovers the Git repositories up to three levels below the workspace directory and bootstraps a Git conventions document for each one and checks commit compliance against it; a conventions document is inherited by the repositories nested in it, conflicting documents are reported to the agent, and one click merges them into the workspace document with timestamped backups and inheritance pointers. Prose documents that state commit rules (AGENTS.md, CLAUDE.md, .cursorrules, CONTRIBUTING.md) next to the workspace or the repository are read with the same rule reader, so rules living outside the conventions document still reach the comparison and the merged union; those files are never rewritten. The same tab can also open as an opt-in, closable page in the conversation's main area, beside the shipped views.",
   "icon": "icon.svg",
   "type": "module",

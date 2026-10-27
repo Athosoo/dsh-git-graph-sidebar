@@ -879,6 +879,7 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("the merged document keeps both bodies", mergedBody.includes("标题不超过 72 字符") && mergedBody.includes("Keep the subject under 50 characters"), mergedBody.slice(0, 400));
 	const pointerBody = await readFile(join(childRepo, "GIT_CONVENTIONS.md"), "utf8");
 	check("the absorbed document becomes a pointer", pointerBody.includes("<!-- dsh-git-graph: inherited from"), pointerBody);
+	check("the pointer keeps the pre-merge text so a clone still reads it", pointerBody.includes("50 characters"), pointerBody);
 	const pointerState = await call("/git/conventions", { path: childRepo });
 	check("the pointer is reported as inherited", pointerState.json?.value?.pointer === true, JSON.stringify(pointerState.json?.value?.pointer));
 	const afterMerge = await call("/git/conventions/conflicts", { path: childRepo });

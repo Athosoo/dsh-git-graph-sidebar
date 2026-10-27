@@ -77,7 +77,7 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "E:/git-graph/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3079 / 2149 / 449 lines（tab / conventions / branches）
+node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3223 / 2153 / 449 lines（tab / conventions / branches）
 node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
 node --check lib/client.js && node --check lib/index.js
 node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.12.1 | 主区域布局修正（提交卡片移到图谱右侧、整列高度减掉宿主发布的 composer 高度）、被并入的仓库文档在指针下面保留合并前原文、locale 187 键、host 243/243 |
 | 1.11.0 | 把 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md` 里的规则也读进来（`foreign` 来源、参与冲突与并集、合并时只读保留）、locale 185 键、host 242/242 |
 | 1.10.1 | 规范面板标题行加「合并规范」按钮（不必先有冲突条）、只有一份规范时改为提示而非报错、tab 3068 行 / locale 183 键 |
 | 1.10.0 | AI 署名政策（`ai: required/optional/forbidden`，读正文 trailer）、排他性检测（工作区 / 本仓库 / 祖先逐字段逐规则比对，冲突写进注入提示）、一键整合（并集规则 + `## Unified rules` 分节 + 时间戳备份 + 仓库文档改指针）、`git_conventions` 工具；已发布并已装 |
@@ -550,6 +551,30 @@ return part.replace(/^HEAD -> /, "").trim();
 - 自检值：`build-lib` spliced **3189 / 2149 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **242/242**、`preview-tab` 全过（末行 `root 40067 / nested 24884 / pinned+zoomed 27231`）。
 - 现场发现（值得记的用法坑）：工作区在 20:56 真的跑过一次整合 —— `E:/git-graph/.dsh/GIT_CONVENTIONS.md` 从 2832 B 涨到 4899 B，`graph-demo` 里多出指针文件与备份。原因是 `graph-demo` 的规范还是「每个小节都写待定」的脚手架，**整合会把脚手架的小节一起并进工作区总纲**（合并后多了 39 处「待定」）。已从插件自己留下的 `GIT_CONVENTIONS.md.bak-20261027-205657` 还原总纲（现在是 2832 B，`parseConventionRules` 回 `maxSubject 72 / language zh / strict true / count 0`），并把 `graph-demo` 里的两份残留挪出仓库。教训：**只该拿「已经写好规则」的文档去整合**，脚手架文档适合先填再并。
 - 发布信息：commit `4e1a38e`、tag `v1.12.0`、release id **425494454**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.12.0`）、资产 `dsh-git-graph-sidebar.tgz` **910380** 字节（asset id **681671318**，`releases/latest/download/...` 经镜像下载校验 sha256 `2963b69addc0646ad46abdd9d15c508fe026742766ffc861974d3cbe1797f5d7` 一致、154 条目、包内 version 1.12.0）、`desktop` 已装 1.12.0（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.12.0.tgz`，lockfile `:41-43` / `:1198-1199` / `:3291` 全指 1.12.0，1.11.0 残留 0 处）。
+
+## 7.14 1.12.1 的改动（主区域布局、指针保留原文）
+
+1.12.0 落地后现场发现两个问题，1.12.1 修掉。
+
+### 7.14.1 主区域里提交卡片压在输入框上
+
+- 现象：主区域打开图谱后点一个提交，卡片跑到最下面、占很高，滚到底时被粘在底部的输入框盖住。
+- 根因：宿主 `.viewArea` 在 active 阶段是 `flex: 1 0 auto; min-height: auto`，也就是**跟着内容长高**；侧边栏里 `SIDEBAR_TAB_ROOT` 的 `height: 100%` 有确定父高所以没事，主区域里百分比高度退化成 auto，整列按画布高度撑开，卡片被推到滚动区底部，而 `.composerSeat` 是 `position: sticky; bottom: 0`，滚动时正好压在上面。
+- 修法：宿主自己用 ResizeObserver 在滚动容器上写了两个变量 —— `--dsh-conversation-viewport-height`（滚动区 clientHeight）和 `--dsh-composer-height`（composer 的 offsetHeight）。主区域根节点改用 `SIDEBAR_TAB_MAIN_VIEW_ROOT = Object.assign({}, SIDEBAR_TAB_ROOT, { height: "calc(var(--dsh-conversation-viewport-height, 100vh) - var(--dsh-composer-height, 96px))", maxHeight: 同值, overflow: "hidden" })`，于是整列刚好等于「可视高 − 输入框」，页面不再滚动，卡片也不可能被盖住。改草稿导致 composer 变高时变量会跟着变。
+- 布局：主区域是横的，所以卡片不再放底部 —— `inMainView && pinned !== void 0` 时把 body 和 detail 放进 `SIDEBAR_TAB_MAIN_VIEW_SPLIT`（`flex-direction: row`），右侧 `SIDEBAR_TAB_MAIN_VIEW_ASIDE`（`flex: 0 0 320px; minWidth: 240; maxWidth: 420; overflowY: auto`）；没选中提交时不分栏，避免空占 320px。侧边栏仍然是底部卡片，没变。
+- `GitGraphMainView` 现在给 `GitGraphSidebarTab` 传 `mainView: true`，组件内 `const inMainView = props.mainView === true;`。
+
+### 7.14.2 被并入的仓库文档只剩一行指针
+
+- 现象：仓库级 `GIT_CONVENTIONS.md` 常被 git 跟踪，整合后它变成 228 字节的指针，指向 `../.dsh/GIT_CONVENTIONS.md` —— 别人 clone 下来根本看不到规则，等于提交了一个死链接。21:40 在本仓库真的发生过一次。
+- 修法：`conventionPointerBody(target, original)` 在指针三行之后追加 `<!-- 合并前的原文 / the pre-merge copy follows -->` 与原文；`conventionsConsolidate` 把 `source.body` 传进去。指针标记仍在，所以 `conventionIsPointer()` / `repoConventionState()` 的 `pointer` 分支、`conventionsDocumentFor()` 的跳过逻辑都不变，只是文件对人仍然可读。
+- 边界：原文保留会让文件变长，且 `parseConventionRules` 若直接读这个文件会把旧规则也算进来 —— 这就是为什么所有内部路径都先过 `conventionIsPointer()`。
+
+### 7.14.3 测试与自检
+
+- `test-host` 第 [18] 段加一条：「pointer keeps the pre-merge text so a clone still reads it」，总数 242 → **243/243**。
+- `preview-tab` 新增一段 `main-area layout keeps the commit card off the composer ok`：挂载 `mainView: true` 的 tab，断言根节点 `height`/`maxHeight` 都含 `--dsh-conversation-viewport-height` 与 `--dsh-composer-height`、未选中提交时没有 `data-gitgraph-main-split`、点行后 split 恰好两个 pane（左 `data-gitgraph-sidebar-body`、右 `data-gitgraph-detail-aside` 且内含唯一 `data-gitgraph-detail`）、根节点直接子级里不再有 `data-gitgraph-detail`。
+- 自检值：`build-lib` spliced **2843 / 3223 / 2153 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **243/243**、`preview-tab` 全过。
 
 ## 8. 待办清单（按优先级）
 

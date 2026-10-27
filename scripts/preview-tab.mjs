@@ -1508,6 +1508,34 @@ let tier4Html = "";
 	delete storedPrefs["dsh-git-graph:main-view"];
 }
 
+// The main-area frame is taller than the side panel, so the layout itself has
+// to keep the pinned card out of the composer's way: the column subtracts the
+// composer height the host publishes, and the card moves beside the graph.
+{
+	const mainMount = await mountComponent(descriptor.component, Object.assign({}, tabProps(focusPath), { mainView: true }));
+	const shell = findAll(mainMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-sidebar-tab"] === true)[0];
+	if (shell === undefined) throw new Error("the main-area frame renders no tab");
+	const shellHeight = String(shell.props.style.height);
+	if (shellHeight.indexOf("--dsh-conversation-viewport-height") < 0) throw new Error("the main-area tab ignores the host viewport height: " + shellHeight);
+	if (shellHeight.indexOf("--dsh-composer-height") < 0) throw new Error("the main-area tab does not subtract the composer from its height: " + shellHeight);
+	if (String(shell.props.style.maxHeight) !== shellHeight) throw new Error("the main-area tab can still grow past its height");
+	if (findAll(mainMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-main-split"] === true).length !== 0) throw new Error("the split layout shows before a commit is pinned");
+	const mainRows = findAll(mainMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-row"] === true);
+	if (mainRows.length < 3) throw new Error("the main-area frame painted " + mainRows.length + " commit rows");
+	click(mainRows[2], "commit row");
+	await mainMount.render();
+	const split = findAll(mainMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-main-split"] === true)[0];
+	if (split === undefined) throw new Error("the main-area frame did not split the graph and the commit card");
+	const splitKids = [].concat(split.props.children).filter((node) => node !== null && typeof node === "object");
+	if (splitKids.length !== 2) throw new Error("the split layout has " + splitKids.length + " panes");
+	if (splitKids[0].props["data-gitgraph-sidebar-body"] !== true) throw new Error("the graph pane is not the scrolling body");
+	if (splitKids[1].props["data-gitgraph-detail-aside"] !== true) throw new Error("the pinned card did not move beside the graph");
+	if (findAll([splitKids[1]], (node) => node.props !== undefined && node.props["data-gitgraph-detail"] === true).length !== 1) throw new Error("the aside does not hold the pinned commit card");
+	const bottomCards = [].concat(shell.props.children).filter((node) => node !== null && typeof node === "object" && node.props !== undefined && node.props["data-gitgraph-detail"] === true);
+	if (bottomCards.length !== 0) throw new Error("the pinned card also still renders at the bottom of the column");
+	console.log("preview-tab: main-area layout keeps the commit card off the composer ok");
+}
+
 // The one-click init flow: a workspace whose root is not a repository offers the
 // button, the bar states the target and the branch, and confirming issues
 // exactly one `git/init` call before the silent refresh.
