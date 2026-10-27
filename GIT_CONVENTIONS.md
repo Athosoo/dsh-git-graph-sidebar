@@ -1,3 +1,9 @@
+> 本仓库的 Git 规范由工作区统一维护：../.dsh/GIT_CONVENTIONS.md
+> This repository inherits the workspace conventions; this file only points at it.
+<!-- dsh-git-graph: inherited from ../.dsh/GIT_CONVENTIONS.md -->
+
+<!-- 合并前的原文 / the pre-merge copy follows -->
+
 # Git 规范 · GitHub Flow
 
 ```yaml
