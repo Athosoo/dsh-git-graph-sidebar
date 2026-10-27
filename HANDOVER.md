@@ -519,6 +519,7 @@ return part.replace(/^HEAD -> /, "").trim();
 
 - 反馈：冲突条只在真有冲突时出现，想手动整理一遍时面板上没有入口。1.10.1 在规范面板标题行（`Git 规范` / 文档名 / 状态 / 打开 / 更换框架 那一行，`flexWrap: "wrap"` 本来就允许换行）加了 **合并规范** 按钮：`data-gitgraph-action="conventions-consolidate-open"`，`exists` 才渲染，`conventionBusy` 时禁用，点击走和冲突条同一条 `previewConsolidate(selected.path)` → `conventionsConsolidate(repoPath, {})`，只出计划，再点「写入并备份」才落盘。
 - 顺手修了一处体验：只有一份规范在生效时（`live < 2`），主机返回 `code: "convention-single-source"`，原来会把它当错误红字显示；现在 `previewConsolidate` 认这个 code，改成提示 `sidebar.consolidateSingle`（`data-gitgraph-conventions-single`）并清掉计划面板。
+- 发布信息：commit `1c02dbf`、tag `v1.10.1`、release id **425292315**、资产 `dsh-git-graph-sidebar.tgz` **901665** 字节（sha256 `fe3ce6f628aaa24c6957d8c1bce37a714adb112e76ef07882aa047f504d2d16e`，`releases/latest/download/` 校验一致）、`desktop` 已装 1.10.1（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.10.1.tgz`，锁文件 5 处全部指向 1.10.1、无 1.10.0 残留）。
 - 代价很小：locale 键 181 → **183**（`sidebar.consolidateOpen`、`sidebar.consolidateSingle`），tab 源码 3049 → **3068** 行，`scripts/build-lib.mjs` 的 `EXTRA_KEYS` 加 4 条；`preview-tab` 的 tier-4 补一段断言（面板按钮出计划但不写盘、取消后计划面板消失）。
 ## 8. 待办清单（按优先级）
 
