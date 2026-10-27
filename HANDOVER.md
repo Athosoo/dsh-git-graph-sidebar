@@ -646,7 +646,8 @@ return part.replace(/^HEAD -> /, "").trim();
 
 ### 7.16.5 发布
 
-版本 **1.13.1**，包名 `dsh-git-graph-sidebar.tgz`（不带版本号，市场条目 `latest/download` 自动跟随）。
+- 版本 **1.13.1**，commit `619811b`，tag `v1.13.1`，release id `425586241`，资产 `dsh-git-graph-sidebar.tgz` **912561 字节**、sha256 `45e1b67ed76c9f73cc7a10853ce6bb1b1e9b80dea17b79c37f8282d992f77f6b`、154 条目、包内 version 1.13.1；经镜像 `releases/latest/download/dsh-git-graph-sidebar.tgz` 下载校验一致。包名不带版本号，市场条目 `latest/download` 自动跟随。
+- `desktop` 已装 1.13.1（`pnpm add file:…/artifacts/dsh-git-graph-sidebar-1.13.1.tgz`，`- 1.13.0 / + 1.13.1`），`package.json` 与 `pnpm-lock.yaml` 六处全指 1.13.1、`1.13.0` 残留 0；已装 `lib/index.js` 188882 B（`conventionsConsolidate` / `consolidate` 各 0 处）、`lib/client.js` 248585 B（`conventions-ai-merge` 1 处、`sidebar.consolidateTitle` 0 处）。**装完必须重启 DSH。**
 
 ## 8. 待办清单（按优先级）
 
