@@ -2,9 +2,20 @@
 
 English | [中文](README.zh.md)
 
-A Git browsing plugin for DeepSeek Harness (DSH): a branch chip in the composer, plus a **Repository graph** tab inside [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) that lists the Git repositories found up to three levels below the current workspace directory and draws the selected repository's commit graph as an SVG lane canvas.
+A Git plugin for DeepSeek Harness (DSH): a branch chip in the composer, a **Repository graph** tab inside [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar), and — opt-in — the same graph as a page in the conversation's main area. It lists the Git repositories found up to three levels below the workspace, draws the selected repository's commit graph as an SVG lane canvas, and turns that repository's commit conventions into something both you and the model actually follow.
 
 ![Repository graph tab, dark theme](assets/shot-dark.png)
+
+## Why this one
+
+Plenty of plugins draw a commit graph. This one is built around the part that decides whether a commit message comes out right, and the three guarantees below are not on offer elsewhere:
+
+1. **The rules reach the model, not just the panel.** The convention document is registered as a `systemPrompt` section, so every model step is told what this repository wants before it writes anything, instead of learning it from a rejection. `strict: true` goes further: the block tells the assistant to rewrite an offending message before committing.
+2. **The rules are read back, prose included.** Machine-checkable rules (type prefixes, subject length, case, trailing period, mood, subject language) are parsed out of the document — and out of an `AGENTS.md`, `CLAUDE.md`, `.cursorrules` or `CONTRIBUTING.md` sitting beside it — so a repository that never wrote a `GIT_CONVENTIONS.md` is still understood. A backward-compatible `ai: required | optional | forbidden` field then checks the trailers in commit **bodies**, which is where attribution actually lives.
+3. **Two documents that disagree never get silently outvoted.** Dropping a plugin into a running project is the usual way a second convention document appears. The tab compares the workspace document, the repository document and a parent repository's document field by field and rule by rule, the injected block asks the agent to check with you before picking a side, and one click merges them into `<workspace>/.dsh/GIT_CONVENTIONS.md` with timestamped backups and pointer files the plugin then follows.
+4. **Three entry points, one body.** The same tab renders in the better-sidebar tab, and — behind a switch, closable at any time — as a page beside *对话* / *轨迹* in the conversation area, so the graph can be widened without leaving the sidebar as the primary entry.
+
+Everything runs locally against the loopback endpoint the host already provides: no network calls, no telemetry, and every Git command is a read except the switches you press yourself.
 
 ## What it does
 
@@ -24,6 +35,7 @@ The tab works from the session's working directory and treats that directory as 
 - **Live updates, no flicker** — the tab subscribes to the host's Git change events and also polls quietly in the background, so a new commit or branch appears on its own. Every background refresh keeps the current rows on screen: an unchanged result is dropped without a re-render, and a failed poll never replaces real data with an error.
 - **Refresh** — re-scans on demand. A manual refresh also keeps the panel content visible while it runs. The host caches a scan for 60 s (the refresh button bypasses it).
 - **Reopens instantly** — closing and reopening the tab used to start from an empty panel. The tab now keeps the last painted list, selection and graph in memory, so a reopen draws that on its first frame and refreshes behind it.
+- **Optional main-area view** — the graph can also open as a page beside *对话* / *轨迹* in the conversation area: *Open in the main view* in the conventions strip switches it on, the `×` in its corner switches it off, the choice is remembered, and the sidebar tab stays the primary entry. Nothing is registered until you ask, so the View tab bar is unchanged for everyone who never opens it.
 - **Selected repository is obvious** — the active row in the repository tree is highlighted with a cyan tint and ring, so the repository whose graph is on screen is never ambiguous.
 - **Git conventions** — a strip above the graph states which convention document the selected repository carries (`draft` / `settled` / missing), opens it in the editor, and offers six proven frameworks to bootstrap a brand-new repository.
 - **One-click repository init** — a workspace directory that is not a repository yet gets an *Initialize Git repository* button. It asks once (target path and initial branch: `main` / `master` / `trunk` / `develop`), runs `git init -b <branch>` there, and then the conventions scaffold and framework picker open by themselves. It refuses when the directory already sits inside a repository, so it can never re-root an existing checkout.

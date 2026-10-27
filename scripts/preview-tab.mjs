@@ -745,6 +745,33 @@ const locale = {
 };
 const silent = { info() {}, warn() {}, error() {}, debug() {} };
 
+// The main-area View is an opt-in stored in localStorage; the node run has no
+// localStorage, so the preview stands one in and records what gets registered.
+const storedPrefs = {};
+globalThis.localStorage = {
+	getItem(key) { return Object.prototype.hasOwnProperty.call(storedPrefs, key) ? storedPrefs[key] : null; },
+	setItem(key, value) { storedPrefs[key] = String(value); },
+	removeItem(key) { delete storedPrefs[key]; }
+};
+const registeredViews = [];
+const slots = {
+	inject(name, factory) {
+		const entry = { name, disposed: false };
+		registeredViews.push(entry);
+		const dispose = factory();
+		entry.dispose = dispose;
+		return () => {
+			entry.disposed = true;
+			if (typeof dispose === "function") dispose();
+		};
+	},
+	register(options, Component) {
+		registeredViews[registeredViews.length - 1].options = options;
+		registeredViews[registeredViews.length - 1].Component = Component;
+		return () => {};
+	}
+};
+
 const ctx = {
 	effect(effect) {
 		try {
@@ -756,6 +783,21 @@ const ctx = {
 	inject(services, callback) {
 		// Only the sidebar-tab injection is wired: the other two belong to the
 		// chip/worktree faces that this preview does not render.
+		if (Array.isArray(services) && services.indexOf("slots") >= 0) {
+			callback({
+				slots,
+				sessions,
+				locale,
+				logger: silent,
+				effect(effect) {
+					try {
+						return effect();
+					} catch {
+						return () => {};
+					}
+				}
+			});
+		}
 		if (Array.isArray(services) && services.indexOf("betterSidebar") >= 0) {
 			callback({
 				betterSidebar,
@@ -1417,6 +1459,53 @@ let tier4Html = "";
 	CONFLICT_STATE.count = 2;
 }
 	console.log("preview-tab: ai attribution, conflict strip and one-click merge ok");
+}
+
+// The main-area View is an opt-in: nothing is registered until the sidebar tab
+// asks for it, the registration carries the Conversation slot contract, and the
+// close button on that View switches the preference back off.
+{
+	const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+	// The dock chip also registers through `slots`, so only count this View.
+	const views = () => registeredViews.filter((entry) => entry.name === "conversation.view");
+	if (views().length !== 0) throw new Error("the main-area view registered itself without the opt-in");
+	const mainToggle = findAll(rootMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "main-view-toggle")[0];
+	if (mainToggle === undefined) throw new Error("the sidebar tab offers no main-view button");
+	if (mainToggle.props["data-gitgraph-main-view-open"] !== "0") throw new Error("the main-view button does not start off");
+	click(mainToggle, "open in the main view");
+	await wait(80);
+	if (storedPrefs["dsh-git-graph:main-view"] !== "1") throw new Error("opening the main view did not persist the preference");
+	if (views().length !== 1) throw new Error("the main-area view was not registered: " + views().length);
+	const view = views()[0];
+	if (view.name !== "conversation.view") throw new Error("registered into the wrong slot: " + view.name);
+	if (view.options.name !== "conversation.view") throw new Error("the descriptor names another slot: " + view.options.name);
+	if (view.options.id !== "git-graph") throw new Error("a fresh id is required so the shipped views survive: " + view.options.id);
+	if (view.options.order !== 70) throw new Error("the View does not keep its place after the shipped ones");
+	// The fake locale binds to the key, so the dictionary fallback answers here.
+	if (view.options.label() !== "仓库图谱") throw new Error("the View label is not localized: " + JSON.stringify(view.options.label()));
+	const viewProps = view.options.inject("session");
+	if (viewProps.scope.cwd !== WORKSPACE) throw new Error("the View did not resolve the session cwd: " + viewProps.scope.cwd);
+	// This harness cannot render nested components (a child component's hooks run
+	// outside a render pass), so assert on the element tree the View returns.
+	const tree = view.Component(viewProps);
+	if (tree.props["data-gitgraph-main-view"] !== true) throw new Error("the main-area view renders no container");
+	const parts = [].concat(tree.props.children === undefined ? [] : tree.props.children).filter((node) => node !== null && typeof node === "object");
+	const body = parts.filter((node) => typeof node.type === "function")[0];
+	if (body === undefined) throw new Error("the main-area view does not render the tab body");
+	if (body.props.tab !== undefined) throw new Error("the main-area view hands the tab body a tab descriptor it does not have");
+	if (body.props.scope.cwd !== WORKSPACE) throw new Error("the tab body did not receive the session cwd");
+	const closeButton = parts.filter((node) => node.props !== undefined && node.props["data-gitgraph-action"] === "main-view-close")[0];
+	if (closeButton === undefined) throw new Error("the main-area view has no close button");
+	click(closeButton, "close the main view");
+	await wait(80);
+	if (storedPrefs["dsh-git-graph:main-view"] !== "0") throw new Error("closing the main view did not persist the preference");
+	if (view.disposed !== true) throw new Error("closing the main view left the registration in place");
+	const reopen = findAll(rootMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "main-view-toggle")[0];
+	click(reopen, "open in the main view again");
+	await wait(80);
+	if (views().length !== 2) throw new Error("the View was not re-registered after the opt-in came back");
+	console.log("preview-tab: main-area conversation view ok");
+	delete storedPrefs["dsh-git-graph:main-view"];
 }
 
 // The one-click init flow: a workspace whose root is not a repository offers the

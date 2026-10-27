@@ -34,6 +34,49 @@
 		let sidebarTabClient;
 		/** The sessions service captured by the tab registration (cwd fallback). */
 		let sidebarTabSessions;
+		/** localStorage key remembering whether the graph also opens as a main-area View. */
+		const MAIN_VIEW_KEY = "dsh-git-graph:main-view";
+		/** Listeners waiting for the preference to change (the View registration follows). */
+		const sidebarTabMainViewListeners = new Set();
+		/** Read the opt-in flag; a broken or missing storage counts as off. */
+		function sidebarTabMainViewEnabled() {
+			try {
+				const store = globalThis.localStorage;
+				return store !== void 0 && store !== null && store.getItem(MAIN_VIEW_KEY) === "1";
+			} catch {
+				return false;
+			}
+		}
+		/** Persist the opt-in flag and wake every subscriber (sidebar and View). */
+		function sidebarTabSetMainView(value) {
+			const next = value === true;
+			try {
+				const store = globalThis.localStorage;
+				if (store !== void 0 && store !== null) store.setItem(MAIN_VIEW_KEY, next ? "1" : "0");
+			} catch {}
+			for (const listener of [...sidebarTabMainViewListeners]) {
+				try {
+					listener();
+				} catch {}
+			}
+		}
+		/** Follow the flag; returns the unsubscribe function the effect cleans up with. */
+		function sidebarTabMainViewSubscribe(listener) {
+			sidebarTabMainViewListeners.add(listener);
+			return () => {
+				sidebarTabMainViewListeners.delete(listener);
+			};
+		}
+		/** The session's workspace root, resolved at call time from the sessions baseline. */
+		function sidebarTabCwdOf(sessions, sessionId) {
+			if (sessions === void 0 || sessions === null || sessionId === void 0) return void 0;
+			try {
+				const entry = sessions.list.getSnapshot().byId[sessionId];
+				return entry === void 0 || entry === null ? void 0 : entry.cwd;
+			} catch {
+				return void 0;
+			}
+		}
 		/** The tab's /git client: stateless, shared for the whole client. */
 		function sidebarTabGit() {
 			if (sidebarTabClient === void 0) sidebarTabClient = new GitApi();
@@ -624,6 +667,32 @@ const SIDEBAR_TAB_COMPLIANCE = {
 		};
 		/** The upgrade preview: what a write would add, rewrite or drop. */
 		/** The cross-document conflict banner: it never guesses, it reports and offers the merge. */
+		/** Full-height frame the main-area View renders the tab inside. */
+		const SIDEBAR_TAB_MAIN_VIEW = {
+			position: "relative",
+			display: "flex",
+			flexDirection: "column",
+			flex: "1 1 auto",
+			minHeight: 0,
+			overflow: "hidden",
+			background: "var(--dsw-alias-bg-base)"
+		};
+		/** The corner button that turns the opt-in off again. */
+		const SIDEBAR_TAB_MAIN_VIEW_CLOSE = {
+			position: "absolute",
+			top: 6,
+			right: 8,
+			width: 22,
+			height: 22,
+			padding: 0,
+			lineHeight: "20px",
+			fontSize: 14,
+			border: "none",
+			borderRadius: 4,
+			cursor: "pointer",
+			color: "var(--dsw-alias-text-2)",
+			background: "transparent"
+		};
 		const SIDEBAR_TAB_CONFLICTS = {
 			display: "flex",
 			flexDirection: "row",
@@ -1177,6 +1246,30 @@ const SIDEBAR_TAB_COMPLIANCE = {
 		const entry = sidebarTabCacheEntry(cwd);
 		return field === void 0 ? entry : entry[field];
 	}
+	/**
+	 * The same graph as a main-area Conversation View. The sidebar tab stays the
+	 * primary entry: this is opt-in, and the close button turns the opt-in off so
+	 * the View leaves the tab bar instead of lingering empty.
+	 */
+	function GitGraphMainView(props) {
+		const ctx = props !== void 0 && props !== null ? props.ctx : void 0;
+		const scope = props !== void 0 && props !== null && props.scope !== void 0 && props.scope !== null ? props.scope : {};
+		return react.createElement("div", {
+			"data-gitgraph-main-view": true,
+			style: SIDEBAR_TAB_MAIN_VIEW
+		}, react.createElement(GitGraphSidebarTab, {
+			ctx,
+			scope,
+			visible: true
+		}), react.createElement("button", {
+			type: "button",
+			"data-gitgraph-action": "main-view-close",
+			style: SIDEBAR_TAB_MAIN_VIEW_CLOSE,
+			onClick: () => sidebarTabSetMainView(false),
+			title: sidebarTabT(ctx, "sidebar.mainViewClose"),
+			"aria-label": sidebarTabT(ctx, "sidebar.mainViewClose")
+		}, "×"));
+	}
 	function GitGraphSidebarTab(props) {
 			sidebarTabEnsureStyle();
 			const ctx = props.ctx;
@@ -1277,6 +1370,10 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [conventionAi, setConventionAi] = react.useState("optional");
 			/** Where the documents that govern this repository disagree, as read from the host. */
 			const [conflicts, setConflicts] = react.useState(null);
+			/** Whether the graph also opens as a main-area View (opt-in, persisted). */
+			const [mainViewOpen, setMainViewOpen] = react.useState(() => sidebarTabMainViewEnabled());
+			/** Follow the flag: the sidebar button and the View's close button both write it. */
+			react.useEffect(() => sidebarTabMainViewSubscribe(() => setMainViewOpen(sidebarTabMainViewEnabled())), []);
 			/** The pending consolidation: a dry-run plan, written only on confirm. */
 			const [consolidate, setConsolidate] = react.useState(null);
 			/** Whether a convention document is being written right now. */
@@ -1454,6 +1551,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				setSelectedPath(path);
 				const sidebar = ctx !== void 0 && ctx !== null ? ctx.betterSidebar : void 0;
 				if (sidebar === void 0 || sidebar === null || typeof sidebar.updateTab !== "function") return;
+				/** The main-area View passes no tab, so the choice stays in local state there. */
+				if (tab === void 0 || tab === null) return;
 				try {
 					const meta = tab !== void 0 && tab !== null && tab.meta !== void 0 && tab.meta !== null ? tab.meta : {};
 					sidebar.updateTab(tab.id, { meta: Object.assign({}, meta, { repoPath: path }) }, scope.sessionId);
@@ -2424,6 +2523,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				const draft = state !== null && state.draft === true;
 				const docName = state !== null && typeof state.doc === "string" ? state.doc : scan.docName !== void 0 ? scan.docName : "GIT_CONVENTIONS.md";
 				const zh = sidebarTabIsZh();
+				/** Literal t() arguments: the locale validator only counts literal keys. */
+				const mainViewLabel = mainViewOpen ? t("sidebar.mainViewOn") : t("sidebar.mainViewOpen");
 				const head = h("div", {
 					key: "head",
 					style: SIDEBAR_TAB_CONVENTIONS_HEAD
@@ -2470,7 +2571,16 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					onClick: () => previewConsolidate(selected.path),
 					title: t("sidebar.consolidateOpen"),
 					"aria-label": t("sidebar.consolidateOpen")
-				}, t("sidebar.consolidateOpen")) : null, exists ? null : h("button", {
+				}, t("sidebar.consolidateOpen")) : null, h("button", {
+					key: "main-view",
+					type: "button",
+					"data-gitgraph-action": "main-view-toggle",
+					"data-gitgraph-main-view-open": mainViewOpen ? "1" : "0",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: () => sidebarTabSetMainView(!mainViewOpen),
+					title: mainViewLabel,
+					"aria-label": mainViewLabel
+				}, mainViewLabel), exists ? null : h("button", {
 					key: "setup",
 					type: "button",
 					"data-gitgraph-action": "setup-conventions",

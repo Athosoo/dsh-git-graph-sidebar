@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.11.0：`AGENTS.md` 这类散文文档里的规则也能检出并整合；`desktop` 装完需重启 DSH）。
+> 最后更新：2026-10-27（1.12.0：图谱可作为对话主区域里的一页打开，可选、可关闭；介绍文档改成先讲独特卖点；`desktop` 装完需重启 DSH）。
 
 ## 0. 一句话状态
 
@@ -147,6 +147,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
 | 1.11.0 | 把 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md` 里的规则也读进来（`foreign` 来源、参与冲突与并集、合并时只读保留）、locale 185 键、host 242/242 |
 | 1.10.1 | 规范面板标题行加「合并规范」按钮（不必先有冲突条）、只有一份规范时改为提示而非报错、tab 3068 行 / locale 183 键 |
 | 1.10.0 | AI 署名政策（`ai: required/optional/forbidden`，读正文 trailer）、排他性检测（工作区 / 本仓库 / 祖先逐字段逐规则比对，冲突写进注入提示）、一键整合（并集规则 + `## Unified rules` 分节 + 时间戳备份 + 仓库文档改指针）、`git_conventions` 工具；已发布并已装 |
@@ -535,6 +536,18 @@ return part.replace(/^HEAD -> /, "").trim();
 - 测试：`test-host` 增第 [20] 段（10 项）—— 散文文档被报成 foreign、长度规则把并集收紧到 50、提示里出现 `AGENTS.md`、计划列 `leftInPlace`、只读文件合并后原文未变、合并后 `count 0`；总数 232 → **242/242**。`preview-tab` 的 consolidate 假响应补 `leftInPlace` 并断言 `data-gitgraph-left`。
 - 发布信息：commit `14e2e72`、tag `v1.11.0`、release id **425422415**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.11.0`）、资产 `dsh-git-graph-sidebar.tgz` **904153** 字节（`releases/latest/download/...` 校验一致，sha256 `321617e084a95e4e8e2c77ea8b7d845b59e769c358a20e9bc157e4a62691e27e`）、`desktop` 已装 1.11.0（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.11.0.tgz`，lockfile 五处全指 1.11.0，1.10.1 残留 0 处）。
 - 边界（有意不做）：不改写 `AGENTS.md`，也不把它的散文整段搬进规范文档（只搬规则，落在并集一节）；`README.md` 等任意文件名不扫 —— 名单硬编码四个最常见的，宁可少扫也不误读。
+
+## 7.13 1.12.0 的改动（图谱可开进对话主区域）
+
+- 用户诉求（原话）：「做，不做文件树，但是加一个功能：支持在图示这个区域打开，要求是可选项，可关闭（主要入口还是在侧边栏那里），然后把介绍文档写好一点，突出独特卖点」——图里指的是宿主窗口顶部那条 `对话 | 轨迹 | 上下文 | 编队`。所以：**不做工作区文件树**，做「主区域视图」，并把 README 的开头改成先讲卖点。
+- 契约（别再猜）：宿主 `@deepseek-ai/dsh-client-ui-conversation` 的 `conversation.view` 插槽，`kind: "list"`、`scope: "session"`；`registerOptions` 里 `id` 必填且**必须用自造 id**（复用内置 id 会替换掉那一格）、`order` 升序（内置轨迹是 10）、`label` 可传 thunk（每次投影重读，所以本地化不用重注册）。注册形态：`ctx.slots.inject("conversation.view", () => ctx.slots.register({ name: "conversation.view", id: "git-graph", order: 70, locale: NS, label: () => sidebarTabT(scope, "view.title"), inject: (sessionId) => ({...}) }, GitGraphMainView))`。
+- 开关存 `localStorage["dsh-git-graph:main-view"]`（`"1"` 为开）；`sidebarTabMainViewEnabled()` 对没有 `localStorage` 或抛异常的宿主一律当「关」，`sidebarTabSetMainView()` 写值并通知 `sidebarTabMainViewSubscribe` 的监听者 —— 侧栏上的「在主区域打开」按钮与视图右上角的 `×` 走同一个入口，两处状态不可能不一致。
+- 注册代码写在 `lib/client.js` 的 `ctx.inject(["slots", "sessions"], …)` 里（**不在 splice 区域内**，因为 splice 区域拿不到 `slots`）；内部 `syncView()` 先 `disposeView()` 再按当前偏好决定是否重新注册，外层 `effect` 的清理函数同时退订与 dispose，所以运行中开关立即生效。
+- 视图本体是 `GitGraphMainView`：一个 `data-gitgraph-main-view` 的 flex 容器里渲染**原来的** `GitGraphSidebarTab`，右上角 `data-gitgraph-action="main-view-close"` 的 `×`。主区域没有 tab 对象，所以 `choose()` 里加了 `if (tab === void 0 || tab === null) return;` 守卫，避免往不存在的 tab 写 `meta.repoPath`。
+- 一个坑：`scripts/validate-lib.mjs` 只用 `/\bt\("([^"\\]+)"/g` 统计**字面量**键，`t(cond ? "a" : "b")` 会静默逃过检查。所以标签提成 `const mainViewLabel = mainViewOpen ? t("sidebar.mainViewOn") : t("sidebar.mainViewOpen");`，键数从 185 涨到 **187** 说明两个键真的被检查到了。
+- 测试：`preview-tab.mjs` 的假 ctx 补了 `slots`（记录 `inject`/`register`）、`sessions`（`session` → `cwd: WORKSPACE`）和一份内存版 `localStorage`；新断言组覆盖「偏好关时**不**注册」「打开后注册进 `conversation.view`、`id: "git-graph"`、`order: 70`、标签本地化」「视图元素树含容器、侧栏本体且**不带** `tab` 描述符」「`×` 关掉后偏好变 `"0"` 且注册被 dispose」「再打开能重新注册」。注意这套测试 harness **不能渲染嵌套组件**（子组件的 hooks 会跑在 render 通道之外），因此断言落在元素树上而不是 `html` 上。
+- 文档：`README.md` / `README.zh.md` 开头新增 **Why this one / 为什么选它**（规范进提示、规范能被读回含散文、两份规范打架不会被悄悄投票、三个入口一套本体、全程本地只读），并在功能清单里补「可选的主区域视图」一条；`DEVELOPMENT.md` 加「The optional main-area View」一节记下偏好键、注册代码、`tab` 守卫、字面量 `t()` 的坑与测试限制；`package.json` 升 **1.12.0**。
+- 自检值：`build-lib` spliced **3189 / 2149 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **242/242**、`preview-tab` 全过（末行 `root 40067 / nested 24884 / pinned+zoomed 27231`）。
 
 ## 8. 待办清单（按优先级）
 

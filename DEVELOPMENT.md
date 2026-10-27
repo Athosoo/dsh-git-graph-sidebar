@@ -16,7 +16,7 @@ This repository ships a prebuilt plugin. Running DSH loads `lib/index.js` (host 
 | `scripts/patch-host.mjs` | Idempotent patch of the upstream host bundle in 25 places: config fields, repository scan entries and decoration, and the `/git/conventions` + `/git/convention` + `/git/convention/preview` + `/git/compliance` + `/git/workspace-convention` + `/git/init` + `/git/cleanup` + `/git/health` routes. |
 | `scripts/test-host.mjs` | Offline end-to-end test of the host half (242 assertions): stubs the subprocess and web-server services, mounts the real route table, and asserts discovery, overview fields, branch cleanup, health, convention reads/writes, commit compliance (including the AI attribution trailer), upgrade previews, the workspace document, document conflicts and merging, the cost of a scan (one ref probe per repository, cached while the refs sit still), gate rejections and error codes. |
 | `scripts/validate-lib.mjs` | Checks that every `t("…")` key used in the tab exists in both the `zh` and `en` dictionaries, and that every `sidebarTab*` / `SIDEBAR_TAB_*` identifier is defined. |
-| `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html` (`-preview`, `-states`, `-hero`, `-overview`, `-tier3`). |
+| `scripts/preview-tab.mjs` | Loads `lib/client.js` with a fake React runtime, runs `apply(ctx)`, renders the tab with sample data and writes `preview/*.html` (`-preview`, `-states`, `-hero`, `-overview`, `-tier3`). Its fake `ctx` also serves the `slots`/`sessions` injection, so the opt-in main-area View is exercised here. |
 | `scripts/prepend-shared.mjs` | One-off helper: extracts the shared prelude (helpers and style constants) of the tab region from a pristine `lib/client.js`. |
 
 ## Building the tab
@@ -327,6 +327,36 @@ A tag points at one commit, so muting it hides exactly one row - it cannot pay f
 **Routes, tool and client.** `patch-host.mjs` adds `/git/conventions/conflicts` and `/git/conventions/consolidate` (`convention-conflict-routes`), threads `ai` through the existing write, preview, settings and workspace routes, and registers the opt-in `git_conventions` tool next to `git_worktree` (`conventions-tool`) — `action: check | consolidate` plus `write` / `force`, shaped like `buildWorktreeTool`, returning `{ok: false, code}` instead of throwing, with a guidance line that says "show this plan, then repeat with write true" when nothing was written. On the client, `SidebarTab.js` gained the three-way AI selector (`data-gitgraph-ai`), the AI rule chip, the conflict strip (`data-gitgraph-conflicts` + *Review and merge*) and the merge panel (`data-gitgraph-consolidate` in `ready` / `written`), backed by 15 new locale keys (166 → 181).
 
 **Testing.** `test-host.mjs` covers it in three new groups (**242 assertions**): [17] the attribution policy is checked in the body (required / forbidden / optional), [18] conflicting documents are reported and merging is previewed before it writes (backups, pointer, `count 0` afterwards, no conflict text left in the prompt), [19] the `git_conventions` tool registers, plans without writing, merges when asked, and answers `internal` / `workspace-unknown`, [20] rules written in a prose document (`AGENTS.md`) are reported as a `foreign` source, tighten the union, are listed as `leftInPlace` in the plan and clear the conflict count once merged. Two host details matter when writing such a test: `apply()` is wrapped in `mountOnce()`, which de-duplicates through `globalThis[Symbol.for("dsh-web.mounted-plugins")]`, so a second mount in the same process is a no-op unless the plugin id is deleted from that set first; and the config passed to `apply()` must be schemastery-shaped (`{ agentTool: { get: () => true } }`), because `effectiveConfig()` unwraps every field with `.get()`.
+## The optional main-area View (1.12.0)
+
+The same tab body can render as a page in the conversation area, beside the shipped
+Views. It is **opt-in and closable**, so the sidebar tab stays the primary entry and
+hosts that never switch it on see no new tab.
+
+- Preference: `localStorage["dsh-git-graph:main-view"]` (`"1"` on). `sidebarTabMainViewEnabled`
+  reads it defensively — a host without `localStorage`, or one that throws, simply means off.
+- `sidebarTabSetMainView` writes it and notifies `sidebarTabMainViewSubscribe` listeners; the
+  sidebar's toggle button and the View's own close button both go through it, so the two
+  surfaces can never disagree.
+- Registration lives in `lib/client.js` — **not** in the spliced region — because it needs
+  `slots`: `ctx.inject(["slots", "sessions"], …)` then `slots.inject("conversation.view", () =>
+  slots.register({ name: "conversation.view", id: "git-graph", order: 70, locale: NS,
+  label: () => sidebarTabT(scope, "view.title"), inject: (sessionId) => ({ ctx, scope: { sessionId,
+  cwd }, tab: void 0, visible: true }) }, GitGraphMainView))`. A fresh `id` is required: reusing a
+  shipped id would replace that cell instead of adding one.
+- `syncView()` disposes the previous registration before registering again, and the surrounding
+  `effect` returns a cleanup that both unsubscribes and disposes, so flipping the switch takes
+  effect in the running client without a restart of the plugin.
+- The View has no `tab` descriptor, so `GitGraphSidebarTab` guards `choose()` with
+  `if (tab === void 0 || tab === null) return;` before writing `meta.repoPath` through `updateTab`.
+- The label must be built from **literal** `t("…")` arguments (`const mainViewLabel = open ?
+  t("sidebar.mainViewOn") : t("sidebar.mainViewOpen")`), because `scripts/validate-lib.mjs` only
+  counts literal keys; a ternary inside `t()` silently escapes the locale check.
+- Testing: this harness cannot render nested components (a child component's hooks would run
+  outside a render pass), so `preview-tab.mjs` asserts against the element tree the View returns —
+  container marker, tab body without a `tab` descriptor, and the close button flipping the
+  preference and disposing the registration.
+
 ## Known debt
 
 - `lib/client.js` still carries upstream code that duplicates some helpers; only the tab region is generated, the rest is the upstream bundle.
