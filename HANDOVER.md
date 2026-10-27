@@ -533,6 +533,7 @@ return part.replace(/^HEAD -> /, "").trim();
 - 合并：`conventionsConsolidate()` 的准入从 `live < 2` 放宽成 `live < 1 || (live < 2 && foreign.length === 0)` —— 只有一份规范但旁边有 `AGENTS.md` 时也允许整合；计划里新增 `leftInPlace`（这些文件**只读不写**，工作区里别的工具在读它们，改写会伤到别人），合并只把它们的规则写进并集，于是 `count` 归零。
 - 客户端：计划面板在「并入」列表后多一段「保留原地：AGENTS.md」（`data-gitgraph-left`），locale 键 183 → **185**（`sidebar.consolidateLeft`、`sidebar.consolidateKeep`），tab 3068 → **3079** 行。
 - 测试：`test-host` 增第 [20] 段（10 项）—— 散文文档被报成 foreign、长度规则把并集收紧到 50、提示里出现 `AGENTS.md`、计划列 `leftInPlace`、只读文件合并后原文未变、合并后 `count 0`；总数 232 → **242/242**。`preview-tab` 的 consolidate 假响应补 `leftInPlace` 并断言 `data-gitgraph-left`。
+- 发布信息：commit `14e2e72`、tag `v1.11.0`、release id **425422415**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.11.0`）、资产 `dsh-git-graph-sidebar.tgz` **904153** 字节（`releases/latest/download/...` 校验一致，sha256 `321617e084a95e4e8e2c77ea8b7d845b59e769c358a20e9bc157e4a62691e27e`）、`desktop` 已装 1.11.0（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.11.0.tgz`，lockfile 五处全指 1.11.0，1.10.1 残留 0 处）。
 - 边界（有意不做）：不改写 `AGENTS.md`，也不把它的散文整段搬进规范文档（只搬规则，落在并集一节）；`README.md` 等任意文件名不扫 —— 名单硬编码四个最常见的，宁可少扫也不误读。
 
 ## 8. 待办清单（按优先级）
@@ -557,7 +558,7 @@ return part.replace(/^HEAD -> /, "").trim();
 5. ~~发 1.8.0~~ **已完成**：主题语言（1.7.3 的改动）+ 扫描成本；`patch-host` 22 处、`174/174`、166 个 locale 键。
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
 7. ~~发 1.10.0~~ **已完成**（commit `8cad121`、tag `v1.10.0`、release id `425076679`、资产 `dsh-git-graph-sidebar.tgz` 900982 字节、`desktop` 已装 1.10.0）。发布内容：AI 署名三态、排他性检测、一键整合、`git_conventions` 工具。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；自检结果：`spliced 2843 / 3049 / 2102 / 449`、`already present 25`、`181 locale keys`、`232/232`、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新面板与新路由。** 下一步候选：市场条目文案还没跟上 1.10.0（描述里仍写「flags the last 20 commit subjects」），以及「明确说明本插件依托 dsh-better-sidebar」的独立一句，两件事一起提一个 PR。**已完成**：分支 `update/athosoo-dsh-git-graph-sidebar-1100`、commit `e7da492d2`、PR [#9767](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/9767)，两项检查均已通过。
-8. ~~发 1.11.0~~ **已完成实现与自检**（散文文档检测）：`spliced 2843 / 3079 / 2149 / 449`、`patch-host` 25 处、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；装完**必须重启 DSH**。
+8. ~~发 1.11.0~~ **已完成**（commit `14e2e72`、tag `v1.11.0`、release id `425422415`、资产 `dsh-git-graph-sidebar.tgz` 904153 字节、`desktop` 已装 1.11.0）。发布内容：散文文档（`AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md`）里的规则也能检出并整合。自检：`spliced 2843 / 3079 / 2149 / 449`、`already present 25`、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新行为（注入提示里的 `AGENTS.md` 一行与面板的「保留原地」）。**
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
