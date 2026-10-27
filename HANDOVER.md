@@ -582,6 +582,14 @@ return part.replace(/^HEAD -> /, "").trim();
 - `test-host.mjs` [19] 改成 `read` → `draft` → `write`，并断言「写到盘上的就是模型给的正文」「备份恰好 2 份」「指针 1 份且保留原文」「空正文被拒」「写完后 `count === 0`」。总数 **252/252**。
 - **写补丁脚本的教训**：先用 `src` 算好索引、再对已经过一次替换（变长）的 `out` 切片，会把文件切坏（本次把 `const toolExec = …` 截断，靠 `git show HEAD:scripts/test-host.mjs > …` 还原后重做）。凡「先替换、再按行插入」一律在同一份字符串上重新 `find`。另外 bash heredoc 里两个反斜杠落进 python 非 raw 字符串会被折叠成一个，再写进 JS 就成了错的 `/\/g`；能不用转义就不用（改成 `includes` / `endsWith`）。
 
+### 7.15.6 发布信息
+
+- commit `9534f1e`「新增(conventions): 合并改由智能体读文档后自己写」（18 files, 531+/84−），tag `v1.13.0`，已推送（`47b2d0a..9534f1e HEAD -> main`）。
+- 打包 `../dsh-git-graph-dist/1.13.0/dsh-git-graph-sidebar.tgz` = **919392 字节**、154 条目，sha256 `d2ca4972077b48c65d12f8c45f6ff56e9e935cbbd03a55e839be612b9aea7472`；解包后 `lib/index.js`、`lib/client.js` 与仓库 `diff -q` 一致。
+- Release `v1.13.0` id **425545057**、资产 id **681786306**（919392 字节、`uploaded`）；镜像 `releases/latest/download/dsh-git-graph-sidebar.tgz` 下载校验 sha256 一致。**注意：创建 release 必须直连 `api.github.com`，经 `ghfast.top` 代理 POST 会返回空响应**（`JSONDecodeError: Expecting value: line 1 column 1 (char 0)`）；资产上传走 `uploads.github.com`（`api.github.com/.../assets` 是 404），`Content-Type: application/x-gzip`。
+- `desktop` 已装 1.13.0（`pnpm add "file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.13.0.tgz"`，`- 1.12.1 / + 1.13.0`）；`package.json` 依赖与 `pnpm-lock.yaml`（6 处 `1.13.0`）全部指向 1.13.0、`1.12.1` 残留 0；已装 `lib/index.js` 195426 B（`CONVENTION_READ_MAX_CHARS` 4 处、`conventionsWriteMerged` 2 处）、`lib/client.js` 255543 B（`conventions-ai-merge` 1 处、`consolidateDraft` 3 处）。
+- **用户需重启 DSH**：host 与客户端都改了，`Ctrl+R` 不够。
+
 ## 7.14 1.12.1 的改动（主区域布局、指针保留原文）
 
 1.12.0 落地后现场发现两个问题，1.12.1 修掉。
@@ -631,6 +639,7 @@ return part.replace(/^HEAD -> /, "").trim();
 6. ~~发 1.8.1~~ **已完成**：开关即刻落盘、界面读文档、工作区总纲带开关、容器读工作区文档；`patch-host` 23 处、`186/186`、166 个 locale 键。
 7. ~~发 1.10.0~~ **已完成**（commit `8cad121`、tag `v1.10.0`、release id `425076679`、资产 `dsh-git-graph-sidebar.tgz` 900982 字节、`desktop` 已装 1.10.0）。发布内容：AI 署名三态、排他性检测、一键整合、`git_conventions` 工具。发版照 §5，资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`；自检结果：`spliced 2843 / 3049 / 2102 / 449`、`already present 25`、`181 locale keys`、`232/232`、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新面板与新路由。** 下一步候选：市场条目文案还没跟上 1.10.0（描述里仍写「flags the last 20 commit subjects」），以及「明确说明本插件依托 dsh-better-sidebar」的独立一句，两件事一起提一个 PR。**已完成**：分支 `update/athosoo-dsh-git-graph-sidebar-1100`、commit `e7da492d2`、PR [#9767](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/9767)，两项检查均已通过。
 8. ~~发 1.11.0~~ **已完成**（commit `14e2e72`、tag `v1.11.0`、release id `425422415`、资产 `dsh-git-graph-sidebar.tgz` 904153 字节、`desktop` 已装 1.11.0）。发布内容：散文文档（`AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md`）里的规则也能检出并整合。自检：`spliced 2843 / 3079 / 2149 / 449`、`already present 25`、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新行为（注入提示里的 `AGENTS.md` 一行与面板的「保留原地」）。**
+9. ~~发 1.13.0~~ **已完成**（commit `9534f1e`、tag `v1.13.0`、release id `425545057`、资产 `dsh-git-graph-sidebar.tgz` 919392 字节、`desktop` 已装 1.13.0）。发布内容：合并改由智能体读文档后自己写（`git_conventions` 增 `read` / `write`，旧的 `consolidate` 退为 `draft`）、提示词改口、面板改为把请求复制到剪贴板。自检：`spliced 2843 / 3253 / 2303 / 449`、`already present 25`、`189 locale keys`、host **252/252**、`preview-tab` 8 组全过。**用户需重启 DSH。** 下一步候选：市场条目文案仍是 1.11.0 口径（写的是一键整合），要与 1.13.0 的「智能体自己读自己写」对齐可再提一次 PR。
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
 ## 9. 坑与教训（每条都真踩过）
