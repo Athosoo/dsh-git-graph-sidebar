@@ -1407,6 +1407,9 @@ let tier4Html = "";
 		}
 	};
 	REPOS = Object.assign({}, savedRepos, { repos: (savedRepos.repos || []).concat([injected]) });
+	/** The panel hands the merge to the model by copying the request. */
+	const COPIED = [];
+	Object.defineProperty(globalThis, "navigator", { configurable: true, value: { clipboard: { writeText(text) { COPIED.push(String(text)); } } } });
 	const tierMount = await mountComponent(descriptor.component, tabProps(TIER4_PATH));
 	await wait(80);
 	let tierHtml = (await tierMount.render()).html;
@@ -1418,8 +1421,17 @@ let tier4Html = "";
 	if (reviewButton === undefined) throw new Error("the conflict review button is not clickable");
 	click(reviewButton, "review conflicts");
 	await wait(80);
-	if (CONSOLIDATE_CALLS.length !== 1) throw new Error("reviewing the conflicts did not ask for a plan");
-	if (CONSOLIDATE_CALLS[0].write === true) throw new Error("reviewing the conflicts wrote the document");
+	if (COPIED.length !== 1) throw new Error("the review button did not hand the merge to the model");
+	if (COPIED[0].indexOf("git_conventions") < 0) throw new Error("the copied request does not name the tool");
+	if (CONSOLIDATE_CALLS.length !== 0) throw new Error("the review button still merged by itself");
+	tierHtml = (await tierMount.render()).html;
+	if (tierHtml.indexOf("data-gitgraph-conventions-ai") < 0) throw new Error("the panel does not confirm the copied request");
+	const draftLink = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
+	if (draftLink === undefined) throw new Error("the mechanical union is unreachable");
+	click(draftLink, "preview the mechanical union");
+	await wait(80);
+	if (CONSOLIDATE_CALLS.length !== 1) throw new Error("the union link did not ask for a plan");
+	if (CONSOLIDATE_CALLS[0].write === true) throw new Error("the union link wrote the document");
 	tierHtml = (await tierMount.render()).html;
 	if (tierHtml.indexOf('data-gitgraph-consolidate="ready"') < 0) throw new Error("the merge plan did not render");
 	if (tierHtml.indexOf("GIT_CONVENTIONS.md") < 0) throw new Error("the merge plan lists no absorbed document");
@@ -1445,12 +1457,17 @@ let tier4Html = "";
 
 	// The panel header carries its own merge button, so a repository whose
 	// documents disagree does not have to be found through the conflict strip.
-	const headerMerge = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
-	if (headerMerge === undefined) throw new Error("the conventions panel has no merge button");
-	const beforeHeader = CONSOLIDATE_CALLS.length;
+	const headerMerge = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-ai-merge")[0];
+	if (headerMerge === undefined) throw new Error("the conventions panel has no AI merge button");
+	const beforeHeader = COPIED.length;
 	click(headerMerge, "merge from the panel header");
-	if (!(await until(async () => (await htmlOf()).indexOf('data-gitgraph-consolidate="ready"') >= 0))) throw new Error("the panel merge button asked for no plan");
-	if (CONSOLIDATE_CALLS.length !== beforeHeader + 1 || CONSOLIDATE_CALLS[CONSOLIDATE_CALLS.length - 1].write === true) throw new Error("the panel merge button wrote without a confirmation");
+	if (COPIED.length !== beforeHeader + 1) throw new Error("the panel merge button copied nothing");
+	if ((await htmlOf()).indexOf("data-gitgraph-consolidate=") >= 0) throw new Error("the panel merge button still merged by itself");
+	const headerDraft = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
+	if (headerDraft === undefined) throw new Error("the panel header lost the union link");
+	click(headerDraft, "open the union from the panel header");
+	if (!(await until(async () => (await htmlOf()).indexOf('data-gitgraph-consolidate="ready"') >= 0))) throw new Error("the union link asked for no plan");
+	if (CONSOLIDATE_CALLS[CONSOLIDATE_CALLS.length - 1].write === true) throw new Error("the union link wrote without a confirmation");
 	const headerCancel = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-cancel")[0];
 	click(headerCancel, "cancel merge");
 	await wait(80);

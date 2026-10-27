@@ -1689,6 +1689,24 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				}).catch(() => void 0);
 			}, []);
 			/**
+			 * Hand the merge to the model. The agent reads every document itself and judges
+			 * the duplicates, so the request is copied for the conversation.
+			 */
+			const requestAiMerge = react.useCallback(() => {
+				const request = "请读出我工作区里所有 Git 规范文档（git_conventions 工具可用就用 action read，否则用你自己的文件工具），逐段比较，找出冲突和重复的规范，把它们合并成一份完整的规范写进 .dsh/GIT_CONVENTIONS.md；写入之前先把合并稿给我看。";
+				const nav = globalThis.navigator;
+				const clipboard = nav === void 0 || nav === null ? void 0 : nav.clipboard;
+				if (clipboard !== void 0 && clipboard !== null && typeof clipboard.writeText === "function") {
+					try {
+						clipboard.writeText(request);
+					} catch (error) {
+						void error;
+					}
+				}
+				setConventionNotice("ai");
+				return true;
+			}, []);
+			/**
 			 * Ask the host what consolidating would change: every document that governs
 			 * this repository merged into the workspace one. Nothing is written yet.
 			 */
@@ -2590,13 +2608,13 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				}, t("sidebar.conventionsSwitch")) : null, exists ? h("button", {
 					key: "merge",
 					type: "button",
-					"data-gitgraph-action": "conventions-consolidate-open",
+					"data-gitgraph-action": "conventions-ai-merge",
 					style: SIDEBAR_TAB_DETAIL_BUTTON,
 					disabled: conventionBusy,
-					onClick: () => previewConsolidate(selected.path),
-					title: t("sidebar.consolidateOpen"),
-					"aria-label": t("sidebar.consolidateOpen")
-				}, t("sidebar.consolidateOpen")) : null, h("button", {
+					onClick: () => requestAiMerge(),
+					title: t("sidebar.consolidateAi"),
+					"aria-label": t("sidebar.consolidateAi")
+				}, t("sidebar.consolidateAi")) : null, h("button", {
 					key: "main-view",
 					type: "button",
 					"data-gitgraph-action": "main-view-toggle",
@@ -2687,7 +2705,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						"data-gitgraph-action": "conventions-conflicts-review",
 						style: SIDEBAR_TAB_DETAIL_BUTTON,
 						disabled: conventionBusy,
-						onClick: () => previewConsolidate(selected.path)
+						onClick: () => requestAiMerge()
 					}, t("sidebar.conflictsReview"))]);
 				/** The consolidation plan: which files merge, and which become pointers. */
 				const consolidatePanel = (() => {
@@ -2775,6 +2793,18 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					"data-gitgraph-conventions-merged": true,
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, t("sidebar.consolidateMerged")));
+				else if (conventionNotice === "ai") children.push(h("span", {
+					key: "notice",
+					"data-gitgraph-conventions-ai": true,
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.consolidateAiNotice"), h("button", {
+					key: "draft",
+					type: "button",
+					"data-gitgraph-action": "conventions-consolidate-open",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					disabled: conventionBusy,
+					onClick: () => previewConsolidate(selected.path)
+				}, t("sidebar.consolidateDraft"))));
 				else if (conventionNotice === "single") children.push(h("span", {
 					key: "notice",
 					"data-gitgraph-conventions-single": true,

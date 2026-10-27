@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.12.0：图谱可作为对话主区域里的一页打开，可选、可关闭；介绍文档改成先讲独特卖点；`desktop` 装完需重启 DSH）。
+> 最后更新：2026-10-27（1.13.0：合并改成由智能体读文档、判冲突与重复、自己写一份；程序化并集降级为草稿路径；`desktop` 装完需重启 DSH）。
 
 ## 0. 一句话状态
 
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.13.0 | 合并改由智能体主导：`git_conventions` 新增 `read`（每份文档完整正文）与 `write`（写入模型写的合并稿，带备份与指针），`consolidate` 退为 `draft`；提示词在无冲突但多文档时也提示查重；面板「AI 合并」把请求复制到剪贴板（客户端无法直接发起模型回合），机械并集降级为通知里的「先看机械并集草稿」；locale 189 键、host 252/252 |
 | 1.12.1 | 主区域布局修正（提交卡片移到图谱右侧、整列高度减掉宿主发布的 composer 高度）、被并入的仓库文档在指针下面保留合并前原文、locale 187 键、host 243/243 |
 | 1.11.0 | 把 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md` 里的规则也读进来（`foreign` 来源、参与冲突与并集、合并时只读保留）、locale 185 键、host 242/242 |
 | 1.10.1 | 规范面板标题行加「合并规范」按钮（不必先有冲突条）、只有一份规范时改为提示而非报错、tab 3068 行 / locale 183 键 |
@@ -551,6 +552,35 @@ return part.replace(/^HEAD -> /, "").trim();
 - 自检值：`build-lib` spliced **3189 / 2149 / 449**、`patch-host` `already present 25`、`validate-lib` **187 键**、`test-host` **242/242**、`preview-tab` 全过（末行 `root 40067 / nested 24884 / pinned+zoomed 27231`）。
 - 现场发现（值得记的用法坑）：工作区在 20:56 真的跑过一次整合 —— `E:/git-graph/.dsh/GIT_CONVENTIONS.md` 从 2832 B 涨到 4899 B，`graph-demo` 里多出指针文件与备份。原因是 `graph-demo` 的规范还是「每个小节都写待定」的脚手架，**整合会把脚手架的小节一起并进工作区总纲**（合并后多了 39 处「待定」）。已从插件自己留下的 `GIT_CONVENTIONS.md.bak-20261027-205657` 还原总纲（现在是 2832 B，`parseConventionRules` 回 `maxSubject 72 / language zh / strict true / count 0`），并把 `graph-demo` 里的两份残留挪出仓库。教训：**只该拿「已经写好规则」的文档去整合**，脚手架文档适合先填再并。
 - 发布信息：commit `4e1a38e`、tag `v1.12.0`、release id **425494454**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.12.0`）、资产 `dsh-git-graph-sidebar.tgz` **910380** 字节（asset id **681671318**，`releases/latest/download/...` 经镜像下载校验 sha256 `2963b69addc0646ad46abdd9d15c508fe026742766ffc861974d3cbe1797f5d7` 一致、154 条目、包内 version 1.12.0）、`desktop` 已装 1.12.0（`pnpm add file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.12.0.tgz`，lockfile `:41-43` / `:1198-1199` / `:3291` 全指 1.12.0，1.11.0 残留 0 处）。
+
+## 7.15 1.13.0 的改动（合并交给智能体）
+
+### 7.15.1 为什么推翻 1.10.0 的合并
+
+1.10.0 的 `conventionsConsolidate()` 是确定性的并集：把各文档 `##` 小节搬过来、追加一节命中解析正则的 `## Unified rules`。它只能合并「正则看得见的东西」——**读不出两段话在说同一件事**，读不出「每节都写待定」的脚手架没有信息量，也不能把人话改写得更短。用户的判断是这种机械合并不够用，于是合并搬到模型侧，代码只留真正机械的部分（发现文档、备份、指针、落盘）。
+
+### 7.15.2 工具面：`read` / `check` / `draft` / `write`
+
+- `read` → `conventionsReadDocuments(cwd, docName)` 返回 `{doc, root, workspace, target, documents}`；每份文档带 `origin`（`workspace` / `this repository` / `parent repository` / 散文文件名）、`docPath`、`bytes`、`pointer`、`inherited`、`truncated`、`text`（上限 `CONVENTION_READ_MAX_CHARS = 20000`）。**要点是模型看到原文件，而不是解析出来的规则列表。**
+- `write` → `conventionsWriteMerged(cwd, docName, body, {force, absorb})`：空正文拒绝（`convention-empty`）；目标已存在且无 `force` 拒绝（`convention-exists`）；旧目标先复制成 `<名>.bak-<yyyymmdd-HHmmss>`；`absorb`（默认 true）时每份非工作区的规范文档备份后改写成指针，且**指针下面保留合并前原文**。读写都过 `conventionReadText` / `conventionWriteText`，失败返回 `{ok:false, error:{code:"internal"}}` 而不是抛异常。
+- `draft` = 旧的 `consolidate`（`write` 仍可强制走机械并集，作为退路），`check` 不变。
+- 参数：`action`（required）+ `body` / `write` / `force` / `absorb`。
+
+### 7.15.3 提示词改了谁来做合并
+
+- `conventionsConflictPromptBlock()` 不再让人去调 `consolidate`，而是要求：**完整读每一份文档 → 自己逐段比较 → 提出一份合并稿 → 用户同意后才写**；并且显式写出退路「工具不可用就用你自己的文件工具」——因为 `agentTool` 默认 `false`，工具是可选开启的。
+- 同一函数**在文档之间没有机械冲突时也会触发一条提示**：文档数 ≥ 2 且 `count === 0` 时输出一行「这些文档在机械设置上一致，但正文仍可能重复，读全文再看」。这样「查重」是常驻指令，而不是只有字段打架时才被提醒。合并完成后仓库文档变指针、`live` 回到 1，这一行自动消失。
+
+### 7.15.4 面板：交接而不是执行
+
+- 「AI 合并」（`data-gitgraph-action="conventions-ai-merge"`）与冲突条上的「查看并合并」都改调 `requestAiMerge()`：把一段现成的请求复制到剪贴板（对 `globalThis.navigator.clipboard` 做容错），并显示 `data-gitgraph-conventions-ai` 通知。**客户端插件无法直接发起模型回合**（查过 `@deepseek-ai/dsh-api-session-controller` 与 ui-conversation，没有 composer submit API），所以这里只能复制。
+- 机械并集保留在通知里的「先看机械并集草稿」（`conventions-consolidate-open` → `previewConsolidate`），旧的预览/确认面板与它的测试因此仍是活路径；面板自身永远不会背着人写盘。
+
+### 7.15.5 测试与坑
+
+- `preview-tab.mjs` 用 `Object.defineProperty(globalThis, "navigator", …)` 注入剪贴板桩（Node 24 的 `globalThis.navigator` 只有 getter，直接赋值报 `Cannot set property navigator of #<Object> which has only a getter`），断言：点 review 只复制不调接口（`CONSOLIDATE_CALLS.length === 0`）、点并集链接才出计划、面板按钮也只复制。
+- `test-host.mjs` [19] 改成 `read` → `draft` → `write`，并断言「写到盘上的就是模型给的正文」「备份恰好 2 份」「指针 1 份且保留原文」「空正文被拒」「写完后 `count === 0`」。总数 **252/252**。
+- **写补丁脚本的教训**：先用 `src` 算好索引、再对已经过一次替换（变长）的 `out` 切片，会把文件切坏（本次把 `const toolExec = …` 截断，靠 `git show HEAD:scripts/test-host.mjs > …` 还原后重做）。凡「先替换、再按行插入」一律在同一份字符串上重新 `find`。另外 bash heredoc 里两个反斜杠落进 python 非 raw 字符串会被折叠成一个，再写进 JS 就成了错的 `/\/g`；能不用转义就不用（改成 `includes` / `endsWith`）。
 
 ## 7.14 1.12.1 的改动（主区域布局、指针保留原文）
 
