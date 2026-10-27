@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.10.0 已发布并已装进 `desktop`，待重启）。
+> 最后更新：2026-10-27（1.10.1：规范面板加了「合并规范」按钮；`desktop` 装完需重启 DSH）。
 
 ## 0. 一句话状态
 
@@ -147,6 +147,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.0 | 扫描成本：每仓一次 refs 探针（`for-each-ref` 带 `upstream:track`）、每仓指纹缓存（refs 没动就不 spawn）、规范文档并发批读、状态并发 8 / 超时 2.5s、`timings` 阶段计时、客户端轮询不再重读图谱；已发布并已装 |
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
+| 1.10.1 | 规范面板标题行加「合并规范」按钮（不必先有冲突条）、只有一份规范时改为提示而非报错、tab 3068 行 / locale 183 键 |
 | 1.10.0 | AI 署名政策（`ai: required/optional/forbidden`，读正文 trailer）、排他性检测（工作区 / 本仓库 / 祖先逐字段逐规则比对，冲突写进注入提示）、一键整合（并集规则 + `## Unified rules` 分节 + 时间戳备份 + 仓库文档改指针）、`git_conventions` 工具；已发布并已装 |
 | 1.9.2 | 补上 1.9.1 漏掉的 host 那一行（`parseDecoration` 保留 `tag: ` 前缀），标签与分支终于真的能区分；`test-host` 增加第 [16] 段真标签断言（189/189）；已发布并已装 |
 | 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键（只改了客户端，实机无效，见 1.9.2）；已发布并已装 |
@@ -514,6 +515,11 @@ return part.replace(/^HEAD -> /, "").trim();
 - `scripts/test-host.mjs` 增加三段，**232/232**：[17] AI 署名在正文里被检查（required / forbidden / optional 三态）；[18] 冲突被报告、合并先预览后写入（含备份、指针、合并后 `count 0`、提示里不再有冲突）；[19] `git_conventions` 工具（注册、check 出计划、consolidate 不带 write 不改盘、带 write 真合并、未知 action、无 cwd）。
 - **`apply()` 是 `mountOnce()` 包的，靠 `globalThis[Symbol.for("dsh-web.mounted-plugins")]` 全局去重** —— 同一进程里第二次 `apply` 是 no-op，只会进 waiters。测试里必须先 `mountedPlugins.delete("dsh-git-graph-sidebar")` 才能再挂。
 - 传给 `apply()` 的 config 必须是 schemastery 形态（字段带 `.get()`），例如 `{ agentTool: { get: () => true } }`；`featureConfig` 是 thunk，`buildConventionsTool(featureConfig)` 里 `readConfig()` 拿到的就是解包后的字符串。
+## 7.11 1.10.1 的改动（规范面板自己的「合并规范」按钮）
+
+- 反馈：冲突条只在真有冲突时出现，想手动整理一遍时面板上没有入口。1.10.1 在规范面板标题行（`Git 规范` / 文档名 / 状态 / 打开 / 更换框架 那一行，`flexWrap: "wrap"` 本来就允许换行）加了 **合并规范** 按钮：`data-gitgraph-action="conventions-consolidate-open"`，`exists` 才渲染，`conventionBusy` 时禁用，点击走和冲突条同一条 `previewConsolidate(selected.path)` → `conventionsConsolidate(repoPath, {})`，只出计划，再点「写入并备份」才落盘。
+- 顺手修了一处体验：只有一份规范在生效时（`live < 2`），主机返回 `code: "convention-single-source"`，原来会把它当错误红字显示；现在 `previewConsolidate` 认这个 code，改成提示 `sidebar.consolidateSingle`（`data-gitgraph-conventions-single`）并清掉计划面板。
+- 代价很小：locale 键 181 → **183**（`sidebar.consolidateOpen`、`sidebar.consolidateSingle`），tab 源码 3049 → **3068** 行，`scripts/build-lib.mjs` 的 `EXTRA_KEYS` 加 4 条；`preview-tab` 的 tier-4 补一段断言（面板按钮出计划但不写盘、取消后计划面板消失）。
 ## 8. 待办清单（按优先级）
 
 1. ~~发 1.5.0~~ **已完成**（commit `2dcb974`、tag `v1.5.0`、Release 资产 `dsh-git-graph-sidebar.tgz` 834240 字节、`desktop` 已装 1.5.0）。

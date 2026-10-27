@@ -1398,6 +1398,19 @@ let tier4Html = "";
 	click(forbiddenButton, "forbid AI attribution");
 	await wait(80);
 	if (SETTINGS_CALLS.length === 0 || SETTINGS_CALLS[SETTINGS_CALLS.length - 1].ai !== "forbidden") throw new Error("the AI switch did not reach /git/convention/settings");
+
+	// The panel header carries its own merge button, so a repository whose
+	// documents disagree does not have to be found through the conflict strip.
+	const headerMerge = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-open")[0];
+	if (headerMerge === undefined) throw new Error("the conventions panel has no merge button");
+	const beforeHeader = CONSOLIDATE_CALLS.length;
+	click(headerMerge, "merge from the panel header");
+	if (!(await until(async () => (await htmlOf()).indexOf('data-gitgraph-consolidate="ready"') >= 0))) throw new Error("the panel merge button asked for no plan");
+	if (CONSOLIDATE_CALLS.length !== beforeHeader + 1 || CONSOLIDATE_CALLS[CONSOLIDATE_CALLS.length - 1].write === true) throw new Error("the panel merge button wrote without a confirmation");
+	const headerCancel = findAll(tierMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "conventions-consolidate-cancel")[0];
+	click(headerCancel, "cancel merge");
+	await wait(80);
+	if ((await htmlOf()).indexOf('data-gitgraph-consolidate=') >= 0) throw new Error("cancelling the header merge left the plan open");
 	REPOS = savedRepos;
 	CONFLICT_STATE.count = 2;
 }

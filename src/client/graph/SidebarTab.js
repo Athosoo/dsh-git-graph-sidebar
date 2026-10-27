@@ -1575,6 +1575,11 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				});
 				return sidebarTabGit().conventionsConsolidate(repoPath, {}).then((result) => {
 					if (!result.ok || result.value === null || result.value === void 0) {
+						if (result.error !== void 0 && result.error !== null && result.error.code === "convention-single-source") {
+							setConsolidate(null);
+							setConventionNotice("single");
+							return false;
+						}
 						setConsolidate(null);
 						setConventionError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.error.conventions"));
 						return false;
@@ -2456,7 +2461,16 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					onClick: () => setPickerOpen((current) => !current),
 					title: t("sidebar.conventionsSwitch"),
 					"aria-label": t("sidebar.conventionsSwitch")
-				}, t("sidebar.conventionsSwitch")) : exists ? null : h("button", {
+				}, t("sidebar.conventionsSwitch")) : null, exists ? h("button", {
+					key: "merge",
+					type: "button",
+					"data-gitgraph-action": "conventions-consolidate-open",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					disabled: conventionBusy,
+					onClick: () => previewConsolidate(selected.path),
+					title: t("sidebar.consolidateOpen"),
+					"aria-label": t("sidebar.consolidateOpen")
+				}, t("sidebar.consolidateOpen")) : null, exists ? null : h("button", {
 					key: "setup",
 					type: "button",
 					"data-gitgraph-action": "setup-conventions",
@@ -2615,6 +2629,11 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					"data-gitgraph-conventions-merged": true,
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
 				}, t("sidebar.consolidateMerged")));
+				else if (conventionNotice === "single") children.push(h("span", {
+					key: "notice",
+					"data-gitgraph-conventions-single": true,
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.consolidateSingle")));
 				else if (!exists) children.push(h("span", {
 					key: "missing",
 					style: SIDEBAR_TAB_CONVENTIONS_NOTE
