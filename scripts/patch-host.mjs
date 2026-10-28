@@ -68,14 +68,16 @@ patch(
 // 2. Config schema: document name + the auto-scaffold switch.
 patch(
 	"config-schema",
-	'\tagentTool: z.boolean().default(false).volatile()\n});',
-	'\tagentTool: z.boolean().default(false).volatile(),\n\tconventionsDoc: z.string().default("GIT_CONVENTIONS.md").volatile(),\n\tconventionsAuto: z.boolean().default(true).volatile()\n});'
+	'\tautoBaseline: z.union(["current", "default"]).default("current").volatile(),',
+	'\tautoBaseline: z.union(["current", "default"]).default("current").volatile(),\n\tconventionsDoc: z.string().default("GIT_CONVENTIONS.md").volatile(),\n\tconventionsAuto: z.boolean().default(true).volatile()',
+	'\tconventionsDoc: z.string().default("GIT_CONVENTIONS.md").volatile(),'
 );
 patch(
 	"config-effective",
-	'\t\tagentTool: config?.agentTool?.get() ?? false\n\t};',
-	'\t\tagentTool: config?.agentTool?.get() ?? false,\n\t\tconventionsDoc: config?.conventionsDoc?.get() ?? "GIT_CONVENTIONS.md",\n\t\tconventionsAuto: config?.conventionsAuto?.get() ?? true\n\t};'
-);
+	'\t\tautoBaseline: config?.autoBaseline?.get() ?? "current",',
+	'\t\tautoBaseline: config?.autoBaseline?.get() ?? "current",\n\t\tconventionsDoc: config?.conventionsDoc?.get() ?? "GIT_CONVENTIONS.md",\n\t\tconventionsAuto: config?.conventionsAuto?.get() ?? true',
+	'\t\tconventionsDoc: config?.conventionsDoc?.get() ?? "GIT_CONVENTIONS.md",');
+
 
 // 3. Region the conventions module is spliced into. Keyed on the region marker
 //    alone: once build-lib has spliced the module in, the replacement string no
@@ -222,8 +224,9 @@ patch(
 );
 patch(
 	"prompt-mount",
-	"\tctx.effect(() => {\n\t\tsyncTool();\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);",
-	"\tconventionsPromptMount(ctx, featureConfig);\n\tctx.effect(() => {\n\t\tsyncTool();\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);"
+	"\tctx.effect(() => {\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);",
+	"\tconventionsPromptMount(ctx, featureConfig);\n\tctx.effect(() => {\n\t\tconst disposeRoutes = registerGitRoutes(ctx, service, featureConfig);",
+	"\tconventionsPromptMount(ctx, featureConfig);"
 );
 
 // 9. One-click repository init (used by the tab for folders without a repo).
@@ -433,16 +436,6 @@ patch(
 \t\tcase "/git/conventions": {`,
 	'\t\t\tcase "/git/conventions/conflicts": {'
 );
-
-// 20. The same detection is reachable from a model step: the session's cwd is
-//     the only input, and the tool reports rather than decides.
-patch(
-	"conventions-tool",
-	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), "dsh-git-graph: git_worktree tool");',
-	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), "dsh-git-graph: git_worktree tool");' +
-	'\t\ttoolCtx.effect(() => toolCtx.tools.register(buildConventionsTool(featureConfig)), "dsh-git-graph: git_conventions tool");'
-);
-
 // A route case may appear exactly once: two copies mean an earlier run
 // inserted a block a second time, and the second copy is dead code.
 const caseLines = source.split(String.fromCharCode(10)).map((line) => line.trim()).filter((line) => line.startsWith("case \"") && line.endsWith(": {"));

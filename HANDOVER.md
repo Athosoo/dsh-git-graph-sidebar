@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-27（1.13.1：把机械合并整条删掉——插件自己不再合并，只由智能体读文档后写；`desktop` 装完需重启 DSH）。
+> 最后更新：2026-10-27（1.14.0：连两个面向模型的工具也删了——`git_worktree` 与 `git_conventions` 不再存在，`agentTool` 开关也取消；合并时要遵守的三条约定改由注入提示携带）。
 
 ## 0. 一句话状态
 
@@ -77,11 +77,11 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "E:/git-graph/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3223 / 2153 / 449 lines（tab / conventions / branches）
-node scripts/patch-host.mjs     # → applied 0, already present 23（幂等）
+node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3104 / 1936 / 449 lines（tab / conventions / branches）
+node scripts/patch-host.mjs     # → applied 0, already present 24（幂等）
 node --check lib/client.js && node --check lib/index.js
-node scripts/validate-lib.mjs   # → OK — 166 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 189/189 checks passed
+node scripts/validate-lib.mjs   # → OK — 180 locale keys resolve, all fork identifiers defined
+node scripts/test-host.mjs      # → 215/215 checks passed
 node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real workspace
 ```
 
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.14.0 | 删掉两个面向模型的工具：`git_worktree`（`GIT_WORKTREE_TOOL` / `callingCwd` / `buildWorktreeTool` / `src/host/agent-tool.ts` 整个区域）与 `git_conventions`（`buildConventionsTool` / `conventionsReadDocuments` / `conventionsWriteMerged` / `conventionReadText` / `conventionWriteText` / `conventionPointerBody` / `conventionRelativePath` / `CONVENTION_READ_MAX_CHARS`），连同 `Config.agentTool`、`effectiveConfig().agentTool`、`toolFiber` / `syncTool()` 与 `loader/volatile-update` 监听；提示词接手——写明「工作区文档管事、每份被替换文件留 `.bak-<时间戳>`、仓库文档变三行指针」；`patch-host` 24 处（省掉 `conventions-tool`，`config-schema` / `config-effective` / `prompt-mount` 换锚点）、locale 180 键、host 215/215 |
 | 1.13.1 | 删掉机械合并：`conventionsConsolidate` / `conventionsUnionSection` / `conventionsMergedBody`、`/git/conventions/consolidate` 路由、工具 `draft` 动作、客户端合并面板与 11 个 locale 键全部移除；合并只能由智能体读完全部文档后自己写（`read` → `write`）。locale 180 键、host 232/232 |
 | 1.13.0 | 合并改由智能体主导：`git_conventions` 新增 `read`（每份文档完整正文）与 `write`（写入模型写的合并稿，带备份与指针），`consolidate` 退为 `draft`；提示词在无冲突但多文档时也提示查重；面板「AI 合并」把请求复制到剪贴板（客户端无法直接发起模型回合），机械并集降级为通知里的「先看机械并集草稿」；locale 189 键、host 252/252 |
 | 1.12.1 | 主区域布局修正（提交卡片移到图谱右侧、整列高度减掉宿主发布的 composer 高度）、被并入的仓库文档在指针下面保留合并前原文、locale 187 键、host 243/243 |
@@ -648,6 +649,36 @@ return part.replace(/^HEAD -> /, "").trim();
 
 - 版本 **1.13.1**，commit `619811b`，tag `v1.13.1`，release id `425586241`，资产 `dsh-git-graph-sidebar.tgz` **912561 字节**、sha256 `45e1b67ed76c9f73cc7a10853ce6bb1b1e9b80dea17b79c37f8282d992f77f6b`、154 条目、包内 version 1.13.1；经镜像 `releases/latest/download/dsh-git-graph-sidebar.tgz` 下载校验一致。包名不带版本号，市场条目 `latest/download` 自动跟随。
 - `desktop` 已装 1.13.1（`pnpm add file:…/artifacts/dsh-git-graph-sidebar-1.13.1.tgz`，`- 1.13.0 / + 1.13.1`），`package.json` 与 `pnpm-lock.yaml` 六处全指 1.13.1、`1.13.0` 残留 0；已装 `lib/index.js` 188882 B（`conventionsConsolidate` / `consolidate` 各 0 处）、`lib/client.js` 248585 B（`conventions-ai-merge` 1 处、`sidebar.consolidateTitle` 0 处）。**装完必须重启 DSH。**
+
+## 7.17 1.14.0 的改动（连两个模型工具也删了）
+
+### 7.17.1 用户的话与执行口径
+
+用户问「当前插件会有技能和工具吗，感觉不需要」，随后又确认「这两个插件有用咩，模型自己都能干吧」，最后一句是「删除呗，按你的理解」。核实结果是：**技能 0 个**（不注册 skill、包里没有 `SKILL.md`），**工具 2 个**，都挂在 `agentTool`（默认 `false`）后面：`git_worktree`（1.5 起）与 `git_conventions`（1.10 起）。我的判断与用户一致：两者都是「模型本来就能干」的事——`git_worktree` 无非是 `git worktree add/list/remove` 的封装（唯一附加值是把 worktree 建进 `~/.dsh/worktrees` 布局，让侧边栏列表看得见），`git_conventions` 的附加值只有两条「知识」：哪些文档算数（工作区 `.dsh` → 本仓库 → 父仓库 → `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md`），以及一次完成备份 + 指针改写。**知识搬进提示词，工具就可以消失。**
+
+### 7.17.2 删了什么（照着 grep 就能确认不存在）
+
+- `lib/index.js`：整个 `//#region src/host/agent-tool.ts` 区域（`GIT_WORKTREE_TOOL`、`callingCwd`、`buildWorktreeTool`）；`Config` 的 `agentTool` 行与 `effectiveConfig()` 里的同名行；`let toolFiber;` + `syncTool()` 整块与 `ctx.on("loader/volatile-update", …)` 监听；挂载 effect 里的 `syncTool()` 与 `toolFiber?.dispose()`，标签改成 `"dsh-git-graph: /git routes"`；模块头注释改成「这一半没有任何模型可见的工具」。
+- `src/host/conventions.js`：`GIT_CONVENTIONS_TOOL`、`buildConventionsTool`、`conventionsReadDocuments`、`conventionsWriteMerged`、`conventionReadText`、`conventionWriteText`、`conventionPointerBody`、`conventionRelativePath`、`CONVENTION_READ_MAX_CHARS`。文件 2156 → **1936 行**。
+- `scripts/patch-host.mjs`：删掉 `conventions-tool` 补丁（25 → **24** 处）；`config-schema` / `config-effective` 原来锚在 `agentTool` 那一行上，改成锚 `autoBaseline` 行、并把 `conventionsDoc` / `conventionsAuto` 那一行当 guard；`prompt-mount` 原来锚在 `ctx.effect(() => { syncTool(); …` 上，改成锚 `ctx.effect(() => { const disposeRoutes = …`，guard 用 `conventionsPromptMount(ctx, featureConfig);`。
+- `scripts/test-host.mjs`：删掉第 [19] 段（工具）：注册、`read` 全量正文、`check` 冲突数、`write` 落盘/备份/指针、空正文 `convention-empty`、未知 action `internal`、无 cwd `workspace-unknown` 全部不再适用。断言总数 232 → **215**（[18] 同时改了两条断言，见 7.17.4）。
+- 客户端：`requestAiMerge()` 复制的请求文案去掉「`git_conventions` 可用就用 action read」，改成「用你自己的文件工具读」，并补上「覆盖前留 `.bak-<时间戳>`、被并入的仓库文档改成指针、指针下保留原文」。
+
+### 7.17.3 保留的与替代的
+
+`conventionsPromptMount()` 注册的 `systemPrompt` 段**不是工具、也关不掉**，它是插件的本体，一行没动。工具里那两条「知识」改由 `conventionsConflictPromptBlock()` 携带：工作区文档管事的优先级、每份被替换文件留 `<名>.bak-<yyyymmdd-HHmmss>`、仓库文档改写成三行指针（`> 本仓库的 Git 规范由工作区统一维护：<相对路径>` / `> This repository inherits the workspace conventions; this file only points at it.` / `<!-- dsh-git-graph: inherited from <相对路径> -->`）且把合并前原文留在下面。**注意**：插件此后**没有任何写盘路径**，落盘完全由模型的写文件工具完成，所以那份文档长什么样由模型与用户负责，插件只负责「发现 + 比较 + 报告 + 说清约定」。
+
+### 7.17.4 测试与自检
+
+- [18] 的两条断言改成：`/Do not pick a side silently/` + `/your own file tools/`；新增一条 `/dsh-git-graph: inherited from/` + `/\.bak-/`，保证「指针格式 + 备份约定」这两句提示词不会被无声删掉。
+- 自检值：`build-lib` spliced **2843 / 3104 / 1936 / 449**、`patch-host` `applied 0, already present 24`、`validate-lib` **180 键**、`test-host` **215/215**、`preview-tab` 8 组全过。
+
+### 7.17.5 坑
+
+- **删工具会连带删掉别人的锚点**：`agentTool` 与 `syncTool()` 既是 `Config` 字段，也是 `patch-host` 里三个补丁的 anchor 文本；删代码不同步改补丁，`patch-host` 立刻 `anchor not found for prompt-mount`（实测）。凡改 `lib/index.js` 的既有行，都要顺手 grep `scripts/patch-host.mjs` 里的引号内字面量。
+- **`callingCwd()` 藏在 agent-tool 区域里**，删区域前先确认没人用：它当时只有两个调用点（`buildWorktreeTool` 与 `buildConventionsTool`），两个都要删，于是函数本身也一起没了。
+- **补丁的 anchor 是文件里字面的 `	` / `
+` 两个字符**，不是真 tab / 真换行。写 python 脚本改 `patch-host.mjs` 时要用 `chr(92)+"t"` 拼，用真 tab 会 `count 0`；如果实在拼不出来，就用 `s.find(...)` 切出整块重写，别硬拼字符串。
 
 ## 8. 待办清单（按优先级）
 

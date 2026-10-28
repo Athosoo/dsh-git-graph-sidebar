@@ -862,7 +862,8 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("the union keeps the stricter side", report.union?.maxSubject === 50 && report.union?.strict === true && report.union?.ai === "required", JSON.stringify(report.union));
 	const noticeText = section.text(cwdOf(childRepo));
 	check("the prompt tells the agent the documents disagree", noticeText.includes("conflict"), noticeText.slice(-400));
-	check("the prompt asks before picking a side", /Do not pick a side silently/.test(noticeText) && /action read/.test(noticeText), noticeText.slice(-400));
+	check("the prompt asks before picking a side", /Do not pick a side silently/.test(noticeText) && /your own file tools/.test(noticeText), noticeText.slice(-400));
+	check("the prompt spells out the pointer a merge leaves behind", /dsh-git-graph: inherited from/.test(noticeText) && /\.bak-/.test(noticeText), noticeText.slice(-700));
 	const noRoute = await call("/git/conventions/consolidate", { path: childRepo });
 	check("there is no mechanical merge route any more", noRoute.json === void 0 || noRoute.json?.ok !== true, noRoute.raw);
 	const conflictDoc = await readFile(join(consolidable, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
@@ -908,73 +909,6 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("a prose document is not merged mechanically", proseNoRoute.json === void 0 || proseNoRoute.json?.ok !== true, proseNoRoute.raw);
 	const agentsLeft = await readFile(join(proseRepo, "AGENTS.md"), "utf8");
 	check("the prose document is never rewritten", agentsLeft.includes("Keep the subject under 50 characters"), agentsLeft.slice(0, 200));
-
-	console.log("\n[19] the git_conventions tool lets an agent check the documents and merge them");
-
-	const toolWorkspace = join(workspace, "ws-tool");
-	const toolRepo = join(toolWorkspace, "repo");
-	await mkdir(join(toolWorkspace, ".dsh"), { recursive: true });
-	await mkdir(toolRepo, { recursive: true });
-	await git(toolRepo, "init", "-b", "main");
-	await writeFile(join(toolWorkspace, ".dsh", "GIT_CONVENTIONS.md"), ["status: settled", "strict: true", "language: zh", "", "## 1. Subject", "", "标题不超过 72 字符。", ""].join(NL), "utf8");
-	await writeFile(join(toolRepo, "GIT_CONVENTIONS.md"), ["status: settled", "strict: false", "language: en", "", "## 1. Subject", "", "Keep the subject under 50 characters.", ""].join(NL), "utf8");
-	await writeFile(join(toolRepo, "a.txt"), "a\n", "utf8");
-	await git(toolRepo, "add", ".");
-	await git(toolRepo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feat: first");
-
-	const toolInjections = [];
-	const toolContext = {
-		logger: { info() {}, warn() {}, error() {}, debug() {} },
-		subprocess: fakeSubprocess(),
-		workspaceRegistry: { list: () => [{ path: workspace }] },
-		webServer: { register() { return () => {}; } },
-		effect(fn) { const disposer = fn(); return () => { if (typeof disposer === "function") disposer(); }; },
-		on() { return () => {}; },
-		inject(deps, callback) { toolInjections.push({ deps, callback }); return { dispose() {} }; },
-		get() { return undefined; }
-	};
-	/** The host hands apply() a schemastery config whose fields answer get(). */
-	/** apply() is mount-once per package, so the second mount needs a fresh slot. */
-	const mountedPlugins = globalThis[Symbol.for("dsh-web.mounted-plugins")];
-	if (mountedPlugins instanceof Set) mountedPlugins.delete("dsh-git-graph-sidebar");
-	apply(toolContext, { agentTool: { get: () => true } });
-	const toolEntry = toolInjections.find((entry) => Array.isArray(entry.deps) && entry.deps.includes("tools"));
-	check("the tool injection is requested", toolEntry !== undefined);
-	const registered = [];
-	if (toolEntry !== undefined) toolEntry.callback({
-		tools: { register(definition) { registered.push(definition); return () => {}; } },
-		effect(fn) { const disposer = fn(); return () => { if (typeof disposer === "function") disposer(); }; }
-	});
-	const conventionsTool = registered.find((definition) => definition.name === "git_conventions");
-	check("git_conventions is registered", conventionsTool !== undefined, JSON.stringify(registered.map((definition) => definition.name)));
-	check("git_conventions asks for one action", conventionsTool !== undefined && Array.isArray(conventionsTool.parameters?.required) && conventionsTool.parameters.required.join(",") === "action");
-	const toolExec = { agent: { session: { header: { cwd: toolRepo } } } };
-	const toolRead = await conventionsTool.execute({ action: "read" }, toolExec);
-	check("read returns every governing document", toolRead.ok === true && Array.isArray(toolRead.documents) && toolRead.documents.length === 2, JSON.stringify(toolRead.documents === void 0 ? null : toolRead.documents.length));
-	const readTexts = toolRead.ok === true && Array.isArray(toolRead.documents) ? toolRead.documents.map((entry) => entry.text).join(NL) : "";
-	check("read returns the whole text of each document", readTexts.includes("Keep the subject under 50 characters") && readTexts.includes("标题不超过 72 字符"), readTexts.slice(0, 80));
-	check("read names the workspace target", toolRead.ok === true && String(toolRead.target).includes(".dsh") && String(toolRead.target).endsWith("GIT_CONVENTIONS.md"), String(toolRead.target));
-	const toolCheck = await conventionsTool.execute({ action: "check" }, toolExec);
-	check("check reports the conflict count", toolCheck.ok === true && toolCheck.count > 0, JSON.stringify(toolCheck.count));
-	check("check hands the merge back to the model", /action read/.test(String(toolCheck.guidance)) && /action write/.test(String(toolCheck.guidance)), String(toolCheck.guidance));
-	const authored = ["status: settled", "strict: true", "language: zh", "", "## 1. Subject", "", "标题不超过 72 字符，且用祈使句。", ""].join(NL);
-	const toolWrite = await conventionsTool.execute({ action: "write", body: authored, force: true }, toolExec);
-	check("write stores the authored body", toolWrite.ok === true && toolWrite.written === true, JSON.stringify(toolWrite.ok === true ? toolWrite.written : toolWrite));
-	const writtenDoc = await readFile(join(toolWorkspace, ".dsh", "GIT_CONVENTIONS.md"), "utf8");
-	check("the authored body is what lands on disk", writtenDoc === authored, writtenDoc.slice(0, 60));
-	check("write backs the replaced files up", toolWrite.ok === true && Array.isArray(toolWrite.backups) && toolWrite.backups.length === 2, JSON.stringify(toolWrite.backups));
-	check("write leaves a pointer in the repository document", toolWrite.ok === true && Array.isArray(toolWrite.pointers) && toolWrite.pointers.length === 1, JSON.stringify(toolWrite.pointers));
-	const pointedRepo = await readFile(join(toolRepo, "GIT_CONVENTIONS.md"), "utf8");
-	check("the pointer keeps the pre-merge text", pointedRepo.includes("dsh-git-graph: inherited") && pointedRepo.includes("Keep the subject under 50 characters"), pointedRepo.slice(0, 60));
-	check("the write explains the backups and pointers", /backed up/.test(String(toolWrite.guidance)), String(toolWrite.guidance));
-	const toolEmpty = await conventionsTool.execute({ action: "write", body: "   " }, toolExec);
-	check("an empty body is refused", toolEmpty.ok === false && toolEmpty.code === "convention-empty", JSON.stringify(toolEmpty));
-	const toolSettled = await conventionsTool.execute({ action: "check" }, toolExec);
-	check("the merged document ends the conflict", toolSettled.ok === true && toolSettled.count === 0, JSON.stringify(toolSettled.count));
-	const toolUnknown = await conventionsTool.execute({ action: "nope" }, toolExec);
-	check("an unknown action is refused", toolUnknown.ok === false && toolUnknown.code === "internal", JSON.stringify(toolUnknown));
-	const toolNoCwd = await conventionsTool.execute({ action: "check" }, {});
-	check("without a session cwd the tool refuses", toolNoCwd.ok === false && toolNoCwd.code === "workspace-unknown", JSON.stringify(toolNoCwd));
 
 	await rm(workspace, { recursive: true, force: true });
 
