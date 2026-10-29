@@ -436,6 +436,61 @@ patch(
 \t\tcase "/git/conventions": {`,
 	'\t\t\tcase "/git/conventions/conflicts": {'
 );
+// 20. Read-only worktree dimension: the sidebar tab opens a linked checkout
+//     without widening the workspace gate. `path` is the gated ANCHOR; the
+//     requested `worktree` only ever matches a string `git worktree list`
+//     printed, and that string becomes the cwd. The chip's `/git/worktrees`
+//     and its parseWorktrees are untouched.
+patch(
+	"worktree-read-routes",
+	'\t\t\tcase "/git/repos": {',
+	`\t\t\tcase "/git/worktree/list": {
+\t\t\t\tconst gated = await createWorkspaceGate(ctx)(path);
+\t\t\t\tif (!gated.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(gated.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tconst view = await worktreeListViewOf(service, gated.canonical);
+\t\t\t\tif (view === null) {
+\t\t\t\t\twriteJson(res, 200, FAIL(NOT_A_REPOSITORY));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tokView(res, view, isWorktreeListView);
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tcase "/git/worktree/status": {
+\t\t\t\tconst target = await worktreeTargetOf(ctx, service, path, payload);
+\t\t\t\tif (!target.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(target.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tokView(res, await service.statusFromGatedPath(target.canonical), isRepoStatus);
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tcase "/git/worktree/branches": {
+\t\t\t\tconst target = await worktreeTargetOf(ctx, service, path, payload);
+\t\t\t\tif (!target.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(target.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tokView(res, await worktreeBranchesOf(service, target.canonical), isBranchesView);
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tcase "/git/worktree/graph": {
+\t\t\t\tconst target = await worktreeTargetOf(ctx, service, path, payload);
+\t\t\t\tif (!target.ok) {
+\t\t\t\t\twriteJson(res, 200, FAIL(target.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tconst rawLimit = typeof payload === "object" && payload !== null ? payload.limit : void 0;
+\t\t\t\tconst limit = typeof rawLimit === "number" && rawLimit > 0 ? Math.min(rawLimit, 1e3) : void 0;
+\t\t\t\tokView(res, await worktreeGraphOf(service, target.canonical, limit), isGraphView);
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tcase "/git/repos": {`,
+	'case "/git/worktree/list": {'
+);
+
 // A route case may appear exactly once: two copies mean an earlier run
 // inserted a block a second time, and the second copy is dead code.
 const caseLines = source.split(String.fromCharCode(10)).map((line) => line.trim()).filter((line) => line.startsWith("case \"") && line.endsWith(": {"));

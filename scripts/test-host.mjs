@@ -25,9 +25,13 @@ function equal(name, actual, expected) {
 	check(name, actual === expected, "got " + JSON.stringify(actual) + ", want " + JSON.stringify(expected));
 }
 
+/** Git spawns the plugin performed through the fake subprocess, for cache tests. */
+const subprocessActivity = { spawns: 0 };
+
 /** The subprocess service contract, backed by a real child process. */
 function fakeSubprocess() {
 	return { spawn(spec) {
+		subprocessActivity.spawns += 1;
 		const child = spawn(spec.argv[0], spec.argv.slice(1), {
 			cwd: spec.cwd,
 			stdio: ["ignore", "pipe", "pipe"],
@@ -108,6 +112,28 @@ async function git(cwd, ...args) {
 		child.on("close", (code) => (code === 0 ? resolve() : reject(new Error("git " + args.join(" ") + " exited " + code))));
 		child.on("error", reject);
 	});
+}
+
+/** git(), but settled: returns the exit code and whatever went to stdout. */
+async function gitCapture(cwd, ...args) {
+	return await new Promise((resolve) => {
+		const child = spawn("git", args, {
+			cwd,
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true
+		});
+		let out = "";
+		child.stdout.on("data", (chunk) => { out += chunk.toString("utf8"); });
+		child.on("close", (code) => resolve({ code: code === null ? -1 : code, stdout: out }));
+		child.on("error", () => resolve({ code: -1, stdout: "" }));
+	});
+}
+
+/** git() that returns stdout and rejects on a non-zero exit. */
+async function gitText(cwd, ...args) {
+	const result = await gitCapture(cwd, ...args);
+	if (result.code !== 0) throw new Error("git " + args.join(" ") + " exited " + result.code);
+	return result.stdout;
 }
 
 async function main() {
@@ -909,6 +935,211 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("a prose document is not merged mechanically", proseNoRoute.json === void 0 || proseNoRoute.json?.ok !== true, proseNoRoute.raw);
 	const agentsLeft = await readFile(join(proseRepo, "AGENTS.md"), "utf8");
 	check("the prose document is never rewritten", agentsLeft.includes("Keep the subject under 50 characters"), agentsLeft.slice(0, 200));
+
+	console.log("\n[21] /git/worktree/list reads the anchor repository's checkouts");
+
+	const wtRoot = await mkdtemp(join(tmpdir(), "gitgraph-worktrees-"));
+	const wtAnchor = join(workspace, "repos", "worktree-anchor");
+	const wtBare = join(workspace, "repos", "bare-worktree.git");
+	const wt1 = join(wtRoot, "wt1");
+	const wt2 = join(wtRoot, "wt2");
+	const wt3 = join(wtRoot, "wt3");
+	const wt4 = join(wtRoot, "wt4");
+	const wt5 = join(wtRoot, "wt5");
+	const pathKey = (value) => {
+		let key = String(value ?? "").replace(/\\/g, "/");
+		while (key.length > 1 && key.endsWith("/")) key = key.slice(0, -1);
+		return process.platform === "win32" ? key.toLowerCase() : key;
+	};
+	await mkdir(wtAnchor, { recursive: true });
+	await mkdir(wtBare, { recursive: true });
+	await git(wtAnchor, "init", "-b", "main");
+	await writeFile(join(wtAnchor, "README.md"), "# anchor\n", "utf8");
+	await git(wtAnchor, "add", ".");
+	await git(wtAnchor, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "chore: anchor");
+	await git(wtAnchor, "worktree", "add", "-b", "wt/t1", wt1, "main");
+	await writeFile(join(wt1, "README.md"), "# edited in wt1\n", "utf8");
+	await writeFile(join(wt1, "scratch.txt"), "scratch\n", "utf8");
+	await git(wtAnchor, "worktree", "add", "--detach", wt2, "main");
+	await git(wtAnchor, "worktree", "add", "-b", "wt/locked", wt3, "main");
+	await git(wtAnchor, "worktree", "lock", wt3);
+	await git(wtBare, "init", "--bare", "-b", "main");
+
+	const mainRoot = (await gitText(wtAnchor, "rev-parse", "--show-toplevel")).trim();
+	const listFirst = await call("/git/worktree/list", { path: wtAnchor });
+	check("/git/worktree/list ok", listFirst.json?.ok === true, listFirst.raw.slice(0, 200));
+	const listed = listFirst.json?.value ?? {};
+	const worktreeRows = listed.worktrees ?? [];
+	equal("lists the main checkout and every linked worktree", worktreeRows.length, 4);
+	equal("root is the anchor repository", pathKey(listed.root), pathKey(mainRoot));
+	check("passes the worktree list shape", typeof listed.root === "string" && worktreeRows.every((row) => typeof row.path === "string" && typeof row.head === "string" && typeof row.branch === "string" && typeof row.main === "boolean"));
+	check("the first row is the main checkout", worktreeRows[0]?.main === true && worktreeRows.slice(1).every((row) => row.main === false));
+	const porcelainPaths = (await gitText(wtAnchor, "worktree", "list", "--porcelain")).split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9).trim());
+	check("worktree paths are exactly the strings git printed", JSON.stringify(worktreeRows.map((row) => row.path)) === JSON.stringify(porcelainPaths), JSON.stringify(worktreeRows.map((row) => row.path)));
+	const rowAt = (target) => worktreeRows.find((row) => pathKey(row.path) === pathKey(target));
+	check("the detached worktree is marked", rowAt(wt2)?.detached === true);
+	check("the locked worktree is marked", rowAt(wt3)?.locked === true);
+	check("no worktree is prunable yet", worktreeRows.every((row) => row.prunable === false));
+
+	const bareList = await call("/git/worktree/list", { path: wtBare });
+	check("a bare repository lists its single entry", bareList.json?.ok === true, bareList.raw.slice(0, 200));
+	const bareRow = (bareList.json?.value?.worktrees ?? [])[0];
+	check("the bare entry is marked bare", bareRow?.bare === true && typeof bareRow?.path === "string", JSON.stringify(bareRow));
+
+	subprocessActivity.spawns = 0;
+	const outsideList = await call("/git/worktree/list", { path: wt1 });
+	equal("an unregistered anchor is refused", outsideList.json?.error?.code, "workspace-unknown");
+	equal("the gate refuses before any git spawn", subprocessActivity.spawns, 0);
+
+	await mkdir(join(wtAnchor, "src"), { recursive: true });
+	const subdirList = await call("/git/worktree/list", { path: join(wtAnchor, "src") });
+	check("an anchor subdirectory still lists the repository", subdirList.json?.ok === true, subdirList.raw.slice(0, 200));
+
+	const cachedFirst = await call("/git/worktree/list", { path: wtAnchor });
+	const spawnsBeforeCache = subprocessActivity.spawns;
+	const cachedSecond = await call("/git/worktree/list", { path: wtAnchor });
+	equal("a cached list spawns no git", subprocessActivity.spawns, spawnsBeforeCache);
+	check("a cached list returns the same view", JSON.stringify(cachedSecond.json) === JSON.stringify(cachedFirst.json));
+
+	await git(wtAnchor, "worktree", "add", "--detach", wt5, "main");
+	const spawnsBeforeAdd = subprocessActivity.spawns;
+	const afterAddList = await call("/git/worktree/list", { path: wtAnchor });
+	equal("a new worktree invalidates the list with one git read", subprocessActivity.spawns - spawnsBeforeAdd, 1);
+	check("the new worktree appears immediately", (afterAddList.json?.value?.worktrees ?? []).some((row) => pathKey(row.path) === pathKey(wt5)));
+	await git(wtAnchor, "worktree", "remove", "--force", wt5);
+
+	console.log("\n[22] /git/worktree/status reads one checkout without the gate");
+
+	const statusWt1 = await call("/git/worktree/status", { path: wtAnchor, worktree: wt1 });
+	check("/git/worktree/status ok for a linked worktree", statusWt1.json?.ok === true, statusWt1.raw.slice(0, 200));
+	const wt1Status = statusWt1.json?.value ?? {};
+	equal("status reports the worktree branch", wt1Status.branch, "wt/t1");
+	equal("status reports the worktree short head", wt1Status.head, (await gitText(wt1, "rev-parse", "--short", "HEAD")).trim());
+	equal("status reports the worktree root", pathKey(wt1Status.root), pathKey(wt1));
+	equal("status counts one tracked change", wt1Status.dirtyFiles, 1);
+	equal("status counts one untracked file", wt1Status.untrackedFiles, 1);
+	equal("status counts no conflicts", wt1Status.conflicts, 0);
+	equal("status reports no operation in progress", wt1Status.operationInProgress, false);
+
+	const statusDetached = await call("/git/worktree/status", { path: wtAnchor, worktree: wt2 });
+	check("a detached worktree status loads", statusDetached.json?.ok === true, statusDetached.raw.slice(0, 200));
+	equal("a detached worktree has an empty branch", statusDetached.json?.value?.branch, "");
+
+	const statusMain = await call("/git/worktree/status", { path: wtAnchor, worktree: wtAnchor });
+	check("the main checkout resolves as a worktree", statusMain.json?.ok === true, statusMain.raw.slice(0, 200));
+	equal("the main checkout reports the anchor root", pathKey(statusMain.json?.value?.root), pathKey(mainRoot));
+
+	const stranger = await mkdtemp(join(tmpdir(), "gitgraph-stranger-"));
+	const statusStranger = await call("/git/worktree/status", { path: wtAnchor, worktree: stranger });
+	equal("a path outside the list is refused", statusStranger.json?.error?.code, "worktree-not-found");
+	equal("the refusal carries the stable message", statusStranger.json?.error?.message, "not a worktree of this repository");
+	check("the refusal does not leak the path", !String(statusStranger.json?.error?.message ?? "").includes(stranger), statusStranger.raw);
+	await rm(stranger, { recursive: true, force: true });
+
+	if (process.platform === "win32") {
+		const spellings = [wt1.replace(/\//g, "\\"), wt1.toUpperCase(), wt1 + "/"];
+		for (const spelling of spellings) {
+			const normalized = await call("/git/worktree/status", { path: wtAnchor, worktree: spelling });
+			check("path spelling matches the same worktree: " + spelling.slice(-14), normalized.json?.ok === true && pathKey(normalized.json?.value?.root) === pathKey(wt1), normalized.raw.slice(0, 160));
+		}
+	} else check("path spelling assertions are Windows-only", true);
+
+	await git(wtAnchor, "worktree", "add", "--detach", wt4, "main");
+	const seededList = await call("/git/worktree/list", { path: wtAnchor });
+	const seededRow = (seededList.json?.value?.worktrees ?? []).find((row) => pathKey(row.path) === pathKey(wt4));
+	check("the doomed worktree is listed before its directory goes", seededRow !== void 0 && seededRow.prunable === false, JSON.stringify(seededRow));
+	await rm(wt4, { recursive: true, force: true });
+	const prunableList = await call("/git/worktree/list", { path: wtAnchor });
+	const prunableRow = (prunableList.json?.value?.worktrees ?? []).find((row) => pathKey(row.path) === pathKey(wt4));
+	check("a deleted worktree stays in the list as prunable", prunableRow !== void 0 && prunableRow.prunable === true, JSON.stringify(prunableRow));
+	const prunableStatus = await call("/git/worktree/status", { path: wtAnchor, worktree: wt4 });
+	equal("a deleted worktree cannot be read", prunableStatus.json?.error?.code, "worktree-not-found");
+
+	console.log("\n[23] /git/worktree/branches and /git/worktree/graph read the worktree itself");
+
+	const branchesWt1 = await call("/git/worktree/branches", { path: wtAnchor, worktree: wt1 });
+	check("worktree branches ok", branchesWt1.json?.ok === true, branchesWt1.raw.slice(0, 200));
+	const branchView = branchesWt1.json?.value ?? {};
+	equal("branches view reports the worktree branch", branchView.branch, "wt/t1");
+	const wtBranchRow = (branchView.branches ?? []).find((row) => row.name === "wt/t1");
+	check("the worktree's own branch is current", wtBranchRow?.current === true, JSON.stringify(wtBranchRow));
+	check("the main branch is not current in the linked worktree", (branchView.branches ?? []).some((row) => row.name === "main" && row.current === false), JSON.stringify(branchView.branches));
+
+	const graphWt1 = await call("/git/worktree/graph", { path: wtAnchor, worktree: wt1 });
+	check("worktree graph ok", graphWt1.json?.ok === true, graphWt1.raw.slice(0, 200));
+	const wt1Graph = graphWt1.json?.value ?? {};
+	equal("graph root is the worktree toplevel", pathKey(wt1Graph.root), pathKey((await gitText(wt1, "rev-parse", "--show-toplevel")).trim()));
+	equal("graph reports the worktree branch", wt1Graph.branch, "wt/t1");
+	check("graph carries commits", Array.isArray(wt1Graph.commits) && wt1Graph.commits.length > 0);
+
+	const graphWt2 = await call("/git/worktree/graph", { path: wtAnchor, worktree: wt2 });
+	check("detached worktree graph ok", graphWt2.json?.ok === true, graphWt2.raw.slice(0, 200));
+	equal("detached graph has an empty branch", graphWt2.json?.value?.branch, "");
+	const mainGraph = await call("/git/graph", { path: wtAnchor, limit: 5 });
+	check("the repository graph loads", mainGraph.json?.ok === true, mainGraph.raw.slice(0, 200));
+	equal("linked and main checkouts share the same first commit", graphWt2.json?.value?.commits?.[0]?.oid, mainGraph.json?.value?.commits?.[0]?.oid);
+
+	console.log("\n[24] the existing worktree routes and reads are unchanged");
+
+	const oldList = await call("/git/worktrees", { path: wtAnchor });
+	check("/git/worktrees still ok", oldList.json?.ok === true, oldList.raw.slice(0, 200));
+	const oldRows = oldList.json?.value?.worktrees ?? [];
+	check("/git/worktrees keeps the 1.14.0 row shape", oldRows.length > 0 && oldRows.every((row) => Object.keys(row).sort().join(",") === "branch,head,main,path"), JSON.stringify(oldRows[0]));
+	check("/git/worktrees keeps the list shape", typeof oldList.json?.value?.root === "string" && oldRows.every((row) => typeof row.path === "string" && typeof row.head === "string" && typeof row.branch === "string" && typeof row.main === "boolean"));
+	check("/git/worktrees still includes the prunable row", oldRows.some((row) => pathKey(row.path) === pathKey(wt4)));
+
+	const badSwitch = await call("/git/switch", { path: wtAnchor, branch: "no-such-branch" });
+	equal("switch keeps its missing-branch code", badSwitch.json?.error?.code, "target-branch-not-found");
+	const badCreate = await call("/git/create-branch", { path: wtAnchor, name: "bad name" });
+	equal("create-branch keeps its invalid-name code", badCreate.json?.error?.code, "invalid-branch-name");
+
+	const savedDshHome = process.env.DSH_HOME;
+	const managedHome = join(wtRoot, "dsh-home");
+	process.env.DSH_HOME = managedHome;
+	try {
+		const added = await call("/git/worktree-add", { path: wtAnchor, name: "route-check" });
+		check("worktree-add still creates a managed worktree", added.json?.ok === true, added.raw.slice(0, 200));
+		const managedPath = added.json?.value?.path;
+		const afterManaged = await call("/git/worktree/list", { path: wtAnchor });
+		check("the new managed worktree is visible through the new route", (afterManaged.json?.value?.worktrees ?? []).some((row) => pathKey(row.path) === pathKey(managedPath)), afterManaged.raw.slice(0, 200));
+		const removed = await call("/git/worktree-remove", { path: wtAnchor, worktreePath: managedPath, force: true });
+		check("worktree-remove still removes it", removed.json?.ok === true, removed.raw.slice(0, 200));
+		const afterRemoval = await call("/git/worktree/list", { path: wtAnchor });
+		check("the removed worktree disappears", !(afterRemoval.json?.value?.worktrees ?? []).some((row) => pathKey(row.path) === pathKey(managedPath)));
+	} finally {
+		process.env.DSH_HOME = savedDshHome;
+	}
+
+	const stateOf = async (cwd) => ({
+		status: (await gitCapture(cwd, "status", "--porcelain")).stdout,
+		head: (await gitCapture(cwd, "rev-parse", "HEAD")).stdout,
+		worktrees: (await gitCapture(cwd, "worktree", "list", "--porcelain")).stdout
+	});
+	const stateBefore = await stateOf(wtAnchor);
+	await call("/git/worktree/list", { path: wtAnchor });
+	await call("/git/worktree/status", { path: wtAnchor, worktree: wt1 });
+	await call("/git/worktree/branches", { path: wtAnchor, worktree: wt1 });
+	await call("/git/worktree/graph", { path: wtAnchor, worktree: wt1 });
+	const stateAfter = await stateOf(wtAnchor);
+	equal("the new reads leave status alone", stateAfter.status, stateBefore.status);
+	equal("the new reads leave HEAD alone", stateAfter.head, stateBefore.head);
+	equal("the new reads leave the worktree list alone", stateAfter.worktrees, stateBefore.worktrees);
+
+	const bareBefore = (await gitCapture(wtBare, "worktree", "list", "--porcelain")).stdout + (await gitCapture(wtBare, "rev-parse", "--is-bare-repository")).stdout;
+	await call("/git/worktree/list", { path: wtBare });
+	const bareAfter = (await gitCapture(wtBare, "worktree", "list", "--porcelain")).stdout + (await gitCapture(wtBare, "rev-parse", "--is-bare-repository")).stdout;
+	equal("the new reads leave a bare repository alone", bareAfter, bareBefore);
+
+	const hostSource = await readFile(new URL("../lib/index.js", import.meta.url), "utf8");
+	for (const name of ["/git/worktree/list", "/git/worktree/status", "/git/worktree/branches", "/git/worktree/graph"]) {
+		equal("route case " + name + " appears exactly once", hostSource.split('case "' + name + '": {').length - 1, 1);
+	}
+
+	// Worktrees live outside the registered workspace; remove them before the
+	// workspace itself goes away (a stale directory makes the next add fail).
+	await gitCapture(wtAnchor, "worktree", "unlock", wt3);
+	for (const dir of [wt1, wt2, wt3, wt4]) await gitCapture(wtAnchor, "worktree", "remove", "--force", dir);
+	await rm(wtRoot, { recursive: true, force: true });
 
 	await rm(workspace, { recursive: true, force: true });
 
