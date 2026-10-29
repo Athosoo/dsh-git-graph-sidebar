@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-28（1.14.0 已发布并已装进 `desktop`，待重启：连两个面向模型的工具也删了——`git_worktree` 与 `git_conventions` 不再存在，`agentTool` 开关也取消；合并时要遵守的三条约定改由注入提示携带）。
+> 最后更新：2026-10-29（1.15.0 已实现并全链验证通过、**尚未打包/发布/提交**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改）。
 
 ## 0. 一句话状态
 
@@ -33,7 +33,7 @@
 5. **Git 规范体系**：选定框架（六套）→ 写 `GIT_CONVENTIONS.md`（空壳/模板）→ 状态带（已定稿/草稿/未建立）→ 通过 `systemPrompt` **每步注入模型**，且**就近继承**（仓库自己的优先，其次祖先容器仓库，最后给容器下的仓库指针清单）。
 6. **一键初始化仓库**：工作区根不是仓库时，tab 提供 `git init`（可选初始分支 main/master/trunk/develop），建完自动接规范流程。
 
-明确**不做**：tab 内切分支/worktree（在 chip 的对话框里）、完整 diff 查看器、悬停卡（做过，按要求删了）。
+明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里；只读的关联 checkout 列表自 1.15.0 起已有）、完整 diff 查看器、悬停卡（做过，按要求删了）。
 
 ## 2. 环境与路径
 
@@ -58,13 +58,13 @@
 ## 3. 代码地图（只改这几个文件）
 
 ```
-src/client/graph/SidebarTab.js   ← tab 的唯一真源（约 2660 行）。所有 UI/交互都改这里
-src/host/conventions.js          ← host 规范体系 + prompt 注入 + repoInit（约 879 行）
-src/host/branches.js             ← 总览/分支清理/体检的 host 模块（约 310 行，build-lib 拼进 lib/index.js）
-scripts/build-lib.mjs            ← 把上面三个模块拼进 lib/*.js，补 branches 的 region 头，并幂等插入 GitApi 方法与 locale 键
-scripts/patch-host.mjs           ← 21 处幂等 host 补丁（imports/Config/路由/prompt/扫描挂载）
+src/client/graph/SidebarTab.js   ← tab 的唯一真源（约 3597 行）。所有 UI/交互都改这里
+src/host/conventions.js          ← host 规范体系 + prompt 注入 + repoInit（约 1936 行）
+src/host/branches.js             ← 总览/分支清理/体检 + 只读 worktree 视图（约 773 行，build-lib 拼进 lib/index.js）
+scripts/build-lib.mjs            ← 把上面三个模块拼进 lib/*.js，补 branches 的 region 头，幂等插入 GitApi 方法 / locale 键 / 客户端 inject glue
+scripts/patch-host.mjs           ← 25 处幂等 host 补丁（imports/Config/路由/prompt/扫描挂载/4 条只读 worktree 路由）
 scripts/validate-lib.mjs         ← 校验 t("key") 都能解析 + 分叉标识符都有定义
-scripts/test-host.mjs            ← 离线 host 端到端（95 项断言，假 ctx + 真 git）
+scripts/test-host.mjs            ← 离线 host 端到端（284 项断言，假 ctx + 真 git + 真 worktree）
 scripts/preview-tab.mjs          ← 离线客户端端到端（假 React/DOM/fetch，跑真实 apply）
 scripts/prepend-shared.mjs       ← 从干净副本抽 tab 共享脚手架（很少用）
 lib/client.js / lib/index.js     ← **构建产物**：`//#region` 之间的内容由 build-lib 生成，永不手改
@@ -77,15 +77,15 @@ README.md / README.zh.md / DEVELOPMENT.md / ROADMAP.md / NOTICE / cordis.patch.y
 
 ```bash
 cd "E:/git-graph/dsh-git-graph-src"
-node scripts/build-lib.mjs      # → synced GitApi additions (7 blocks) + spliced 2843 / 3104 / 1936 / 449 lines（tab / conventions / branches）
-node scripts/patch-host.mjs     # → applied 0, already present 24（幂等）
+node scripts/build-lib.mjs      # → synced GitApi additions (8 blocks) + spliced 3597 / 1936 / 773 lines（tab / conventions / branches）
+node scripts/patch-host.mjs     # → applied 0, already present 25（幂等）
 node --check lib/client.js && node --check lib/index.js
-node scripts/validate-lib.mjs   # → OK — 180 locale keys resolve, all fork identifiers defined
-node scripts/test-host.mjs      # → 215/215 checks passed
+node scripts/validate-lib.mjs   # → OK — 191 locale keys resolve, all fork identifiers defined
+node scripts/test-host.mjs      # → 284/284 checks passed
 node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real workspace
 ```
 
-`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero,tier3,refs}.html`，可截图：
+`preview-tab.mjs` 会写出 `preview/graph-tab-{preview,preview-light,states,hero,tier3,refs,worktrees}.html`，可截图：
 
 ```bash
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --hide-scrollbars \
@@ -159,6 +159,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.9.1 | 标签退出筛选排（只留行内徽章）、可筛分支少于 4 条时不画这一排、清掉 `sidebar.expandGraph` 死键（只改了客户端，实机无效，见 1.9.2）；已发布并已装 |
 | 1.9.0 | 引用筛选改成一个分支一枚标签（本地与远程同名合并、符号引用不再出现、标签单独灰色、超 12 枚折 `+N`、静音时给「清除筛选」），行内徽章与导出 SVG 复用同一套标签；已发布并已装 |
 | 1.8.3 | 修「文档里的行内注释把字段值污染」：`conventionFieldValue()` 现在去掉 `#` 之后的注释与首尾引号，`conventionDocLanguageOf()` 容忍「中文 / zh / Chinese」这类写法、先认 mix/混 再认中英，模板自带的 `status: draft   # draft | settled` 不再让 `language: zh   # zh | en | mixed` 被读成 mixed；已发布并已装 |
+| 1.15.0 | 图谱 tab 的**只读关联 checkout** 维度：仓库行展开 `git worktree list`，选中的 checkout 接管状态行（`worktreeStatusShown ?? status`）、它的 HEAD 行在图谱上被框出，三个跳转动作（新会话 / 作为工作区 / 复制路径）；宿主新增 4 条只读 `/git/worktree/{list,status,branches,graph}` 路由，`createWorkspaceGate`/`GitService`/`parseWorktrees`/`/git/worktrees` 全未改；locale 191 键、`patch-host` 25 处、host 284/284、preview 7 页；**已实现并通过全链验证，尚未打包发布** |
 
 ## 7. 1.4.0 的三项改动（已随 1.4.0 发布）
 
@@ -686,6 +687,50 @@ return part.replace(/^HEAD -> /, "").trim();
 - `desktop` 已装 1.14.0（`pnpm add "file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.14.0.tgz"`，`- 1.13.1 / + 1.14.0`）；`package.json` 依赖指向 1.14.0、`pnpm-lock.yaml` 六处全指 1.14.0、`1.13.1` 残留 0；已装 `lib/index.js` 179801 B、`lib/client.js` 251987 B，`agentTool` / `git_conventions` / `buildWorktreeTool` 三个字符串在两个文件里都是 **0 处**。**装完必须重启 DSH。**
 - 换装前删旧目录这一步被 **CC Safety Net** 拦了（`rm.recursive-force-outside-cwd`，即使命令里已 `cd` 进目标目录也算“在 cwd 之外”），改用 python `shutil.rmtree` 解决。`git checkout -- <path>` 同样被拦，需要还原文件时用 `git show HEAD:<path> > 临时文件` 再拷回。
 
+## 7.18 1.15.0 的改动（关联 checkout，只读）
+
+### 7.18.1 需求与口径
+
+用户原话开头是「我有一个新想法，是个大改动，要求支持 worktree，需要怎么做」。我先给了四种解读，用户选「A：图谱 tab 里增加 worktree 维度」+「只读展示 + 跳转」；方案文档（`E:\git-graph\git-graph-sidebar-worktree-plan.md`）给出五个待拍板项后，用户回「按你的建议」，即：Q1 一张图 + 叠加（B2）、Q2 两种跳转都要但「新建会话」只放显式按钮、Q3 列**全部** linked worktree（托管的加徽标）、Q4 只为选中的 checkout 拉脏状态 + 缓存、Q5 加「复制路径」。**口径**：tab 里绝不新建/删除/切换 worktree，写操作仍归 chip 的对话框。
+
+### 7.18.2 host（`src/host/branches.js` + `scripts/patch-host.mjs`）
+
+四个只读路由：`/git/worktree/list`、`/git/worktree/status`、`/git/worktree/branches`、`/git/worktree/graph`（`lib/index.js` 排在 `case "/git/repos":` 之前，行号约 4696/4710/4719/4728）。**最关键的一点：`createWorkspaceGate` 一份没改。** 托管 checkout 在 `$DSH_HOME/worktrees` 下、通常在任何工作区之外，但门禁同时守着 `/git/switch`、`/git/worktree-add`、`/git/worktree-remove`，放宽它等于把所有写路由一起放开。解法是「锚点 gate + git 自证」：客户端把**锚点仓库**（必在工作区内）和要看的 checkout 一起发上来，路由先对锚点过门禁，再把 `git worktree list --porcelain` 的输出当唯一白名单，命中后一律用 **git 打印出来的路径**当 cwd——请求里的字符串永远不会变成 cwd。
+
+- 新解析器 `parseWorktreeRows()` 保留 `bare` / `locked` / `prunable` / `detached` / Windows `\\?\` 与 `\\?\UNC\` 前缀；**旧的 `parseWorktrees()` 一个字节没动**（chip 的 worktree 管理器通过 `/git/worktrees` 在用它）。
+- 列表缓存 60 秒，key = `worktreeKeyOf(anchor)`，digest = `<commonGitDir>/worktrees/*/HEAD` 的「名字 + 取整 mtime」；**不能复用 `repoSummaryFingerprint()`**——`git worktree add` 写的是主仓库之外的目录，主仓库的 `HEAD` / `logs/HEAD` 根本不变。缓存命中前还会检查行目录是否仍存在（否则删掉的 checkout 会一直返回旧列表）。
+- 复用既有 seam：status 走 `service.statusFromGatedPath()`（本来就不过 gate），branches/graph 用模块级 `forEachRefArgv` / `headBranchArgv` / `graphLogArgv` + `parseBranches` / `parseGraph` 自己拼；`GitService`、守卫、错误码（复用 `worktree-not-found` / `workspace-unknown`）、`/git/worktrees` 全部未改。
+- `patch-host.mjs` 只多一个补丁（`worktree-read-routes`，anchor `'\t\t\tcase "/git/repos": {'`、guard `'case "/git/worktree/list": {'`），现在 **25 处**。
+
+### 7.18.3 客户端（`src/client/graph/SidebarTab.js` + `scripts/build-lib.mjs`）
+
+- **注册处拿服务**：`workspaces` / `uiWorkspace` 在 `ctx.inject` 时捕获，但那段 inject 在 tab region **之外**（构建不重建），所以 `build-lib.mjs` 新增了 `GLUE_PATCHES`（带 anchor + guard 的幂等 patch），把 inject 列表加宽并 stash 到 `sidebarTabWorkspaces` / `sidebarTabUiWorkspace`（声明在 SidebarTab.js 里，因为 validate-lib 只在 region 内查声明）。
+- **树**：仓库行展开才知道有哪些 checkout（`worktrees` 请求只在展开时发），子树用 `data-gitgraph-worktrees` / `data-gitgraph-worktree` / `-worktree-active` / `-worktree-current` / `-worktree-dirty` / `-worktree-missing` / `-worktree-count`；当前会话自己的 checkout 打「当前会话」标记。
+- **状态行必须换数据源**：`currentStatus = worktreeStatusShown.value ?? status`，否则选中 checkout 后状态行还在描述主检出（这是最容易漏的一处）。
+- **一张图**：`activeWorktree.head === commit.oid` 的行加 `data-gitgraph-head` + 内阴影描边，不重拉图谱（linked worktree 共享 refs/对象库，提交集合相同）。
+- **跳转**：`workspaces.create({path})` → `sessions.create({workspaceId})` → `uiWorkspace.openSession(sessionId)`，已有工作区分区直接复用；**禁止 `uiWorkspace.startSession`**——auto-isolation 包了它，会在 `$DSH_HOME/worktrees` 下再建一棵。另两个动作是「作为工作区打开」`registry.create({path})` 和「复制路径」。
+- **SSE 仍订阅仓库根**（`selectedKey` 不变）：把订阅改成 checkout 路径会让宿主 key 退化为 `no-repo`，客户端会把图清空。worktree 列表/状态只在 `scheduleReload` 里顺带刷新，20 秒慢轮询不碰它们。
+- 新增 11 个 `sidebar.worktree*` locale 键（zh/en），`EXTRA_KEYS` 里注意 `block.includes(key + ":")` 的前缀陷阱（`sidebar.worktreeMissing` 会被 `sidebar.worktree` 命中）。
+
+### 7.18.4 测试与自检
+
+- `test-host.mjs` 新增 `[21]`–`[24]`，**69 条**断言（215 → **284/284**）；fixture 用真 `git` 在 `mkdtemp` 里建 `wt1`（改文件 + untracked）、`wt2`（`--detach`）、`wt3`（`lock`）、`wt4`（删目录 → prunable）；bare 锚点仓库放在工作区**内**（否则过不了门禁测不到）。
+- `preview-tab.mjs` 补了 `git/worktree/list` 与 `git/worktree/status` 的 fakeFetch 分支、`workspaces` / `uiWorkspace` / `sessions.create` stub，以及一段断言（检出行的状态接管、HEAD 行标记、三个跳转动作、无 checkout 时的空态），并多写一页 `preview/graph-tab-worktrees.html`（**7 页**）。
+- 自检值：`build-lib` spliced **3597 / 1936 / 773**、`patch-host` `applied 0, already present 25`、`validate-lib` **191 键**、`test-host` **284/284**、`preview-tab` 全部段落过。
+
+### 7.18.5 坑
+
+- **`src/host/git-service.ts` 不参与构建**：改它等于没改，host 逻辑只能进 `src/host/branches.js`（被 splice 进 `lib/index.js`），路由只能经 `patch-host.mjs`。这一版所有 host 代码都遵守了。
+- **`core.autocrlf=true`**：任何 `git stash` / `git restore` / `git checkout --` 都会把 `lib/*.js` 变成 CRLF，`build-lib` 立刻报 `end marker ... not found`。构建前用 node 把两个 bundle 的 `\r\n` 归一回 `\n`（源文件都是 LF）。
+- **`workspaceAt()` 守卫写错过**：一开始写 `typeof registry.list !== "function"`，而真实契约是 `registry.list.getSnapshot()` 对象方法，于是永远返回 undefined、每次跳转都重复 `create`；预览断言「registered the same checkout twice」抓到它，改成检查 `registry.list.getSnapshot`。
+- **闲话一句**：预览里同一 `sessionId|cwd` 的缓存会让后挂载的实例继承前一个的选中项，worktree 断言必须自己 `mountComponent(..., tabProps(WORKSPACE))`，否则测的是 NESTED 仓库。
+
+### 7.18.6 发布信息
+
+**尚未发布**（等用户确认）。发布时照 §5：`package.json` → `1.15.0` → 全链路自检 → `mkdir -p ../dsh-git-graph-dist/1.15.0` + `npm pack` + 复制无版本名 → 提交（本版是本机第一次用「按 §9 分提交」，host 与客户端分开，见下方待办）→ `git gpush` → tag `v1.15.0` → GitHub Release（资产名仍不带版本号）→ 重装 `desktop` → **重启 DSH**（host 与客户端都动了）。
+
+
+
 ## 8. 待办清单（按优先级）
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
@@ -713,6 +758,8 @@ return part.replace(/^HEAD -> /, "").trim();
 8. ~~发 1.11.0~~ **已完成**（commit `14e2e72`、tag `v1.11.0`、release id `425422415`、资产 `dsh-git-graph-sidebar.tgz` 904153 字节、`desktop` 已装 1.11.0）。发布内容：散文文档（`AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `CONTRIBUTING.md`）里的规则也能检出并整合。自检：`spliced 2843 / 3079 / 2149 / 449`、`already present 25`、`185 locale keys`、host **242/242**、`preview-tab` 12 段全过。**用户需重启 DSH 才能看到新行为（注入提示里的 `AGENTS.md` 一行与面板的「保留原地」）。**
 9. ~~发 1.13.0~~ **已完成**（commit `9534f1e`、tag `v1.13.0`、release id `425545057`、资产 `dsh-git-graph-sidebar.tgz` 919392 字节、`desktop` 已装 1.13.0）。发布内容：合并改由智能体读文档后自己写（`git_conventions` 增 `read` / `write`，旧的 `consolidate` 退为 `draft`）、提示词改口、面板改为把请求复制到剪贴板。自检：`spliced 2843 / 3253 / 2303 / 449`、`already present 25`、`189 locale keys`、host **252/252**、`preview-tab` 8 组全过。**用户需重启 DSH。** 下一步候选：市场条目文案仍是 1.11.0 口径（写的是一键整合），要与 1.13.0 的「智能体自己读自己写」对齐可再提一次 PR。
 11. ~~发 1.14.0~~ **已完成**（按用户指示删掉两个面向模型的工具：`git_worktree` 与 `git_conventions`、整个 agent-tool 区域、`Config.agentTool`、`toolFiber` / `syncTool()`；合并要遵守的三条约定改由注入提示携带；commit `4ead12c`、tag `v1.14.0`、release id `426134952`、资产 907224 字节、`desktop` 已装 1.14.0）。**用户需重启 DSH**。
+
+12. **发 1.15.0（待用户确认）**：关联 checkout 只读维度已实现并全链绿（host 284/284、locale 191、preview 7 页），代码尚未提交、未打包。发布口径见 §7.18.6：`package.json` 1.15.0 → 全链 → `npm pack` 到 `../dsh-git-graph-dist/1.15.0` → 提交（host / tab / docs / release 分开）→ `git gpush` → tag `v1.15.0` → Release（资产不带版本号）→ 重装 `desktop` → **重启 DSH**。发完把 §7.18.6 的「尚未发布」改成发布事实（commit / tag / release id / 资产字节 / sha256）。
 
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 

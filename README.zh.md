@@ -26,6 +26,7 @@
 - **多级仓库发现**——工作区根目录本身，加上最多 3 层以内的嵌套仓库。每个条目带当前分支、短 head、脏文件数与冲突数。
 - **扫描有分寸**——每个仓库先用一次 `git for-each-ref` 同时拿到分支时间、上游与领先/落后距离；refs 没动过就整轮复用上次结果，状态（脏文件、冲突）照旧每次都问。工作区里仓库多的时候，刷新不再按仓库数成倍变慢。
 - **仓库树**——根目录、中间目录、每个仓库按层级排开，层级关系直接看得见，而不是靠路径去猜。
+- **关联 checkout，只读**——仓库行可以展开它关联的 worktree（`git worktree list`），每行带分支与 HEAD。选中一棵，状态行就切到这棵的分支、HEAD 与脏文件数，图谱里它的 HEAD 行也会被标出——是**一张图**而不是一棵一张图：linked worktree 共享 refs 与对象库，提交集合本来就相同。从这里可以在新会话中打开这棵、作为工作区打开，或复制它的路径；还没注册成工作区的 checkout 会说明原因而不是静默失败，目录已被删掉的仍会列出来。tab 从不新建、删除或切换 worktree——那些仍在 chip 的对话框里。
 - **SVG 提交图**——一次提交一行，一条分支一条彩色泳道，父提交在别的泳道时画曲线连接，合并提交画成菱形，带 ref 徽章与相对时间。
 - **一个分支一枚引用标签**——`main` 与 `origin/main` 指的是同一个分支，所以共用一枚标签，静音一次两边一起关掉；`origin/HEAD` 这类符号引用不再变成标签；**标签不再是筛选项**（一个标签只指向一个提交，静音它只能藏一行），它们仍然显示在提交行上；顺序是当前分支、其他本地分支、只有远程的分支，超过 12 枚先折成 `+N`，有静音时旁边出现「清除筛选」；可筛的分支少于 4 条时整排不显示，不为筛不了什么东西腾地方。行内徽章与导出的 SVG 用的是同一套标签。
 - **缩放**——默认双行；`−` / `+` 把行与文字一起放大缩小，从紧凑单行到宽松列表。
@@ -129,6 +130,10 @@
 | `/git/worktrees` | worktree 列表 |
 | `/git/worktree-add` | 创建 worktree |
 | `/git/worktree-remove` | 删除 worktree |
+| `/git/worktree/list` | 某仓库关联的 worktree 列表，只读（`{path}`；锚点须在已注册工作区内，返回 `git worktree list --porcelain` 的结果并保留 `bare`/`locked`/`prunable`/`detached`） |
+| `/git/worktree/status` | 在某一棵关联 checkout 里读分支、head 与脏状态（`{path, worktree}`；`worktree` 只与列表比对，绝不直接当 cwd） |
+| `/git/worktree/branches` | 某一棵关联 checkout 的分支列表（`{path, worktree}`） |
+| `/git/worktree/graph` | 在某一棵关联 checkout 里读提交列表（`{path, worktree, limit?}`） |
 | `/git/conventions` | 某仓库的规范文档状态 + 框架目录（`{path}`） |
 | `/git/convention` | 写入规范文档（`{path, framework?, force?}`） |
 | `/git/init` | 为还没有仓库的目录初始化仓库（`{path, branch?}`） |
@@ -142,11 +147,12 @@
 
 | `/git/events` | 变更通知（界面轮询） |
 
-每个路由都会先 `realpath` 解析请求路径，只有在某个已注册工作区**内部**时才放行；嵌套仓库目录会被接受，工作区之外的路径返回 `workspace-unknown`。
+每个路由都会先 `realpath` 解析请求路径，只有在某个已注册工作区**内部**时才放行；嵌套仓库目录会被接受，工作区之外的路径返回 `workspace-unknown`。四条 `/git/worktree/*` 路由校验的是**请求里的锚点仓库**，checkout 本身可以在工作区之外：锚点过门禁后，`git worktree list --porcelain` 的输出就是唯一白名单，所有探针都在 git 打印的路径里跑。
 
 ## 已知限制
 
-- **图谱页不改动已有仓库的 Git 状态。** 它写规范文档，并且可以对「还不是仓库」的目录执行 `git init`——除此之外什么都不做。不做提交、不切分支、不动 worktree，那些仍在徽章的对话框里。
+- **图谱页不改动已有仓库的 Git 状态。** 它写规范文档，并且可以对「还不是仓库」的目录执行 `git init`——除此之外什么都不做。不做提交、不切分支、不新建或删除 worktree，那些仍在徽章的对话框里。关联 checkout 只是只读列出，跳转只负责打开会话或工作区，绝不新建 worktree。
+- **工作区之外、且自身未注册的关联 checkout：能读状态，但页面不会替你注册。** 四条 `/git/worktree/*` 校验的是它所属的仓库，所以未注册的 checkout 也能给出分支、head 与脏状态；真要进去，点「在新会话中打开」或「作为工作区打开」时才注册。
 - **不要和 `@linxin666/dsh-client-ui-git-graph` 同时安装。** 两者都占用 `/git` 这个路由前缀，重复注册会冲突，二选一。
 - **超过 3 层的仓库不会被列出**；位于被跳过目录名（`node_modules`、`dist` 等）里的仓库同样不会列出，这是设计如此。
 - **宿主半边是构建产物。** `lib/index.js` 是直接改的（新增部分在带标记的 `//#region` 块里）；`lib/client.js` 由 `src/client/graph/SidebarTab.js` 拼接生成。细节见 [DEVELOPMENT.md](DEVELOPMENT.md)。
@@ -166,4 +172,4 @@ npm run preview   # 不启动 DSH，直接渲染出 preview/*.html
 
 Apache-2.0——见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
 
-本项目是 linxin666 的 [`@linxin666/dsh-client-ui-git-graph`](https://www.npmjs.com/package/@linxin666/dsh-client-ui-git-graph) 0.4.8（同为 Apache-2.0）的分叉：分支徽章、提交图对话框、worktree 管理器与宿主 git 服务来自上游。本分叉的改动：重命名包、把工作区校验从「路径完全相等」放宽到「位于工作区内」、新增 `/git/repos` 发现路由、新增 better-sidebar 图谱页（仓库树、SVG 画布、缩放、提交详情卡）及其语言键。
+本项目是 linxin666 的 [`@linxin666/dsh-client-ui-git-graph`](https://www.npmjs.com/package/@linxin666/dsh-client-ui-git-graph) 0.4.8（同为 Apache-2.0）的分叉：分支徽章、提交图对话框、worktree 管理器与宿主 git 服务来自上游。本分叉的改动：重命名包、把工作区校验从「路径完全相等」放宽到「位于工作区内」、新增 `/git/repos` 发现路由、新增 better-sidebar 图谱页（仓库树、SVG 画布、缩放、提交详情卡）及其语言键；自 1.15.0 起图谱页还能只读列出关联 checkout（4 条 `/git/worktree/*` 路由）并跳转过去。

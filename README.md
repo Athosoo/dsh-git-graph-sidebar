@@ -26,6 +26,7 @@ The tab works from the session's working directory and treats that directory as 
 - **Multi-repository discovery** — the workspace root itself, plus repositories nested up to 3 levels below it. Each entry carries its current branch, short head, dirty-file count and conflict count.
 - **A scan that costs what it should** — one `git for-each-ref` per repository returns the branch time, the upstream and the ahead/behind distance in one call; while the refs have not moved the whole answer comes from the last scan, and only the status probe (dirty files, conflicts) is repeated. A workspace full of repositories no longer gets slower with every extra one.
 - **Repository tree** — the root, the intermediate directories and each repository, so the level relationship between them is visible rather than implied by a path.
+- **Linked checkouts, read-only** — a repository row expands to its linked worktrees (`git worktree list`), each with its branch and HEAD. Picking one switches the status strip to that checkout's branch, HEAD and dirty state and marks its HEAD row on the graph — one graph, not one per checkout: linked worktrees share refs and objects, so the commit list is the same everywhere. From there the checkout opens in a new session, opens as a workspace, or its path is copied; a checkout that is not registered as a workspace says so instead of failing silently, and a directory that was removed still shows in the list. The tab never creates, removes or switches a worktree — that stays in the chip's dialog.
 - **SVG commit graph** — one row per commit, one colored lane per branch line, curved edges where a commit's parent sits on another lane, merge commits drawn as diamonds, ref badges and relative timestamps.
 - **One ref chip per branch** — `main` and `origin/main` name the same branch, so they share a chip and mute together; symbolic refs such as `origin/HEAD` never become chips; tags are not filters either (a tag points at a single commit, so muting it would hide one row) and stay on the commit rows as badges; the order is the current branch, other local branches, then remote-only branches, anything past twelve folds into `+N`, and a *Clear filters* chip appears while something is muted. Fewer than four filterable branches and the row is not drawn at all. Row badges and the exported SVG use the same labels.
 - **Zoom** — rows are two lines by default; `−` / `+` scale the rows and their text from a compact single line up to a roomy list.
@@ -139,6 +140,10 @@ Registered by the host half under `/git`; all of them answer JSON (`{ok:true,val
 | `/git/worktrees` | worktree list |
 | `/git/worktree-add` | create a worktree |
 | `/git/worktree-remove` | remove a worktree |
+| `/git/worktree/list` | linked worktrees of a repository, read-only (`{path}`; the anchor must sit inside a registered workspace, the answer is `git worktree list --porcelain` with `bare`/`locked`/`prunable`/`detached` kept) |
+| `/git/worktree/status` | branch, HEAD and dirty state read in one linked checkout (`{path, worktree}`; `worktree` is matched against the list, never used as a cwd directly) |
+| `/git/worktree/branches` | branch list of one linked checkout (`{path, worktree}`) |
+| `/git/worktree/graph` | commit list read in one linked checkout (`{path, worktree, limit?}`) |
 | `/git/conventions` | convention document state for a repository plus the framework catalog (`{path}`) |
 | `/git/convention` | write the document (`{path, framework?, force?}`) |
 | `/git/init` | initialize a repository in a directory that has none (`{path, branch?}`) |
@@ -156,7 +161,8 @@ Every route resolves the requested path with `realpath` and rejects it unless it
 
 ## Known limitations
 
-- **The tab never changes an existing repository's Git state.** It writes the conventions document, and it can run `git init` for a directory that is not a repository yet — nothing else. No commits, no branch switching, no worktrees: those stay in the chip's dialog.
+- **The tab never changes an existing repository's Git state.** It writes the conventions document, and it can run `git init` for a directory that is not a repository yet — nothing else. No commits, no branch switching, no worktree creation or removal: those stay in the chip's dialog. Linked checkouts are listed read-only, and a jump only opens a session or a workspace — it never creates a worktree.
+- **Linked checkouts outside every registered workspace are listed but not readable.** The four `/git/worktree/*` routes gate the *repository* the checkout belongs to, so a checkout that is not registered as a workspace itself still gets its branch, HEAD and dirty state; the jump then registers it on request.
 - **Do not install this alongside `@linxin666/dsh-client-ui-git-graph`.** Both halves own the `/git` route prefix, and two registrations of the same prefix conflict. Install one or the other.
 - **Repositories deeper than 3 levels are not listed**, and a repository inside a skipped directory name (`node_modules`, `dist`, …) is not listed either, by design.
 - **The host half is a build output.** `lib/index.js` is edited directly (the added parts sit in marked `//#region` blocks); `lib/client.js` is generated by splicing `src/client/graph/SidebarTab.js` into it. See [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -176,4 +182,4 @@ npm run preview   # render the tab to preview/*.html without a running DSH
 
 Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-This is a fork of [`@linxin666/dsh-client-ui-git-graph`](https://www.npmjs.com/package/@linxin666/dsh-client-ui-git-graph) 0.4.8 by linxin666, also Apache-2.0. The branch chip, the commit-graph dialog, the worktree manager and the host git service come from that project. Changes in this fork: renamed package, workspace gate widened from exact-path match to inside-a-workspace, added the `/git/repos` discovery route, added the better-sidebar tab (repository tree, SVG canvas, zoom, pinned commit card) and its locale keys.
+This is a fork of [`@linxin666/dsh-client-ui-git-graph`](https://www.npmjs.com/package/@linxin666/dsh-client-ui-git-graph) 0.4.8 by linxin666, also Apache-2.0. The branch chip, the commit-graph dialog, the worktree manager and the host git service come from that project. Changes in this fork: renamed package, workspace gate widened from exact-path match to inside-a-workspace, added the `/git/repos` discovery route, added the better-sidebar tab (repository tree, SVG canvas, zoom, pinned commit card) and its locale keys, and since 1.15.0 the tab lists linked checkouts read-only through four `/git/worktree/*` routes and can jump to one.

@@ -1,8 +1,8 @@
 # Roadmap
 
-This file is the delivery plan that follows 1.3.0. Each tier is one release; every item is read-only unless it says otherwise, and the plugin still never changes an existing repository's Git state (no commits, no branch switching, no worktrees — those stay in the chip's dialog).
+This file is the delivery plan that follows 1.3.0. Each tier is one release; every item is read-only unless it says otherwise, and the plugin still never changes an existing repository's Git state: no commits, no branch switching, and no worktree creation or removal — those stay in the chip's dialog. Since 1.15.0 a repository row also expands to its linked worktrees, read-only: the list, each checkout's branch/HEAD/dirty state and a jump to a session.
 
-本文件是 1.3.0 之后的交付计划。每个梯队对应一个版本；除特别标注外全部只读，插件依旧不改动已有仓库的 Git 状态（不提交、不切分支、不动 worktree——那些仍在对话栏 chip 的对话框里）。
+本文件是 1.3.0 之后的交付计划。每个梯队对应一个版本；除特别标注外全部只读，插件依旧不改动已有仓库的 Git 状态：不提交、不切分支、不新建或删除 worktree——那些仍在对话栏 chip 的对话框里。自 1.15.0 起，仓库行还会展开它关联的 worktree，只读展示列表、每个 checkout 的分支/HEAD/脏状态，并可跳转到会话。
 
 ## Where the plugin stands / 现状基座
 
@@ -37,6 +37,7 @@ This file is the delivery plan that follows 1.3.0. Each tier is one release; eve
 | 1.9.1 | **released and installed** / 已发布并已装 (client half only) | Tags left the filter row: a tag points at one commit, so muting it only hid a single row. They stay on the commit rows as badges (host `lib/index.js:616` keeps the `tag: ` prefix now, so the client can tell a tag from a branch). The whole row is skipped when fewer than four branches can be filtered, and the dead `sidebar.expandGraph` locale keys left behind by 1.6.1 are gone. |
 | 1.9.0 | **released and installed** / 已发布并已装 | Ref filters became one chip per branch: `feat/x` and `origin/feat/x` share a chip and mute together, symbolic refs (`HEAD`, `origin/HEAD`) never become chips, tags get their own grey chip, order is current branch then local then remote-only then tags, the row folds to `+N` past twelve and a clear chip appears while anything is muted; row badges and the exported SVG carry the same labels. |
 | 1.8.3 | **released and installed** | Front-matter values are read back cleanly: `conventionFieldValue()` strips an inline `# comment` and surrounding quotes, `conventionDocLanguageOf()` accepts 中文 / zh / Chinese / 中英混排, so the scaffold's own comments can no longer turn `language: zh` into `mixed`. |
+| 1.15.0 | **pending release** / 待发布 | Linked checkouts, read-only: a repository row expands to its `git worktree list`, picking one shows that checkout's branch, HEAD and dirty state in the status strip and marks its HEAD row on the graph, and three actions jump out — open the checkout in a new session (no second worktree is created), open it as a workspace, or copy its path. Four new read-only routes back it (`/git/worktree/list`, `/status`, `/branches`, `/graph`); nothing in the tab creates, removes or switches a worktree. |
 
 1.4.0 shipped from `src/client/graph/SidebarTab.js`, `scripts/build-lib.mjs` and `scripts/preview-tab.mjs` (plus the generated `lib/*.js` and `preview/*.html`). `HANDOVER.md` keeps the release trail and the next checklist.| 1.7.1 | **released and installed** / 已发布并已装 | Documentation only: the description no longer claims every repository — the scan reads up to three levels below the workspace root. |
 
@@ -141,11 +142,21 @@ Choosing a framework while a document exists currently overwrites it with `force
 
 **Implemented / 实现（1.6.0）**：新路由 `/git/convention/preview` + `conventionPreview(root, docName, frameworkId)`，**只读**。`conventionSectionsOf(text)` 按 `^##\s+` 切节，`conventionDiff(current, next)` 返回 `added`/`changed`/`removed`/`same` 与逐节 `{title, status, dropped, fresh}`；空文档时全部算 `added`。客户端在文档已存在时把框架卡片改成先预览：`pickFramework()` 拿 diff 渲染「写入前的差异」面板（计数 + 前 6 个非 `same` 小节，徽章「新增/改写」带颜色），按「确认写入」才调 `/git/convention`，按「取消」清空预览。已经写过的仓库还多了一个「更换框架」入口，否则预览在界面上不可达。
 
+## 1.15.0 — linked checkouts, read-only / 关联 worktree（只读）
+
+**Why.** A session can already run in a managed checkout under `$DSH_HOME/worktrees` (auto-isolation creates one per new session), and other linked checkouts can sit beside the main one. The tab only knew the main checkout, so the branch, HEAD and dirty count in its status strip could describe a directory other than the one the graph came from — and the checkout a session actually owns was invisible. / 需求：会话可能已经跑在 `$DSH_HOME/worktrees` 下的托管 checkout 里（自动隔离会为新会话建一棵），主检出旁边也可能有别的 checkout。tab 以前只认主检出，状态行里的分支/HEAD/脏文件数可能根本不属于图所对应的目录，当前会话自己拥有的那棵也完全看不见。
+
+**Design (as built).** One graph, many checkouts. Linked worktrees share refs and the object database, so the commit list is the same everywhere; the worktree dimension adds *which checkout you are looking at* (its branch, HEAD and dirty state) plus a marker on the HEAD row, not a second graph. A repository row expands on click; picking a checkout switches the status strip over to it, and three actions jump out of the tab: open the checkout in a new session, open it as a workspace, or copy its path. / 一张图，多个 checkout：linked worktree 共享 refs 与对象库，提交集合本来就相同；worktree 维度加的是「你正在看哪一棵」（分支、HEAD、脏状态）以及 HEAD 行上的标记，而不是第二张图。仓库行点开即是它关联的 checkout；选中后状态行切到这棵，并提供三个跳转动作：在新会话中打开、作为工作区打开、复制路径。
+
+**Host.** Four read-only routes — `/git/worktree/list`, `/git/worktree/status`, `/git/worktree/branches`, `/git/worktree/graph` — added by one idempotent `patch-host.mjs` patch next to the existing ones. Each request names an anchor repository path plus a requested checkout; the host gates the anchor first, then treats `git worktree list --porcelain` as the only whitelist and runs every probe in the path git printed, so a request string never becomes a cwd. `bare`, `locked`, `prunable`, `detached` and Windows long-path prefixes survive the new porcelain parser; the list is cached for 60 s on the common git dir's `worktrees/*/HEAD` mtimes (a managed worktree is created outside the main repository, so the existing scan fingerprint cannot see it). `/git/worktrees`, the write routes, the scan and the SSE key are untouched. / 宿主：4 条只读路由由 `patch-host.mjs` 的一个幂等 patch 加在既有 24 个旁边。请求带锚点仓库路径与要看的 checkout：先对锚点过门禁，再把 `git worktree list --porcelain` 当作唯一白名单，所有探针都在 git 打印的路径里跑，请求字符串永远不会变成 cwd。新解析器保留 `bare`/`locked`/`prunable`/`detached` 与 Windows 长路径前缀；列表按 common git dir 的 `worktrees/*/HEAD` mtime 缓存 60 秒（托管 worktree 建在主仓库之外，既有扫描指纹看不见它）。`/git/worktrees`、写路由、扫描与 SSE key 一律不动。
+
+**Client.** The checkout list hangs under the repository row it belongs to (`data-gitgraph-worktrees`, `data-gitgraph-worktree`), only one checkout's status is requested (and only while it is selected), the HEAD row of the graph carries `data-gitgraph-head`, and the current session's own checkout is marked. Failure degrades: an unregistered checkout says why, a missing directory stays listed, and a failed list never blanks the graph. / 客户端：checkout 列表挂在所属仓库行下面（`data-gitgraph-worktrees`、`data-gitgraph-worktree`），只为选中的那一棵请求状态，图谱里它的 HEAD 行带 `data-gitgraph-head`，当前会话自己拥有的 checked out 目录会被标出。失败会降级：未注册的 checkout 说明原因、被删目录仍列着、列表失败也不清空图。
+
 ## Not planned / 不做
 
 - **Hover cards.** Tried and removed on request; the pinned commit card is the better answer.
 - **A full diff viewer.** better-sidebar already ships one; the plugin links to it instead of duplicating it.
-- **Branch switching and worktrees inside the tab.** Technically possible and deliberately out of scope: the chip's dialog owns those actions.
+- **Writing worktrees from the tab.** Branch switching, worktree creation and removal stay in the chip's dialog: the tab lists linked checkouts and jumps to them (1.15.0), and never creates, removes or switches one.
 
 ## Delivery loop / 每个版本的交付动作
 
@@ -153,7 +164,7 @@ Choosing a framework while a document exists currently overwrites it with `force
 2. `node scripts/patch-host.mjs` — idempotent host patches.
 3. `node --check lib/client.js && node --check lib/index.js`.
 4. `node scripts/validate-lib.mjs` — locale keys and fork identifiers.
-5. `node scripts/test-host.mjs` — offline host end-to-end (132 checks).
+5. `node scripts/test-host.mjs` — offline host end-to-end (284 checks).
 6. `node scripts/preview-tab.mjs` — offline client end-to-end, on the built-in fixture (pass `--repos …`/`--graph …` to point it at a real workspace instead).
 7. Bump `package.json`, update `README.md` / `README.zh.md` / `DEVELOPMENT.md`, `npm pack --pack-destination ../dsh-git-graph-dist/<version>`, copy to a version-less `dsh-git-graph-sidebar.tgz`.
 8. Commit, push, create the GitHub release, upload the asset, verify the mirror checksum, `remove_bundle` + `install_bundle`, restart DSH.
