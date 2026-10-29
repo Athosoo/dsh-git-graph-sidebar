@@ -34,6 +34,10 @@
 		let sidebarTabClient;
 		/** The sessions service captured by the tab registration (cwd fallback). */
 		let sidebarTabSessions;
+		/** The workspaces registry captured by the tab registration (worktree jump). */
+		let sidebarTabWorkspaces;
+		/** The workspace UI captured by the tab registration (open a session). */
+		let sidebarTabUiWorkspace;
 		/** localStorage key remembering whether the graph also opens as a main-area View. */
 		const MAIN_VIEW_KEY = "dsh-git-graph:main-view";
 		/** Listeners waiting for the preference to change (the View registration follows). */
@@ -527,6 +531,79 @@
 			}
 			return true;
 		}
+		/**
+		 * A path as the panel compares paths: `git worktree list`, the workspace
+		 * registry and the sessions baseline all spell Windows paths a little
+		 * differently (drive case, separators, `\\?\` long form, trailing slash),
+		 * so every side is folded before it is compared.
+		 */
+		function sidebarTabPathKey(value) {
+			if (typeof value !== "string") return "";
+			let text = value.replace(/\\/g, "/");
+			if (text.startsWith("//?/UNC/")) text = "//" + text.slice(8);
+			else if (text.startsWith("//?/")) text = text.slice(4);
+			while (text.length > 1 && text.endsWith("/")) text = text.slice(0, -1);
+			return text.toLowerCase();
+		}
+		/** The directory name of a worktree, as its display label. */
+		function sidebarTabWorktreeName(path) {
+			let text = String(path).replace(/\\/g, "/");
+			while (text.length > 1 && text.endsWith("/")) text = text.slice(0, -1);
+			const cut = text.lastIndexOf("/");
+			return cut < 0 ? text : text.slice(cut + 1);
+		}
+		/** How many uncommitted files one status counts. */
+		function sidebarTabDirtyCount(status) {
+			if (status === void 0 || status === null) return 0;
+			return (status.dirtyFiles || 0) + (status.untrackedFiles || 0);
+		}
+		/**
+		 * Whether two worktree lists describe the same checkouts. A quiet refresh
+		 * that finds nothing new must not re-render the tree under the pointer.
+		 */
+		function sidebarTabSameWorktrees(previous, next) {
+			if (previous === void 0 || previous === null || previous.phase !== "ready") return false;
+			if (next === void 0 || next === null || next.phase !== "ready") return false;
+			if (previous.root !== next.root || previous.count !== next.count) return false;
+			const before = previous.list;
+			const after = next.list;
+			if (before.length !== after.length) return false;
+			for (let index = 0; index < before.length; index += 1) {
+				const a = before[index];
+				const b = after[index];
+				if (a.path !== b.path || a.head !== b.head || a.branch !== b.branch) return false;
+				if (a.main !== b.main || a.locked === b.locked || a.prunable === b.prunable || a.bare === b.bare) return false;
+			}
+			return true;
+		}
+		/** The linked worktrees under the selected repository (read-only rows). */
+		const SIDEBAR_TAB_WORKTREE_GROUP = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 1,
+			marginLeft: 12,
+			padding: "1px 0 3px 6px",
+			borderLeft: "1px solid var(--dsw-alias-border-l2)"
+		};
+		const SIDEBAR_TAB_WORKTREE_ROW = {
+			display: "flex",
+			alignItems: "center",
+			gap: 4,
+			padding: "1px 6px 1px 0",
+			fontSize: 12,
+			lineHeight: "15px",
+			whiteSpace: "nowrap",
+			cursor: "pointer",
+			color: "var(--dsw-alias-label-secondary)",
+			borderRadius: 6
+		};
+		const SIDEBAR_TAB_WORKTREE_ACTIONS = {
+			display: "flex",
+			alignItems: "center",
+			gap: 6,
+			flexWrap: "wrap",
+			flex: "none"
+		};
 		/** Author + relative time of one row. */
 		const SIDEBAR_TAB_ROW_META = {
 			flex: "none",
@@ -1360,6 +1437,29 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				const cached = sidebarTabCached(sessionCwd, "treeOpen");
 				return typeof cached === "boolean" ? cached : true;
 			});
+			/**
+			 * The linked worktree the panel describes: undefined means the selected
+			 * repository's main checkout (the repository row itself). A worktree only
+			 * changes which checkout is read, never which graph is drawn: checkouts of
+			 * one repository share its refs and object database.
+			 */
+			const [worktreePath, setWorktreePath] = react.useState(void 0);
+			/** The linked worktrees of the selected repository, loaded on selection. */
+			const [worktrees, setWorktrees] = react.useState({
+				phase: "idle",
+				root: void 0,
+				list: [],
+				count: 0,
+				error: null
+			});
+			/** The status of the selected linked worktree (the row keeps the main one). */
+			const [worktreeStatus, setWorktreeStatus] = react.useState(null);
+			const worktreeSeq = react.useRef(0);
+			const worktreeStatusSeq = react.useRef(0);
+			/** A worktree jump is in flight, so the buttons say so. */
+			const [worktreeBusy, setWorktreeBusy] = react.useState(false);
+			/** A failed worktree read, shown with the worktree rows. */
+			const [worktreeNotice, setWorktreeNotice] = react.useState(null);
 			/** Free-text filter over the loaded commits (subject, author, sha, refs). */
 			const [query, setQuery] = react.useState("");
 			/** Refs whose commits are hidden; name -> true. */
@@ -1552,6 +1652,214 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					});
 				});
 			}, [selected, t]);
+			/**
+			 * Load the linked worktrees of the selected repository. One read per
+			 * selection plus the quiet refreshes the change stream triggers; the list
+			 * is the only source of the checkout rows the panel offers.
+			 */
+			const loadWorktrees = react.useCallback((silent) => {
+				if (selected === void 0) {
+					setWorktrees({
+						phase: "idle",
+						root: void 0,
+						list: [],
+						count: 0,
+						error: null
+					});
+					return;
+				}
+				const root = selected.path;
+				const seq = worktreeSeq.current + 1;
+				worktreeSeq.current = seq;
+				if (silent !== true) setWorktrees((current) => current.root === root && current.phase === "ready" ? current : {
+					phase: "loading",
+					root,
+					list: current.root === root ? current.list : [],
+					count: current.root === root ? current.count : 0,
+					error: null
+				});
+				const git = sidebarTabGit();
+				if (typeof git.worktreeList !== "function") {
+					setWorktrees({
+						phase: "error",
+						root,
+						list: [],
+						count: 0,
+						error: t("sidebar.worktreeError")
+					});
+					return;
+				}
+				git.worktreeList(root).then((result) => {
+					if (seq !== worktreeSeq.current) return;
+					if (!result.ok || result.value === null) {
+						setWorktrees((current) => silent === true && current.root === root && current.phase === "ready" ? current : {
+							phase: "error",
+							root,
+							list: current.root === root ? current.list : [],
+							count: current.root === root ? current.count : 0,
+							error: result.ok ? t("error.internal") : t("sidebar.worktreeError")
+						});
+						return;
+					}
+					const value = result.value;
+					const list = Array.isArray(value.worktrees) ? value.worktrees : [];
+					const next = {
+						phase: "ready",
+						root,
+						list,
+						count: list.length,
+						error: null
+					};
+					setWorktrees((current) => sidebarTabSameWorktrees(current, next) ? current : next);
+					/** A checkout that was pruned or moved falls back to the repository row. */
+					setWorktreePath((current) => {
+						if (current === void 0) return current;
+						return list.some((entry) => entry.path === current) ? current : void 0;
+					});
+				}).catch(() => {
+					if (seq !== worktreeSeq.current) return;
+					setWorktrees((current) => silent === true && current.root === root && current.phase === "ready" ? current : {
+						phase: "error",
+						root,
+						list: current.root === root ? current.list : [],
+						count: current.root === root ? current.count : 0,
+						error: t("sidebar.worktreeError")
+					});
+				});
+			}, [selected, t]);
+			/**
+			 * Load the status of the selected linked worktree. The main checkout never
+			 * asks: its status already arrived with the repository scan.
+			 */
+			const loadWorktreeStatus = react.useCallback((silent) => {
+				const root = selected !== void 0 ? selected.path : void 0;
+				const target = worktreePath;
+				if (root === void 0 || target === void 0) {
+					worktreeStatusSeq.current += 1;
+					setWorktreeStatus(null);
+					return;
+				}
+				const git = sidebarTabGit();
+				if (typeof git.worktreeStatus !== "function") {
+					setWorktreeStatus({
+						path: target,
+						phase: "error",
+						value: null,
+						error: t("sidebar.worktreeError")
+					});
+					return;
+				}
+				const seq = worktreeStatusSeq.current + 1;
+				worktreeStatusSeq.current = seq;
+				if (silent !== true) setWorktreeStatus((current) => current !== null && current.path === target ? current : {
+					path: target,
+					phase: "loading",
+					value: null,
+					error: null
+				});
+				git.worktreeStatus(root, target).then((result) => {
+					if (seq !== worktreeStatusSeq.current) return;
+					if (!result.ok || result.value === null) {
+						const code = !result.ok && result.error !== void 0 && result.error !== null ? String(result.error.code) : "";
+						const message = code === "worktree-not-found" ? t("sidebar.worktreeMissing") : code === "workspace-unknown" ? t("sidebar.worktreeUnregistered") : t("sidebar.worktreeError");
+						setWorktreeStatus((current) => silent === true && current !== null && current.path === target && current.phase === "ready" ? current : {
+							path: target,
+							phase: "error",
+							value: current !== null && current.path === target ? current.value : null,
+							error: message
+						});
+						return;
+					}
+					const value = result.value;
+					setWorktreeStatus((current) => current !== null && current.path === target && current.phase === "ready" && JSON.stringify(current.value) === JSON.stringify(value) ? current : {
+						path: target,
+						phase: "ready",
+						value,
+						error: null
+					});
+				}).catch(() => {
+					if (seq !== worktreeStatusSeq.current) return;
+					setWorktreeStatus((current) => silent === true && current !== null && current.path === target && current.phase === "ready" ? current : {
+						path: target,
+						phase: "error",
+						value: current !== null && current.path === target ? current.value : null,
+						error: t("sidebar.worktreeError")
+					});
+				});
+			}, [selected, worktreePath, t]);
+			/** Another repository selected: the worktree rows start over. */
+			react.useEffect(() => {
+				setWorktreePath(void 0);
+				setWorktreeNotice(null);
+			}, [selectedPath]);
+			/** Load the linked worktrees when this tab starts describing a repository. */
+			react.useEffect(() => {
+				if (!active) return;
+				if (selected === void 0) return;
+				loadWorktrees(false);
+			}, [active, selected, loadWorktrees]);
+			/** Load the selected worktree's status (identical refreshes are dropped). */
+			react.useEffect(() => {
+				if (!active) return;
+				loadWorktreeStatus(false);
+			}, [active, loadWorktreeStatus]);
+			/** Where the workspaces registry already points, matched on folded paths. */
+			const workspaceAt = (path) => {
+				const registry = sidebarTabWorkspaces;
+				if (registry === void 0 || registry === null || registry.list === void 0 || registry.list === null || typeof registry.list.getSnapshot !== "function") return void 0;
+				try {
+					const snapshot = registry.list.getSnapshot();
+					const items = snapshot !== void 0 && snapshot !== null && Array.isArray(snapshot.items) ? snapshot.items : [];
+					const key = sidebarTabPathKey(path);
+					return items.find((item) => typeof item.path === "string" && sidebarTabPathKey(item.path) === key);
+				} catch {
+					return void 0;
+				}
+			};
+			/** Adopt one checkout as a workspace (read-only otherwise: no session). */
+			const openWorktreeWorkspace = react.useCallback((target) => {
+				const registry = sidebarTabWorkspaces;
+				if (registry === void 0 || registry === null || typeof registry.create !== "function") {
+					setWorktreeNotice(t("sidebar.worktreeUnregistered"));
+					return;
+				}
+				setWorktreeNotice(null);
+				setWorktreeBusy(true);
+				Promise.resolve(registry.create({ path: target.path })).then(() => {
+					setWorktreeBusy(false);
+				}).catch(() => {
+					setWorktreeBusy(false);
+					setWorktreeNotice(t("sidebar.worktreeError"));
+				});
+			}, [t]);
+			/**
+			 * Open one checkout as a fresh session: adopt it as a workspace, then let
+			 * the sessions face create the session and the workspace UI open it. The
+			 * plugin's auto-isolation wraps `uiWorkspace.startSession`, so that entry
+			 * is never used here: it would create a second worktree.
+			 */
+			const openWorktreeSession = react.useCallback((target) => {
+				const registry = sidebarTabWorkspaces;
+				const sessions = sidebarTabSessions;
+				const ui = sidebarTabUiWorkspace;
+				if (registry === void 0 || registry === null || typeof registry.create !== "function" || sessions === void 0 || sessions === null || typeof sessions.create !== "function" || ui === void 0 || ui === null || typeof ui.openSession !== "function") {
+					setWorktreeNotice(t("sidebar.worktreeUnregistered"));
+					return;
+				}
+				setWorktreeNotice(null);
+				setWorktreeBusy(true);
+				const existing = workspaceAt(target.path);
+				Promise.resolve(existing !== void 0 ? existing : registry.create({ path: target.path })).then((workspace) => {
+					if (workspace === void 0 || workspace === null || workspace.workspaceId === void 0) throw new Error("workspace");
+					return sessions.create({ workspaceId: workspace.workspaceId });
+				}).then((sessionId) => {
+					setWorktreeBusy(false);
+					if (typeof sessionId === "string" && sessionId !== "") ui.openSession(sessionId);
+				}).catch(() => {
+					setWorktreeBusy(false);
+					setWorktreeNotice(t("sidebar.worktreeError"));
+				});
+			}, [t]);
 			react.useEffect(() => {
 				if (!active) return;
 				if (selected === void 0) {
@@ -1844,8 +2152,11 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					reloadTimer.current = void 0;
 					runScan(false, true);
 					loadGraph(void 0, true);
+					/** A worktree added, removed or checked out elsewhere moves the rows. */
+					loadWorktrees(true);
+					loadWorktreeStatus(true);
 				}, 600);
-			}, [runScan, loadGraph]);
+			}, [runScan, loadGraph, loadWorktrees, loadWorktreeStatus]);
 			react.useEffect(() => () => {
 				if (reloadTimer.current !== void 0) clearTimeout(reloadTimer.current);
 			}, []);
@@ -2080,14 +2391,23 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			/** Tree rows: the workspace root, the directories between, each repository. */
 			const treeRows = react.useMemo(() => scan.phase === "ready" ? sidebarTabRepoTree(scan.repos) : [], [scan]);
 			const status = selected !== void 0 && selected.status !== void 0 && selected.status !== null ? selected.status : null;
-			const dirty = status === null ? 0 : (status.dirtyFiles || 0) + (status.untrackedFiles || 0);
+			/** The linked checkout under the selected repository, when one is selected. */
+			const activeWorktree = worktreePath === void 0 ? void 0 : worktrees.list.find((entry) => entry.path === worktreePath && entry.main !== true);
+			/** The status of that checkout; the main checkout reuses the scanned row. */
+			const worktreeStatusShown = activeWorktree !== void 0 && worktreeStatus !== null && worktreeStatus.path === activeWorktree.path ? worktreeStatus : null;
+			const currentStatus = worktreeStatusShown !== null && worktreeStatusShown.value !== null ? worktreeStatusShown.value : status;
+			const dirty = sidebarTabDirtyCount(currentStatus);
 			const toolbarChildren = [];
 			toolbarChildren.push(h("button", {
 				key: "refresh",
 				type: "button",
 				"data-gitgraph-action": "refresh",
 				style: SIDEBAR_TAB_BUTTON,
-				onClick: () => runScan(true),
+				onClick: () => {
+					runScan(true);
+					loadWorktrees(false);
+					loadWorktreeStatus(false);
+				},
 				disabled: refreshing === true,
 				title: t("sidebar.refresh"),
 				"aria-label": t("sidebar.refresh")
@@ -2225,31 +2545,201 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					}
 				}, children);
 			};
+			/**
+			 * The linked worktrees of one repository, indented under its row. They are a
+			 * read-only projection: selecting one only changes which checkout the status
+			 * strip, the graph highlight and the jump buttons describe. Creating or
+			 * removing still belongs to the branch chip, as before.
+			 */
+			const worktreeGroup = (repoPath) => {
+				if (worktrees.root !== repoPath) return null;
+				const children = [];
+				if (worktrees.phase === "loading") children.push(h("span", {
+					key: "loading",
+					"data-gitgraph-worktree-notice": "loading",
+					style: SIDEBAR_TAB_MUTED
+				}, t("worktree.manager.loading")));
+				else if (worktrees.phase === "error") children.push(h("span", {
+					key: "error",
+					"data-gitgraph-worktree-notice": "error",
+					style: SIDEBAR_TAB_WARN
+				}, worktrees.error !== null ? worktrees.error : t("sidebar.worktreeError")));
+				else if (worktrees.phase === "ready") {
+					const linked = worktrees.list.filter((entry) => entry.main !== true);
+					children.push(h("span", {
+						key: "count",
+						"data-gitgraph-worktree-count": worktrees.count,
+						style: SIDEBAR_TAB_MUTED
+					}, t("sidebar.worktrees", { count: worktrees.count })));
+					if (linked.length === 0) children.push(h("span", {
+						key: "none",
+						"data-gitgraph-worktree-notice": "none",
+						style: SIDEBAR_TAB_MUTED
+					}, t("sidebar.worktreeNone")));
+					for (const entry of linked.slice(0, 50)) {
+						if (typeof entry.path !== "string" || entry.path === "") continue;
+						children.push(worktreeRow(entry));
+					}
+					if (worktreeNotice !== null) children.push(h("span", {
+						key: "jump-error",
+						"data-gitgraph-worktree-notice": "jump-error",
+						style: SIDEBAR_TAB_WARN
+					}, worktreeNotice));
+					else if (linked.length > 0) children.push(h("span", {
+						key: "hint",
+						"data-gitgraph-worktree-notice": "read-only",
+						style: SIDEBAR_TAB_MUTED,
+						title: t("sidebar.worktreeJumpHint")
+					}, t("sidebar.worktreeReadOnly")));
+				}
+				return h("div", {
+					key: "wt-group:" + repoPath,
+					"data-gitgraph-worktrees": repoPath,
+					style: SIDEBAR_TAB_WORKTREE_GROUP
+				}, children);
+			};
+			/** One checkout: name, branch, and only the selected one carries a status. */
+			const worktreeRow = (entry) => {
+				const isActive = worktreePath === entry.path;
+				const key = sidebarTabPathKey(entry.path);
+				const sessionKey = sessionCwd !== void 0 ? sidebarTabPathKey(sessionCwd) : "";
+				/** Whether this session's cwd sits inside the checkout. */
+				const isCurrentSession = sessionKey !== "" && (sessionKey === key || sessionKey.startsWith(key + "/"));
+				const branch = typeof entry.branch === "string" && entry.branch !== "" ? entry.branch : t("worktree.manager.detached");
+				const rowDirty = worktreeStatus !== null && worktreeStatus.path === entry.path && worktreeStatus.value !== null ? sidebarTabDirtyCount(worktreeStatus.value) : -1;
+				const children = [h("span", {
+					key: "glyph",
+					style: SIDEBAR_TAB_TREE_GLYPH
+				}, isActive ? "●" : "○"), h("span", {
+					key: "name",
+					style: Object.assign({}, SIDEBAR_TAB_TREE_NAME, {
+						flex: "0 1 auto",
+						fontWeight: isActive ? 600 : 400
+					})
+				}, sidebarTabWorktreeName(entry.path)), h("span", {
+					key: "branch",
+					style: Object.assign({}, SIDEBAR_TAB_BADGE, { flex: "none" })
+				}, branch)];
+				if (rowDirty >= 0) children.push(h("span", {
+					key: "dirty",
+					"data-gitgraph-worktree-dirty": rowDirty,
+					style: rowDirty > 0 ? SIDEBAR_TAB_WARN : SIDEBAR_TAB_MUTED
+				}, rowDirty > 0 ? t("sidebar.dirty", { count: rowDirty }) : t("sidebar.clean")));
+				if (isCurrentSession) children.push(h("span", {
+					key: "current",
+					"data-gitgraph-worktree-current": true,
+					style: Object.assign({}, SIDEBAR_TAB_BADGE, { flex: "none" })
+				}, t("sidebar.worktreeCurrent")));
+				if (entry.locked === true) children.push(h("span", {
+					key: "locked",
+					title: "locked",
+					style: Object.assign({}, SIDEBAR_TAB_TREE_GLYPH, { flex: "none" })
+				}, "■"));
+				if (entry.prunable === true) children.push(h("span", {
+					key: "missing",
+					"data-gitgraph-worktree-missing": true,
+					style: SIDEBAR_TAB_WARN
+				}, t("sidebar.worktreeMissing")));
+				return h("div", {
+					key: "wt:" + entry.path,
+					role: "button",
+					tabIndex: 0,
+					"data-gitgraph-worktree": entry.path,
+					"data-gitgraph-worktree-active": isActive ? true : void 0,
+					style: Object.assign({}, SIDEBAR_TAB_WORKTREE_ROW, isActive ? {
+						background: "var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.14))"
+					} : {}),
+					title: entry.path,
+					onClick: () => setWorktreePath(entry.path),
+					onKeyDown: (event) => {
+						if (event.key !== "Enter" && event.key !== " ") return;
+						event.preventDefault();
+						setWorktreePath(entry.path);
+					}
+				}, children);
+			};
 			const treeList = treeHeader !== null && treeOpen ? h("div", {
 				key: "tree",
 				"data-gitgraph-repo-tree": true,
 				style: SIDEBAR_TAB_TREE
-			}, treeRows.map(treeRow)) : null;
+			}, (() => {
+				const nodes = [];
+				for (const row of treeRows) {
+					nodes.push(treeRow(row));
+					if (row.entry !== void 0 && row.entry.path === selectedKey) {
+						const group = worktreeGroup(row.entry.path);
+						if (group !== null) nodes.push(group);
+					}
+				}
+				return nodes;
+			})()) : null;
 			const statusChildren = [];
 			if (selected !== void 0) {
-				const branch = status !== null && typeof status.branch === "string" && status.branch !== "" ? status.branch : t("branch.detached");
+				if (activeWorktree !== void 0) statusChildren.push(h("span", {
+					key: "worktree",
+					"data-gitgraph-worktree-badge": activeWorktree.path,
+					style: SIDEBAR_TAB_BADGE,
+					title: activeWorktree.path
+				}, sidebarTabWorktreeName(activeWorktree.path)));
+				const branchSource = currentStatus;
+				const branch = branchSource !== null && typeof branchSource.branch === "string" && branchSource.branch !== "" ? branchSource.branch : t("branch.detached");
 				statusChildren.push(h("span", {
 					key: "branch",
 					style: SIDEBAR_TAB_BADGE,
 					title: t("sidebar.branch")
 				}, branch));
-				if (status !== null && status.operationInProgress === true) statusChildren.push(h("span", {
+				if (branchSource !== null && branchSource.operationInProgress === true) statusChildren.push(h("span", {
 					key: "op",
 					style: SIDEBAR_TAB_WARN
 				}, t("sidebar.operationInProgress")));
-				if (status !== null && status.conflicts > 0) statusChildren.push(h("span", {
+				if (branchSource !== null && branchSource.conflicts > 0) statusChildren.push(h("span", {
 					key: "conflicts",
 					style: SIDEBAR_TAB_WARN
-				}, t("sidebar.conflicts", { count: status.conflicts })));
+				}, t("sidebar.conflicts", { count: branchSource.conflicts })));
 				statusChildren.push(h("span", {
 					key: "dirty",
 					style: dirty > 0 ? SIDEBAR_TAB_WARN : SIDEBAR_TAB_MUTED
 				}, dirty > 0 ? t("sidebar.dirty", { count: dirty }) : t("sidebar.clean")));
+				if (activeWorktree !== void 0) {
+					const jumpTitle = t("sidebar.worktreeJumpHint");
+					const actions = [h("button", {
+						key: "session",
+						type: "button",
+						"data-gitgraph-action": "worktree-open-session",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						onClick: () => openWorktreeSession(activeWorktree),
+						disabled: worktreeBusy === true,
+						title: t("sidebar.worktreeOpenSession"),
+						"aria-label": t("sidebar.worktreeOpenSession")
+					}, t("sidebar.worktreeOpenSession")), h("button", {
+						key: "workspace",
+						type: "button",
+						"data-gitgraph-action": "worktree-open-workspace",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						onClick: () => openWorktreeWorkspace(activeWorktree),
+						disabled: worktreeBusy === true,
+						title: t("sidebar.worktreeOpenWorkspace"),
+						"aria-label": t("sidebar.worktreeOpenWorkspace")
+					}, t("sidebar.worktreeOpenWorkspace")), h("button", {
+						key: "copy",
+						type: "button",
+						"data-gitgraph-action": "worktree-copy-path",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						onClick: () => copyText("worktree", activeWorktree.path),
+						title: t("sidebar.worktreeCopyPath"),
+						"aria-label": t("sidebar.worktreeCopyPath")
+					}, copiedKey === "worktree" ? t("sidebar.copied") : t("sidebar.worktreeCopyPath"))];
+					statusChildren.push(h("span", {
+						key: "wt-actions",
+						"data-gitgraph-worktree-actions": activeWorktree.path,
+						style: SIDEBAR_TAB_WORKTREE_ACTIONS,
+						title: jumpTitle
+					}, actions), h("span", {
+						key: "wt-read-only",
+						"data-gitgraph-worktree-notice": "read-only",
+						style: SIDEBAR_TAB_MUTED
+					}, t("sidebar.worktreeReadOnly")));
+				}
 				if (selected.outside === true) statusChildren.push(h("span", {
 					key: "outside",
 					style: SIDEBAR_TAB_MUTED
@@ -2314,6 +2804,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				const row = lanes[position];
 				if (row === void 0) return null;
 				const pinned = pinnedOid === commit.oid;
+				/** The commit the selected checkout has checked out (B2: one graph, overlay). */
+				const isWorktreeHead = activeWorktree !== void 0 && typeof activeWorktree.head === "string" && activeWorktree.head !== "" && activeWorktree.head === commit.oid;
 				const dimmed = pinnedOid !== void 0 && !pinned;
 				const stacked = rowHeight >= SIDEBAR_TAB_STACK_ROW_H;
 				const refBudget = stacked ? SIDEBAR_TAB_REF_MAX : 1;
@@ -2397,11 +2889,12 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					key: commit.oid,
 					"data-gitgraph-row": true,
 					"data-gitgraph-pinned": pinned ? "true" : "false",
+					"data-gitgraph-head": isWorktreeHead ? activeWorktree.path : void 0,
 					style: Object.assign({}, SIDEBAR_TAB_ROW, {
 						height: rowHeight,
 						paddingLeft: geometry.width + 2,
 						opacity: dimmed ? 0.62 : 1
-					}, pinned ? { background: "var(--dsw-alias-bg-layer-2)" } : void 0),
+					}, pinned ? { background: "var(--dsw-alias-bg-layer-2)" } : void 0, isWorktreeHead ? { boxShadow: "inset 0 0 0 1px var(--dsw-alias-state-business-primary, #4c8dff)" } : void 0),
 					onClick: () => setPinnedOid(pinned ? void 0 : commit.oid),
 					title: commit.subject
 				}, children);

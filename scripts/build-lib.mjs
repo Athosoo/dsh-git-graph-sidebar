@@ -137,6 +137,17 @@ const EXTRA_KEYS = [
 			['"sidebar.refsLess"', '"收起"'],
 			['"sidebar.filtered"', '"{shown} / {total} 条匹配"'],
 			['"sidebar.noMatch"', '"没有匹配的提交"'],
+			['"sidebar.worktrees"', '"{count} 个 worktree"'],
+			['"sidebar.worktreeCurrent"', '"当前会话"'],
+			['"sidebar.worktreeNone"', '"无关联 worktree"'],
+			['"sidebar.worktreeUnregistered"', '"未注册为工作区，无法读取状态"'],
+			['"sidebar.worktreeMissing"', '"目录已不存在（可能被移动或删除）"'],
+			['"sidebar.worktreeError"', '"worktree 列表读取失败"'],
+			['"sidebar.worktreeReadOnly"', '"只读：新建或删除 worktree 请用分支 chip"'],
+			['"sidebar.worktreeOpenSession"', '"在新会话中打开"'],
+			['"sidebar.worktreeOpenWorkspace"', '"打开为工作区"'],
+			['"sidebar.worktreeCopyPath"', '"复制路径"'],
+			['"sidebar.worktreeJumpHint"', '"点击切换视图；按钮可在会话中打开"'],
 		]
 	},
 	{
@@ -252,6 +263,17 @@ const EXTRA_KEYS = [
 			['"sidebar.refsLess"', '"Fewer"'],
 			['"sidebar.filtered"', '"{shown} of {total} matched"'],
 			['"sidebar.noMatch"', '"No commits match the filter"'],
+			['"sidebar.worktrees"', '"{count} worktrees"'],
+			['"sidebar.worktreeCurrent"', '"this session"'],
+			['"sidebar.worktreeNone"', '"No linked worktrees"'],
+			['"sidebar.worktreeUnregistered"', '"Not a registered workspace — status unavailable"'],
+			['"sidebar.worktreeMissing"', '"Directory is gone (moved or removed)"'],
+			['"sidebar.worktreeError"', '"Could not read the worktree list"'],
+			['"sidebar.worktreeReadOnly"', '"Read-only: create or remove worktrees from the branch chip"'],
+			['"sidebar.worktreeOpenSession"', '"Open in a new session"'],
+			['"sidebar.worktreeOpenWorkspace"', '"Open as workspace"'],
+			['"sidebar.worktreeCopyPath"', '"Copy path"'],
+			['"sidebar.worktreeJumpHint"', '"Click to switch the view; the button opens it in a session"'],
 		]
 	}
 ];
@@ -354,8 +376,28 @@ const API_METHODS = [{
 			/** Every convention document that governs this repository, and where they disagree. */
 			conventionConflicts(path) {
 				return post("git/conventions/conflicts", { path });
+			}`
+}, {
+	guard: "git/worktree/list",
+	code: `
+			/** Linked worktrees of one repository; the anchor path must be a registered workspace. */
+			worktreeList(path) {
+				return post("git/worktree/list", { path });
 			}
-`
+			/** Status of one linked worktree; the anchor repository authorizes the target. */
+			worktreeStatus(path, worktree) {
+				return post("git/worktree/status", { path, worktree });
+			}
+			/** Branch heads of one linked worktree. */
+			worktreeBranches(path, worktree) {
+				return post("git/worktree/branches", { path, worktree });
+			}
+			/** Commit graph of one linked worktree. */
+			worktreeGraph(path, worktree, limit) {
+				const payload = { path, worktree };
+				if (typeof limit === "number" && limit > 0) payload.limit = limit;
+				return post("git/worktree/graph", payload);
+			}`
 }];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";
 
@@ -412,6 +454,24 @@ for (const method of API_METHODS) {
 }
 console.log("build-lib: synced GitApi additions (" + API_METHODS.length + " blocks)");
 if (beforeApi === next) console.log("build-lib: GitApi additions unchanged");
+
+// Client glue outside the tab region: opening a worktree in a session needs the
+// workspace services, and the registration block lives in the `index.ts` region
+// that this script never regenerates — so the inject list is patched here.
+// The guard keeps re-runs a no-op; a missing anchor throws when the bundle drifts.
+const GLUE_PATCHES = [{
+	guard: "\t\t\t\tsidebarTabUiWorkspace = sidebarScope.uiWorkspace;",
+	from: "\t\t\tctx.inject([\"betterSidebar\", \"sessions\"], (sidebarScope) => {\n\t\t\t\tsidebarTabSessions = sidebarScope.sessions;",
+	to: "\t\t\tctx.inject([\"betterSidebar\", \"sessions\", \"workspaces\", \"uiWorkspace\"], (sidebarScope) => {\n\t\t\t\tsidebarTabSessions = sidebarScope.sessions;\n\t\t\t\tsidebarTabWorkspaces = sidebarScope.workspaces;\n\t\t\t\tsidebarTabUiWorkspace = sidebarScope.uiWorkspace;"
+}];
+let glueApplied = 0;
+for (const patch of GLUE_PATCHES) {
+	if (next.includes(patch.guard)) continue;
+	if (!next.includes(patch.from)) throw new Error("build-lib: client glue anchor missing: " + patch.guard.trim());
+	next = next.replace(patch.from, patch.to);
+	glueApplied += 1;
+}
+if (glueApplied > 0) console.log("build-lib: patched " + glueApplied + " client glue anchor(s)");
 
 /** Absolute `[open, close]` brace positions of one `const <name> = { ... }` literal. */
 function dictionaryRange(text, name) {

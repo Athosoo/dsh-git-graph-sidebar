@@ -500,6 +500,66 @@ const SETTINGS_CALLS = [];
 const CONSOLIDATE_CALLS = [];
 const CONFLICT_STATE = { count: 2 };
 const WORKSPACE_DOC = { exists: false, draft: false, size: 0 };
+// ------------------------------------------------------ linked worktrees
+// The read-only worktree dimension: the workspace root repository owns three
+// linked checkouts (one locked, one pruned away), the nested repository none.
+const WORKTREES_HOME = "C:/Users/sample/.dsh/worktrees/E-git-graph-0a1b2c3d";
+const WT_CLEAN = WORKTREES_HOME + "/t1";
+const WT_LOCKED = WORKTREES_HOME + "/t2";
+const WT_GONE = WORKTREES_HOME + "/gone";
+const WT_STATUS = new Map();
+const worktreeRowOf = (path, head, branch, extra) => Object.assign({
+	path,
+	head,
+	branch,
+	main: false,
+	locked: false,
+	prunable: false,
+	bare: false,
+	detached: false
+}, extra);
+const worktreeViewOf = (anchor) => {
+	const rows = [{
+		path: anchor,
+		head: ROOT_GRAPH.commits[0].oid,
+		branch: "main",
+		main: true,
+		locked: false,
+		prunable: false,
+		bare: false,
+		detached: false
+	}];
+	if (viewKey(anchor) === viewKey(WORKSPACE)) rows.push(
+		worktreeRowOf(WT_CLEAN, ROOT_GRAPH.commits[1].oid, "wt/t1"),
+		worktreeRowOf(WT_LOCKED, ROOT_GRAPH.commits[2].oid, "wt/t2", { locked: true }),
+		worktreeRowOf(WT_GONE, "", "", { prunable: true, detached: true })
+	);
+	return { root: anchor, worktrees: rows };
+};
+/** The status the host answers for one checkout; the pruned one is gone. */
+const worktreeStatusOf = (target) => {
+	if (viewKey(target) === viewKey(WT_CLEAN)) return {
+		root: WT_CLEAN,
+		branch: "wt/t1",
+		head: ROOT_GRAPH.commits[1].oid,
+		dirtyFiles: 2,
+		untrackedFiles: 1,
+		conflicts: 0,
+		operationInProgress: false
+	};
+	if (viewKey(target) === viewKey(WT_LOCKED)) return {
+		root: WT_LOCKED,
+		branch: "wt/t2",
+		head: ROOT_GRAPH.commits[2].oid,
+		dirtyFiles: 0,
+		untrackedFiles: 0,
+		conflicts: 0,
+		operationInProgress: false
+	};
+	return null;
+};
+/** Answer one /git envelope as a FAIL, like the host does for a rejected read. */
+const failEnvelope = (code, message) => ({ ok: true, json: async () => ({ ok: false, error: { code, message } }) });
 const fakeFetch = async (path, init) => {
 	const payload = init !== undefined && typeof init.body === "string" ? JSON.parse(init.body) : {};
 	let value;
@@ -513,6 +573,24 @@ const fakeFetch = async (path, init) => {
 		value = GRAPH_BY_ROOT !== null && GRAPH_BY_ROOT.has(key)
 			? GRAPH_BY_ROOT.get(key)
 			: String(payload.path).indexOf("dsh-git-graph-src") >= 0 ? NESTED_GRAPH : ROOT_GRAPH;
+	} else if (path === "git/worktree/list") {
+		value = worktreeViewOf(payload.path);
+	} else if (path === "git/worktree/status") {
+		const status = worktreeStatusOf(payload.worktree);
+		if (status === null) return failEnvelope("worktree-not-found", "the checkout is gone");
+		value = status;
+	} else if (path === "git/worktree/branches") {
+		value = {
+			root: payload.worktree,
+			branch: "wt/t1",
+			detached: false,
+			branches: [
+				{ name: "main", current: false, upstream: "origin/main", lastCommit: Math.floor(Date.now() / 1000) - 7200, stale: false },
+				{ name: "wt/t1", current: true, upstream: "", lastCommit: Math.floor(Date.now() / 1000) - 600, stale: false }
+			]
+		};
+	} else if (path === "git/worktree/graph") {
+		value = ROOT_GRAPH;
 	} else if (path === "git/cleanup") {
 		const repo = (REPOS.repos || []).find((item) => viewKey(item.path) === viewKey(payload.path)) || {};
 		const status = repo.status !== undefined && repo.status !== null ? repo.status : {};
@@ -731,7 +809,32 @@ const plugin = captured.factory(requireStub);
 
 // -------------------------------------------------------------- run apply()
 let descriptor;
-const sessions = { list: { getSnapshot: () => ({ byId: { session: { cwd: WORKSPACE } } }) } };
+/** Sessions created by the tab's "open in a new session" jump. */
+const CREATED_SESSIONS = [];
+/** Workspaces the tab adopted; `list` returns the same array a live registry would. */
+const REGISTERED_WORKSPACES = [];
+/** Session ids the tab handed to the workspace UI to open. */
+const OPENED_SESSIONS = [];
+const sessions = {
+	list: { getSnapshot: () => ({ byId: { session: { cwd: WORKSPACE } } }) },
+	create: async ({ workspaceId }) => {
+		CREATED_SESSIONS.push(workspaceId);
+		return "session-" + workspaceId;
+	}
+};
+const workspaces = {
+	list: { getSnapshot: () => ({ items: REGISTERED_WORKSPACES }) },
+	create: async ({ path }) => {
+		const entry = { workspaceId: "ws-" + (REGISTERED_WORKSPACES.length + 1), path };
+		REGISTERED_WORKSPACES.push(entry);
+		return entry;
+	}
+};
+const uiWorkspace = {
+	openSession(sessionId) {
+		OPENED_SESSIONS.push(sessionId);
+	}
+};
 const betterSidebar = {
 	version: 1,
 	features: ["tabLifecycle", "updateTab"],
@@ -802,6 +905,8 @@ const ctx = {
 			callback({
 				betterSidebar,
 				sessions,
+				workspaces,
+				uiWorkspace,
 				locale,
 				logger: silent,
 				effect(effect) {
@@ -1590,6 +1695,84 @@ if (!usingRealData) {
 	console.log("preview-tab: one-click init button, confirm bar and empty state ok");
 }
 
+// --- Read-only worktree dimension -------------------------------------------
+// The repository row grows a group of linked checkouts; selecting one moves the
+// status strip, the HEAD marker and the jump actions onto that checkout.
+let worktreePanel = '';
+{
+	const worktreeMount = await mountComponent(descriptor.component, tabProps(WORKSPACE));
+	await worktreeMount.render();
+	const groups = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktrees'] !== undefined);
+	if (groups.length !== 1) throw new Error('expected one linked-worktree group, got ' + groups.length);
+	if (String(groups[0].props['data-gitgraph-worktrees']) !== WORKSPACE) {
+		throw new Error('the worktree group hangs off ' + JSON.stringify(groups[0].props['data-gitgraph-worktrees']));
+	}
+	const checkoutRows = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree'] !== undefined);
+	if (checkoutRows.length !== 3) throw new Error('expected 3 linked checkouts, got ' + checkoutRows.length);
+	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-active'] === true).length !== 0) {
+		throw new Error('a checkout is selected before any click');
+	}
+	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-missing'] === true).length !== 1) {
+		throw new Error('the pruned checkout is not marked missing');
+	}
+	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-current'] !== undefined).length !== 0) {
+		throw new Error('a checkout claims the session while the session is in the main checkout');
+	}
+	const cleanRow = checkoutRows.find((node) => node.props['data-gitgraph-worktree'] === WT_CLEAN);
+	if (cleanRow === undefined) throw new Error('fixture checkout ' + WT_CLEAN + ' is not rendered');
+	click(cleanRow, 'linked checkout row');
+	const selectedHtml = (await worktreeMount.render()).html;
+	const active = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-active'] === true);
+	if (active.length !== 1 || active[0].props['data-gitgraph-worktree'] !== WT_CLEAN) {
+		throw new Error('clicking a checkout did not select it');
+	}
+	const badge = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-badge'] !== undefined)[0];
+	if (badge === undefined || badge.props['data-gitgraph-worktree-badge'] !== WT_CLEAN) {
+		throw new Error('the status strip does not name the selected checkout');
+	}
+	const headMarks = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-head'] !== undefined);
+	if (headMarks.length !== 1 || headMarks[0].props['data-gitgraph-head'] !== WT_CLEAN) {
+		throw new Error('the checkout HEAD is not marked on the graph');
+	}
+	if (selectedHtml.indexOf('data-gitgraph-worktree-dirty="3"') < 0) {
+		throw new Error('the selected checkout dirty count is not shown');
+	}
+	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-actions'] !== undefined).length !== 1) {
+		throw new Error('the checkout has no jump actions');
+	}
+	const actionOf = (name) => findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-action'] === name)[0];
+	click(actionOf('worktree-copy-path'), 'copy the checkout path');
+	await worktreeMount.render();
+	if ((COPIED[COPIED.length - 1] ?? '') !== WT_CLEAN) {
+		throw new Error('copy path handed ' + JSON.stringify(COPIED[COPIED.length - 1]));
+	}
+	click(actionOf('worktree-open-workspace'), 'adopt the checkout as a workspace');
+	await worktreeMount.render();
+	if (!REGISTERED_WORKSPACES.some((entry) => viewKey(entry.path) === viewKey(WT_CLEAN))) {
+		throw new Error('the checkout was not registered as a workspace');
+	}
+	const registeredBefore = REGISTERED_WORKSPACES.length;
+	click(actionOf('worktree-open-session'), 'open a session in the checkout');
+	await worktreeMount.render();
+	if (REGISTERED_WORKSPACES.length !== registeredBefore) throw new Error('the jump registered the same checkout twice');
+	if (CREATED_SESSIONS.length !== 1) throw new Error('the jump created ' + CREATED_SESSIONS.length + ' sessions');
+	if (OPENED_SESSIONS.length !== 1) throw new Error('the jump opened ' + OPENED_SESSIONS.length + ' sessions');
+	worktreePanel = (await worktreeMount.render()).html;
+
+	// A session that already lives in one checkout marks that row as current.
+	const ownedMount = await mountComponent(descriptor.component, Object.assign(tabProps(WORKSPACE), { scope: { sessionId: "session", cwd: WT_CLEAN } }));
+	await ownedMount.render();
+	const ownedRows = findAll(ownedMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-worktree"] !== undefined);
+	const markedRows = ownedRows.filter((node) => findAll([node], (child) => child.props !== undefined && child.props["data-gitgraph-worktree-current"] !== undefined).length === 1);
+	if (markedRows.length !== 1 || markedRows[0].props["data-gitgraph-worktree"] !== WT_CLEAN) {
+		throw new Error("the session-owned checkout is not marked");
+	}
+	if (findAll(nestedMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-notice'] === 'none').length !== 1) {
+		throw new Error('a repository without linked checkouts does not say so');
+	}
+	console.log('preview-tab: linked checkouts, checkout status, HEAD marker and jump actions ok');
+}
+
 const rootPanel = rootMount.html;
 const nestedPanel = nestedMount.html;
 
@@ -1718,6 +1901,70 @@ console.log("preview-tab: wrote " + outFile);
 const lightFile = outFile.replace(/\.html$/, "-light.html");
 await writeFile(lightFile, html.replace("<body>", '<body data-theme="light">'), "utf8");
 console.log("preview-tab: wrote " + lightFile);
+
+// A dedicated sheet for the read-only worktree dimension: one selected linked
+// checkout (with a dirty count and the jump actions) and a repository that has
+// no linked checkouts at all. Both panels are real renders of the bundle.
+const worktreesFile = join(dirname(outFile), "graph-tab-worktrees.html");
+const worktreesHtml = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GIT-graph sidebar tab — linked worktrees</title>
+<style>
+	:root {
+		--dsw-alias-bg-base: #1b1d21;
+		--dsw-alias-bg-layer-1: #212429;
+		--dsw-alias-bg-layer-2: #262a31;
+		--dsw-alias-label-primary: #e8eaed;
+		--dsh-gg-ctl-bg: rgba(255,255,255,0.06);
+		--dsh-gg-ctl-fg: #eef2f7;
+		--dsh-gg-ctl-bd: rgba(255,255,255,0.22);
+		--dsw-alias-label-secondary: #a8b0ba;
+		--dsw-alias-label-tertiary: #7d858f;
+		--dsw-alias-border-l1: #2f343d;
+		--dsw-alias-border-l2: #3a404a;
+		--dsw-alias-button-tool-bar-fill: #262a31;
+		--dsw-alias-state-warn-primary: #e0a24a;
+		--dsw-alias-state-error-primary: #e57373;
+		--dsw-alias-state-business-primary: #4c8dff;
+	}
+	body { margin: 0; padding: 24px; background: #0f1115; color: #e6e8eb; font: 13px/1.5 system-ui, sans-serif; }
+	h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+	p.note { margin: 0 0 18px; color: #9aa1ab; font-size: 12px; }
+	.stage { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+	.panel { width: 380px; height: 560px; border-radius: 12px; overflow: hidden;
+		background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1);
+		color: var(--dsw-alias-label-primary); display: flex; flex-direction: column; }
+	.panel > header { flex: none; padding: 8px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary);
+		border-bottom: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
+	.panel > div { flex: 1 1 auto; min-height: 0; }
+	.legend { margin-top: 18px; color: #9aa1ab; font-size: 12px; line-height: 1.8; }
+	code { background: #24262b; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+	<h1>GIT-graph · 只读 worktree 维度 — 离线预览</h1>
+	<p class="note">由 <code>scripts/preview-tab.mjs</code> 执行已构建的 <code>lib/client.js</code> 生成。① 脚本真的点了 <code>${WT_CLEAN}</code> 一行：状态行换成该 checkout、图谱里 HEAD 行高亮、跳转按钮（新会话 / 打开为工作区 / 复制路径）指向它；<code>gone</code> 一行是 pruned 检出，标为缺失。② 没有 linked checkout 的仓库只显示一行说明。tab 只读：新建与删除仍在分支 chip 里。</p>
+	<div class="stage">
+		<div class="panel">
+			<header>① 选中 linked checkout（脏 2 改 + 1 未跟踪）</header>
+			<div>${worktreePanel}</div>
+		</div>
+		<div class="panel">
+			<header>② 没有 linked checkout</header>
+			<div>${nestedPanel}</div>
+		</div>
+	</div>
+	<div class="legend">
+		仓库行下缩进的每一行是一棵 <code>git worktree</code>；<b>●</b>/<b>○</b> 为该 checkout 是否被选中，<b>■</b> 表示 locked，<code>missing</code> 表示目录已不存在。会话 cwd 落在哪棵就标 <b>当前会话</b>。<br>
+		只读边界：本 tab 不新建、不删除、不切换 checkout，按钮只做「在本会话外打开」与「复制路径」。
+	</div>
+</body>
+</html>
+`;
+await writeFile(worktreesFile, worktreesHtml, "utf8");
+console.log("preview-tab: wrote " + worktreesFile);
 
 // A side-by-side sheet of the states that are hard to judge from the panel
 // render alone: the pinned commit card and the full-window view. `transform: translateZ(0)` on the wrapper turns the
