@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-29（1.15.0 已实现并全链验证通过、**尚未打包/发布/提交**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改）。
+> 最后更新：2026-10-29（**1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**）。
 
 ## 0. 一句话状态
 
@@ -727,7 +727,10 @@ return part.replace(/^HEAD -> /, "").trim();
 
 ### 7.18.6 发布信息
 
-**尚未发布**（等用户确认）。发布时照 §5：`package.json` → `1.15.0` → 全链路自检 → `mkdir -p ../dsh-git-graph-dist/1.15.0` + `npm pack` + 复制无版本名 → 提交（本版是本机第一次用「按 §9 分提交」，host 与客户端分开，见下方待办）→ `git gpush` → tag `v1.15.0` → GitHub Release（资产名仍不带版本号）→ 重装 `desktop` → **重启 DSH**（host 与客户端都动了）。
+- 版本 **1.15.0**，分 4 个提交：host `6b4e213`、tab `959fec2`、docs `b9c11df`、release `490eb95`（tag 打在 release 提交上）。
+- tag `v1.15.0`；release id **427888690**（`https://github.com/Athosoo/dsh-git-graph-sidebar/releases/tag/v1.15.0`）；资产 `dsh-git-graph-sidebar.tgz` **933400** 字节、asset id **688624500**、sha256 `8b4fab4f5d17ddb3233f0dcfd2b4f0f3e79bcadcb3a67d33a4d6472567f4193e`、154 条目、包内 version 1.15.0；经镜像 `releases/latest/download/dsh-git-graph-sidebar.tgz` 下载校验一致。
+- `desktop` 已装 1.15.0（1.14.0 → 1.15.0）。装法注意：本机 `dsh plugin` CLI 会拒绝 desktop profile（`managed exclusively by the Electron application`），而 PATH 上的 pnpm 10 与 profile 的 pnpm 11 store 不兼容，所以要用 DSH 自带的 pnpm：`node ".../resources/runtime/primary-runtime/dependencies/node/bin/node.exe" ".../resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.cjs" add "file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.15.0.tgz"`（先 `rm -rf node_modules/dsh-git-graph-sidebar`）。装完核对 `node_modules/dsh-git-graph-sidebar/package.json` 的 version 与 `lib/index.js` 里的 `/git/worktree/list`。
+- **用户需重启 DSH**：host 与客户端都动了，`Ctrl+R` 不够。
 
 
 
@@ -759,7 +762,7 @@ return part.replace(/^HEAD -> /, "").trim();
 9. ~~发 1.13.0~~ **已完成**（commit `9534f1e`、tag `v1.13.0`、release id `425545057`、资产 `dsh-git-graph-sidebar.tgz` 919392 字节、`desktop` 已装 1.13.0）。发布内容：合并改由智能体读文档后自己写（`git_conventions` 增 `read` / `write`，旧的 `consolidate` 退为 `draft`）、提示词改口、面板改为把请求复制到剪贴板。自检：`spliced 2843 / 3253 / 2303 / 449`、`already present 25`、`189 locale keys`、host **252/252**、`preview-tab` 8 组全过。**用户需重启 DSH。** 下一步候选：市场条目文案仍是 1.11.0 口径（写的是一键整合），要与 1.13.0 的「智能体自己读自己写」对齐可再提一次 PR。
 11. ~~发 1.14.0~~ **已完成**（按用户指示删掉两个面向模型的工具：`git_worktree` 与 `git_conventions`、整个 agent-tool 区域、`Config.agentTool`、`toolFiber` / `syncTool()`；合并要遵守的三条约定改由注入提示携带；commit `4ead12c`、tag `v1.14.0`、release id `426134952`、资产 907224 字节、`desktop` 已装 1.14.0）。**用户需重启 DSH**。
 
-12. **发 1.15.0（待用户确认）**：关联 checkout 只读维度已实现并全链绿（host 284/284、locale 191、preview 7 页），代码尚未提交、未打包。发布口径见 §7.18.6：`package.json` 1.15.0 → 全链 → `npm pack` 到 `../dsh-git-graph-dist/1.15.0` → 提交（host / tab / docs / release 分开）→ `git gpush` → tag `v1.15.0` → Release（资产不带版本号）→ 重装 `desktop` → **重启 DSH**。发完把 §7.18.6 的「尚未发布」改成发布事实（commit / tag / release id / 资产字节 / sha256）。
+12. ~~发 1.15.0~~ **已完成**（关联 checkout 只读维度；host `6b4e213` / tab `959fec2` / docs `b9c11df` / release `490eb95`，tag `v1.15.0`、release id `427888690`、资产 933400 字节 sha256 `8b4fab4f…`、`desktop` 已装 1.15.0）。**用户需重启 DSH**（host 与客户端都动了）。下一版候选：列表里「作为工作区打开」也可以顺手建会话；每行按需查脏状态（现在只查选中的）；只改 worktree 内文件时补一条轻量推送。
 
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 
