@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-30（**1.16.0 已实现、全链路自检通过，待发布、待换装**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**）。
+> 最后更新：2026-10-30（**1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
 
 ## 0. 一句话状态
 
@@ -777,6 +777,7 @@ return part.replace(/^HEAD -> /, "").trim();
 - **bash / node 在 `dsh-git-graph-src` 里写、删、`mkdir` 全部 EPERM，而 DSH 的 write/edit 工具能写**：Windows 沙箱只给「工作区根」授了 ACL，子目录继承了旧 DACL 且缺 `WriteOwner`。用 `diagnose-windows-sandbox-acl` 技能的一发脚本把 `E:\git-graph\dsh-git-graph-src` 的完整控制权限补上（备份 + 回滚脚本在 `E:\git-graph\.acl-reports\acl-backup-*.json(.ps1)`）之后，`rm`、`git mv`、`node` 写文件立刻恢复。**别再对子目录里的 EPERM 硬重试**：先确认是「权限」还是「`.git/index.lock` 残留」，再决定重跑；`git mv` 失败会留下锁，但进程退出后锁就释放。
 - **删源文件要 `git mv` 而不是 `rm`**（保留历史），且 ACL 修好之前 `git mv` 会在建 `.git/index.lock` 时失败——先修权限，再移动。
 - **`src/host/agent-tool.js` 是第一个「src 里的 `.js` 源」**：改它必须跑 `build-lib`，否则 `lib/index.js` 还是旧的；`build-lib` 幂等，连跑两次输出一致。
+- **发布这台机器上的两个固定坑**：① `curl` 走 schannel 默认要查吊销列表，离线时报 `CRYPT_E_REVOCATION_OFFLINE`（`HTTP 000`）——所有 `curl` 都加 `--ssl-no-revoke`；② 带 `Authorization` 的 GitHub API 请求**必须直连 `api.github.com`**，走 `gh-proxy.com` 会返回 `403 Resource not accessible by personal access token`（代理把身份搅了），`uploads.github.com` 也是直连；`https://ghfast.top/.../releases/latest/download/...` 只用来做下载校验。
 
 ## 8. 待办清单（按优先级）
 
@@ -808,11 +809,8 @@ return part.replace(/^HEAD -> /, "").trim();
 
 12. ~~发 1.15.0~~ **已完成**（关联 checkout 只读维度；host `6b4e213` / tab `959fec2` / docs `b9c11df` / release `490eb95`，tag `v1.15.0`、release id `427888690`、资产 933400 字节 sha256 `8b4fab4f…`、`desktop` 已装 1.15.0）。**用户需重启 DSH**（host 与客户端都动了）。下一版候选：列表里「作为工作区打开」也可以顺手建会话；每行按需查脏状态（现在只查选中的）；只改 worktree 内文件时补一条轻量推送。
 
-13. **1.16.0 待发布、待换装**（代码/文档/类型已就绪，全链路自检全绿：`spliced 3573 / 1936 / 773 / 164`、`already present 25`、`189 locale keys`、host **299/299**、`preview-tab` 全段过）。剩余步骤：
-   - commit（中文 conventional，含 `Assisted-by: DeepSeek`）→ `git gpush` → tag `v1.16.0`（先 `git rev-parse` 取 sha）→ GitHub Release（资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`）；
-   - `mkdir -p ../dsh-git-graph-dist/1.16.0 && npm pack --pack-destination ../dsh-git-graph-dist/1.16.0`，另存一份无版本名；
-   - 换装 `desktop`（先备份 profile `package.json`）→ **用户重启 DSH**（host 与客户端都动了；顺带修掉「worktree 列表读取失败」的旧进程 404）。
-   - **发布/换装前先问用户**（这批改动是用户拍板的，但发版动作要得到确认）。
+13. ~~发 1.16.0~~ **已完成**（侧栏 worktree 列表静默化 + 唯一兜底工具 `git_worktree`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9137b85f5e2558b962822dd85a707c7783fefce41324963215d20a2de`、`desktop` 已装 1.16.0）。自检：`spliced 3573 / 1936 / 773 / 164`、`already present 25`、`189 locale keys`、host **299/299**、`preview-tab` 全段过；镜像 `releases/latest/download/dsh-git-graph-sidebar.tgz` 下载校验 sha256 与包内版本 1.16.0 一致。**用户需重启 DSH**（host 与客户端都动了；顺带修掉此前「worktree 列表读取失败」——那是旧宿主进程不认识 1.15.0 才加的路由）。
+    - 换装实录（下次照此做）：`dsh plugin --profile desktop add …` 会报 `managed exclusively by the Electron application`，改为**手动改 profile 的 `package.json` 依赖行** → `file:C:/Users/18316/.dsh/artifacts/dsh-git-graph-sidebar-1.16.0.tgz`（先把新 tgz 拷进 `~/.dsh/artifacts/`），再 `node C:/Users/18316/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs install --no-frozen-lockfile`；`node_modules` 里的版本可从 1.15.0 换到 1.16.0。**副作用**：这一跑顺手把 `billion-context` 从 0.1.208 升到 0.1.209（profile 依赖被 pnpm 一并刷新），下次换装前先看一眼 lockfile diff。
 
 
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
