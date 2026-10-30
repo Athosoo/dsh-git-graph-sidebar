@@ -1718,6 +1718,13 @@ let worktreePanel = '';
 	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-current'] !== undefined).length !== 0) {
 		throw new Error('a checkout claims the session while the session is in the main checkout');
 	}
+	if (findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-notice'] !== undefined).length !== 0) {
+		throw new Error('the ready worktree group renders a notice row');
+	}
+	const count = findAll(worktreeMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-count'] !== undefined)[0];
+	if (count === undefined || String(count.props['data-gitgraph-worktree-count']) !== '3') {
+		throw new Error('the linked-checkout count is not rendered inside the group');
+	}
 	const cleanRow = checkoutRows.find((node) => node.props['data-gitgraph-worktree'] === WT_CLEAN);
 	if (cleanRow === undefined) throw new Error('fixture checkout ' + WT_CLEAN + ' is not rendered');
 	click(cleanRow, 'linked checkout row');
@@ -1767,8 +1774,11 @@ let worktreePanel = '';
 	if (markedRows.length !== 1 || markedRows[0].props["data-gitgraph-worktree"] !== WT_CLEAN) {
 		throw new Error("the session-owned checkout is not marked");
 	}
-	if (findAll(nestedMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-notice'] === 'none').length !== 1) {
-		throw new Error('a repository without linked checkouts does not say so');
+	if (findAll(nestedMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktrees'] !== undefined).length !== 0) {
+		throw new Error('a repository without linked checkouts still grows a worktree group');
+	}
+	if (findAll(nestedMount.tree, (node) => node.props !== undefined && node.props['data-gitgraph-worktree-notice'] !== undefined).length !== 0) {
+		throw new Error('a repository without linked checkouts renders a worktree notice');
 	}
 	console.log('preview-tab: linked checkouts, checkout status, HEAD marker and jump actions ok');
 }

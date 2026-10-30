@@ -152,10 +152,22 @@ async function main() {
 
 	const routes = [];
 	const injected = [];
+	const wsCreated = [];
+	const wsDeleted = [];
 	const ctx = {
 		logger: { info() {}, warn() {}, error() {}, debug() {} },
 		subprocess: fakeSubprocess(),
-		workspaceRegistry: { list: () => [{ path: workspace }] },
+		workspaceRegistry: {
+			list: () => [{ path: workspace }, ...wsCreated.map((entry, index) => ({ id: "ws-" + (index + 1), path: entry.path }))],
+			create: async (path, name) => {
+				wsCreated.push({ path, name });
+				return { id: "ws-" + wsCreated.length };
+			},
+			delete: async (id) => {
+				wsDeleted.push(id);
+				return true;
+			}
+		},
 		webServer: {
 			register(route) {
 				routes.push(route);
@@ -1133,6 +1145,60 @@ const noRules = await call("/git/compliance", { path: docless });
 	const hostSource = await readFile(new URL("../lib/index.js", import.meta.url), "utf8");
 	for (const name of ["/git/worktree/list", "/git/worktree/status", "/git/worktree/branches", "/git/worktree/graph"]) {
 		equal("route case " + name + " appears exactly once", hostSource.split('case "' + name + '": {').length - 1, 1);
+	}
+
+	console.log("\n[25] git_worktree tool: the one fallback tool over the managed worktree service");
+	const toolsEntry = injected.find((entry) => Array.isArray(entry.deps) && entry.deps.includes("tools"));
+	check("the tool registers through inject(['tools'])", toolsEntry !== void 0);
+	const registeredTools = [];
+	const toolScope = {
+		effect(fn) {
+			const disposer = fn();
+			return () => {
+				if (typeof disposer === "function") disposer();
+			};
+		},
+		tools: {
+			register(definition) {
+				registeredTools.push(definition);
+				return () => {};
+			}
+		}
+	};
+	if (toolsEntry !== void 0) toolsEntry.callback(toolScope);
+	const tool = registeredTools.find((definition) => definition.name === "git_worktree");
+	check("the git_worktree definition is registered", tool !== void 0);
+	equal("the tool declares its three actions", JSON.stringify(tool?.parameters?.properties?.action?.enum), JSON.stringify(["create", "list", "remove"]));
+	const execIn = (cwd) => ({ agent: { session: { header: { cwd } } } });
+	if (tool !== void 0) {
+		const missingCwd = await tool.execute({ action: "list" }, { agent: { session: { header: {} } } });
+		equal("a session without a project cwd is refused", missingCwd.code, "workspace-unknown");
+		const unknownAction = await tool.execute({ action: "bogus" }, execIn(wtAnchor));
+		equal("an unknown action is refused", unknownAction.code, "internal");
+		const beforeTool = await tool.execute({ action: "list" }, execIn(wtAnchor));
+		check("the tool lists the anchor repository", beforeTool.ok === true && Array.isArray(beforeTool.worktrees) && beforeTool.worktrees.length >= 1, JSON.stringify(beforeTool).slice(0, 200));
+		const savedToolHome = process.env.DSH_HOME;
+		process.env.DSH_HOME = join(wtRoot, "tool-home");
+		try {
+			wsCreated.length = 0;
+			wsDeleted.length = 0;
+			const created = await tool.execute({ action: "create", name: "agent-one", baseRef: "main" }, execIn(wtAnchor));
+			check("create makes a managed worktree on a wt/ branch", created.ok === true && typeof created.path === "string" && created.branch === "wt/agent-one", JSON.stringify(created).slice(0, 240));
+			check("create registers the new worktree as a workspace", wsCreated.length === 1 && pathKey(wsCreated[0].path) === pathKey(created.path), JSON.stringify(wsCreated));
+			check("the created worktree exists on disk", await stat(created.path).then((info) => info.isDirectory() === true, () => false));
+			const listedAfter = await tool.execute({ action: "list" }, execIn(wtAnchor));
+			check("the created worktree is listed", (listedAfter.worktrees ?? []).some((row) => pathKey(row.path) === pathKey(created.path)));
+			const removeWithoutPath = await tool.execute({ action: "remove" }, execIn(wtAnchor));
+			equal("remove without worktreePath is refused", removeWithoutPath.code, "invalid-worktree-name");
+			const removed = await tool.execute({ action: "remove", worktreePath: created.path, force: true }, execIn(wtAnchor));
+			check("remove deletes the managed worktree", removed.ok === true, JSON.stringify(removed).slice(0, 200));
+			check("remove unregisters the workspace", wsDeleted.length === 1, JSON.stringify(wsDeleted));
+			check("the removed worktree is gone from disk", await stat(created.path).then(() => false, () => true));
+			const listedFinal = await tool.execute({ action: "list" }, execIn(wtAnchor));
+			check("the removed worktree is gone from the list", !(listedFinal.worktrees ?? []).some((row) => pathKey(row.path) === pathKey(created.path)));
+		} finally {
+			process.env.DSH_HOME = savedToolHome;
+		}
 	}
 
 	// Worktrees live outside the registered workspace; remove them before the

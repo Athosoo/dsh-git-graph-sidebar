@@ -1,9 +1,9 @@
 /**
- * The opt-in model-facing `git_worktree` tool: an agent may create, list,
- * and remove managed worktrees of its calling session's repository. This
- * deliberately reverses the package's original 'git stays off the
- * model-visible surface' rule for users who enable it — registration only
- * happens while the agentTool setting is on (default off).
+ * The model-facing `git_worktree` tool: an agent may create, list, and remove
+ * managed worktrees of its calling session's repository. It is the single
+ * model-visible git verb of the package — the sidebar renders no worktree
+ * controls, so this tool is how an agent falls back when no worktree exists
+ * yet or a stale one has to go.
  *
  * EnterWorktree-style session migration is impossible (a session's cwd is
  * immutable), and under workspace-write sandboxing the agent cannot write

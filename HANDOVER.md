@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-29（**1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**）。
+> 最后更新：2026-10-30（**1.16.0 已实现、全链路自检通过，待发布、待换装**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**）。
 
 ## 0. 一句话状态
 
@@ -33,7 +33,7 @@
 5. **Git 规范体系**：选定框架（六套）→ 写 `GIT_CONVENTIONS.md`（空壳/模板）→ 状态带（已定稿/草稿/未建立）→ 通过 `systemPrompt` **每步注入模型**，且**就近继承**（仓库自己的优先，其次祖先容器仓库，最后给容器下的仓库指针清单）。
 6. **一键初始化仓库**：工作区根不是仓库时，tab 提供 `git init`（可选初始分支 main/master/trunk/develop），建完自动接规范流程。
 
-明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里；只读的关联 checkout 列表自 1.15.0 起已有）、完整 diff 查看器、悬停卡（做过，按要求删了）。
+明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里，或由智能体用 `git_worktree` 工具；只读的关联 checkout 列表自 1.15.0 起已有，且自 1.16.0 起连「无关联」「读取失败」这些提示都不画——tab 是静默只读投影）、完整 diff 查看器、悬停卡（做过，按要求删了）。
 
 ## 2. 环境与路径
 
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.16.0 | worktree 列表静默化 + 唯一兜底工具：侧栏不再渲染「{count} 个 worktree」空态、「无关联 worktree」、「只读：…chip」提示，也不在 `phase !== "ready"` 时渲染失败行；恢复 `git_worktree`（`create` / `list` / `remove`，`create` 自动注册工作区，`agentTool` 开关永久移除、改为无条件注册）；`src/host/agent-tool.js`（纯 JS，splice 进 `lib/index.js` 的 `//#region src/host/agent-tool.ts` 区域）；host **299/299**、locale 189 键、`spliced 3573 / 1936 / 773 / 164` |
 | 1.14.0 | 删掉两个面向模型的工具：`git_worktree`（`GIT_WORKTREE_TOOL` / `callingCwd` / `buildWorktreeTool` / `src/host/agent-tool.ts` 整个区域）与 `git_conventions`（`buildConventionsTool` / `conventionsReadDocuments` / `conventionsWriteMerged` / `conventionReadText` / `conventionWriteText` / `conventionPointerBody` / `conventionRelativePath` / `CONVENTION_READ_MAX_CHARS`），连同 `Config.agentTool`、`effectiveConfig().agentTool`、`toolFiber` / `syncTool()` 与 `loader/volatile-update` 监听；提示词接手——写明「工作区文档管事、每份被替换文件留 `.bak-<时间戳>`、仓库文档变三行指针」；`patch-host` 24 处（省掉 `conventions-tool`，`config-schema` / `config-effective` / `prompt-mount` 换锚点）、locale 180 键、host 215/215 |
 | 1.13.1 | 删掉机械合并：`conventionsConsolidate` / `conventionsUnionSection` / `conventionsMergedBody`、`/git/conventions/consolidate` 路由、工具 `draft` 动作、客户端合并面板与 11 个 locale 键全部移除；合并只能由智能体读完全部文档后自己写（`read` → `write`）。locale 180 键、host 232/232 |
 | 1.13.0 | 合并改由智能体主导：`git_conventions` 新增 `read`（每份文档完整正文）与 `write`（写入模型写的合并稿，带备份与指针），`consolidate` 退为 `draft`；提示词在无冲突但多文档时也提示查重；面板「AI 合并」把请求复制到剪贴板（客户端无法直接发起模型回合），机械并集降级为通知里的「先看机械并集草稿」；locale 189 键、host 252/252 |
@@ -734,6 +735,49 @@ return part.replace(/^HEAD -> /, "").trim();
 
 
 
+
+### 7.19 1.16.0：worktree 列表静默化 + 唯一兜底工具
+
+#### 7.19.1 为什么做（用户原话在前）
+
+用户先看到侧栏在 `awesome-dsh-plugin` 行下面报「worktree 列表读取失败」，接着问「它会显示读取wt失败，但是怎么建立呢？」。根因是宿主进程比安装版本旧：`/git/worktree/list` 是 1.15.0 才加的路由，而当时运行中的 DSH 进程还是 10-27 起的旧版（客户端已按 1.15.0 发请求 → 404 → 客户端把那句话渲染成一行警告），重启即愈。但这件事暴露了真正的流程问题：侧栏是只读投影，建 worktree 要去 chip 的对话框，建完还要「在新会话中打开」。用户的结论是「侧栏不显示任何提示/文字更好」「插件只读，创建由我直接指挥 AI 做」。于是 1.16.0 做了两件事：把侧栏的 worktree 组降级成**静默只读投影**，并恢复**唯一的兜底工具** `git_worktree`，让 AI 在没有 worktree 或要清掉过期 worktree 时能自己做。
+
+#### 7.19.2 侧栏（`src/client/graph/SidebarTab.js` → `lib/client.js`）
+
+- `worktreeGroup()`：`worktrees.root !== repoPath` 直接 `return null`；`worktrees.phase !== "ready"` 也 `return null`——**列表读取失败不再渲染一行警告**（读不读得到 worktree 对「看 git 图」没有影响，旧提示只是在暴露宿主版本差）；`linked.length === 0` 时 `return null`——**没有关联 checkout 就整组不渲染**（不再是「{count} 个 worktree」+「无关联 worktree」两个空态）。
+- 计数改用 `linked.length`：`worktrees.count` 把主检出算进去，单仓库也会显示 1。
+- 删掉提示行 `data-gitgraph-worktree-notice="read-only"`（`sidebar.worktreeReadOnly`），group 改用 `title` 带一句跳转提示（`sidebar.worktreeJumpHint`）；状态行里选中 checkout 时那条「只读：…」提示同样删除，`jumpTitle` 保留给 `data-gitgraph-worktree-actions` 的 `title`。
+- 保留 `data-gitgraph-worktree-notice="jump-error"`（跳转失败必须报错）与 `sidebar.worktreeError`（tab 别处仍在用；`validate-lib` 只查 `t()` 字面量是否在字典里，所以删键必须先删所有调用）。
+- 字典删 `sidebar.worktreeNone` / `sidebar.worktreeReadOnly`（zh/en 各一行），`EXTRA_KEYS` 同步删——locale **191 → 189**。
+
+#### 7.19.3 兜底工具 `git_worktree`（`src/host/agent-tool.js`）
+
+- **纯 JS 源**：host 半边不编译，`scripts/build-lib.mjs` 把 `src/host/agent-tool.js` 原样 splice 进 `lib/index.js` 的 `//#region src/host/agent-tool.ts` 区域（区域名保留历史写法，`HOST_MODULES` 里 `file` 指 `.js`、`start` 仍指 `.ts`）。区域不存在时 build 先按锚 `//#region src/mount-once.ts` 插入空标记，再由原来的循环填充——插入必须发生在循环之前，否则第一次 build 找不到 start。
+- `buildWorktreeTool(ctx, service)`：`action: create | list | remove`（`additionalProperties: false`）。`create` 调 `service.addWorktree(cwd, name, baseRef)`，成功后 `ctx.workspaceRegistry.create(result.path, "wt: " + result.name)`，返回 `{ok, path, branch, name, workspaceId, note}`（`note` 说明「当前会话不会迁移 cwd，开一个新会话才在 worktree 里干活」）；`list` 调 `service.worktrees(cwd, signal)`，返回 `{ok, root, worktrees}`；`remove` 调 `service.removeWorktree(cwd, worktreePath, {force, deleteBranch})`，成功后按路径找到注册的工作区并 `delete`，返回 `{ok, removed}`。业务失败一律 `{ok: false, code, message}`，不 throw。
+- `callingCwd(exec)` 读 `exec.agent?.session?.header?.cwd`（`exec.agent` 在纯 host 调用里可能不存在，所以可选链一路到底）；没有 cwd 时三个动作都拒绝为 `workspace-unknown`。
+- 注册处：`lib/index.js` 的 `applyImpl` 里 `ctx.inject(["tools"], (toolCtx) => toolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), "dsh-git-graph: git_worktree tool"))`。**没有** `agentTool` 开关、**没有** `toolFiber` / `syncTool()` / `loader/volatile-update` 监听（1.14.0 拆掉的那一套不回来）；`Config` 只剩 `autoIsolate` / `autoBaseline`。
+- 复用的 seam 一个都没改：`GitService.worktrees` / `addWorktree` / `removeWorktree`、`createWorkspaceGate`、`worktreesHome()`、`/git/*` 路由全部原样，所以工具和 UI 走的是同一套守卫（托管目录限制、名字 sanitize、`wt/` 分支约定、未提交改动要 `force`）。
+
+#### 7.19.4 测试
+
+- `test-host.mjs` 的 fake ctx 增加 `workspaceRegistry.create/list/delete`（记录 `wsCreated` / `wsDeleted`），新增第 [25] 段：从 `injected` 里找含 `"tools"` 的依赖 → 执行 `toolCtx.effect(fn)` → 断言 `tools.register` 收到的工具名是 `git_worktree`；`create` 用自动名、`baseRef: "HEAD"`，返回 `path` / `branch` / `workspaceId`，`wsCreated` 多一条；`list` 返回小时级 fixture；`remove` 传 `force` + `deleteBranch` 后 `wsDeleted` 多一条；`remove` 不存在的路径报 `worktree-not-found`。断言总数 **215 → 299**。
+- `preview-tab.mjs`：`repos-refs/nested` 挂载断言**没有** worktree 组（`[data-gitgraph-worktrees]` 计数 0，也没有任何 notice）；ready 态挂载断言计数 `3`、没有任何 `[data-gitgraph-worktree-notice]`；「没有关联 checkout」的仓库整组不渲染。`preview/graph-tab-worktrees.html` 仍 7 页。
+- 全链路自检：`node scripts/build-lib.mjs`（`spliced 3573 / 1936 / 773 / 164`）→ `node --check lib/index.js` / `lib/client.js` → `node scripts/validate-lib.mjs`（189 键）→ `node scripts/test-host.mjs`（**299/299**）→ `node scripts/patch-host.mjs`（`applied 0, already present 25`）→ `node scripts/preview-tab.mjs`（全部段落过）。
+
+#### 7.19.5 类型面、包与文档
+
+- `package.json` → **1.16.0**，description 重写：删掉「registers no tool of its own」，改成「the single model-facing surface is a `git_worktree` fallback tool …」，并写明侧栏是只读投影。
+- `lib/types/`（手写类型面，不是构建产物）：`host/config.d.ts` 去掉 `agentTool`（`Config` 与 `ConfigInput` 各一行）；`host/agent-tool.d.ts` 头注释改成「唯一的模型可见 git 动作」；`index.d.ts` 模块头注释同步。`lib/types/**/*.js` 是上游 tsc 旧产物、本来就与 fork 不同步，没有改。
+- `src/host/config.ts` / `src/index.ts`（参考源，不参与构建）同步：删 `agentTool` 三处、删 `toolFiber` / `syncTool()` / 监听，改为无条件 `ctx.inject(["tools"], …)`，import 指向 `./host/agent-tool.js`。
+- `README.md` / `README.zh.md`：卖点「没有工具、没有技能——提示词就是全部」改成「只有一个兜底工具，没有技能」。
+- `DEVELOPMENT.md`：1.14.0 注释里补一句「conventions 没有恢复工具，1.16.0 恢复的是 worktree 工具」；新增 *One fallback tool, and a quieter worktree list (1.16.0)* 一节；Known debt 注明 `src/host/agent-tool.js` 是唯一的 `.js` host 源。
+
+#### 7.19.6 坑（1.16.0 新增）
+
+- **bash / node 在 `dsh-git-graph-src` 里写、删、`mkdir` 全部 EPERM，而 DSH 的 write/edit 工具能写**：Windows 沙箱只给「工作区根」授了 ACL，子目录继承了旧 DACL 且缺 `WriteOwner`。用 `diagnose-windows-sandbox-acl` 技能的一发脚本把 `E:\git-graph\dsh-git-graph-src` 的完整控制权限补上（备份 + 回滚脚本在 `E:\git-graph\.acl-reports\acl-backup-*.json(.ps1)`）之后，`rm`、`git mv`、`node` 写文件立刻恢复。**别再对子目录里的 EPERM 硬重试**：先确认是「权限」还是「`.git/index.lock` 残留」，再决定重跑；`git mv` 失败会留下锁，但进程退出后锁就释放。
+- **删源文件要 `git mv` 而不是 `rm`**（保留历史），且 ACL 修好之前 `git mv` 会在建 `.git/index.lock` 时失败——先修权限，再移动。
+- **`src/host/agent-tool.js` 是第一个「src 里的 `.js` 源」**：改它必须跑 `build-lib`，否则 `lib/index.js` 还是旧的；`build-lib` 幂等，连跑两次输出一致。
+
 ## 8. 待办清单（按优先级）
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
@@ -763,6 +807,13 @@ return part.replace(/^HEAD -> /, "").trim();
 11. ~~发 1.14.0~~ **已完成**（按用户指示删掉两个面向模型的工具：`git_worktree` 与 `git_conventions`、整个 agent-tool 区域、`Config.agentTool`、`toolFiber` / `syncTool()`；合并要遵守的三条约定改由注入提示携带；commit `4ead12c`、tag `v1.14.0`、release id `426134952`、资产 907224 字节、`desktop` 已装 1.14.0）。**用户需重启 DSH**。
 
 12. ~~发 1.15.0~~ **已完成**（关联 checkout 只读维度；host `6b4e213` / tab `959fec2` / docs `b9c11df` / release `490eb95`，tag `v1.15.0`、release id `427888690`、资产 933400 字节 sha256 `8b4fab4f…`、`desktop` 已装 1.15.0）。**用户需重启 DSH**（host 与客户端都动了）。下一版候选：列表里「作为工作区打开」也可以顺手建会话；每行按需查脏状态（现在只查选中的）；只改 worktree 内文件时补一条轻量推送。
+
+13. **1.16.0 待发布、待换装**（代码/文档/类型已就绪，全链路自检全绿：`spliced 3573 / 1936 / 773 / 164`、`already present 25`、`189 locale keys`、host **299/299**、`preview-tab` 全段过）。剩余步骤：
+   - commit（中文 conventional，含 `Assisted-by: DeepSeek`）→ `git gpush` → tag `v1.16.0`（先 `git rev-parse` 取 sha）→ GitHub Release（资产名仍是不带版本号的 `dsh-git-graph-sidebar.tgz`）；
+   - `mkdir -p ../dsh-git-graph-dist/1.16.0 && npm pack --pack-destination ../dsh-git-graph-dist/1.16.0`，另存一份无版本名；
+   - 换装 `desktop`（先备份 profile `package.json`）→ **用户重启 DSH**（host 与客户端都动了；顺带修掉「worktree 列表读取失败」的旧进程 404）。
+   - **发布/换装前先问用户**（这批改动是用户拍板的，但发版动作要得到确认）。
+
 
 6. 下一步候选（未立项）：图谱分页（host 已经返回 `hasMore`，tab 还没有「加载更早」入口）、真历史搜索（`/git/log --grep/--author/--since`）、状态条显示落后上游、详情卡 `--stat`、PNG 导出（现在只有 SVG）；性能上还可以让首屏流式返回（先给目录树，再补状态）。
 

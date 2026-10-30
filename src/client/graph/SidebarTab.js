@@ -2549,49 +2549,29 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			 * The linked worktrees of one repository, indented under its row. They are a
 			 * read-only projection: selecting one only changes which checkout the status
 			 * strip, the graph highlight and the jump buttons describe. Creating or
-			 * removing still belongs to the branch chip, as before.
+			 * removing belongs to the branch chip or the agent's git_worktree tool; the
+			 * tab never grows a worktree write action, so it also has no empty state and
+			 * no failure row to explain.
 			 */
 			const worktreeGroup = (repoPath) => {
 				if (worktrees.root !== repoPath) return null;
-				const children = [];
-				if (worktrees.phase === "loading") children.push(h("span", {
-					key: "loading",
-					"data-gitgraph-worktree-notice": "loading",
+				if (worktrees.phase !== "ready") return null;
+				const linked = worktrees.list.filter((entry) => entry.main !== true);
+				if (linked.length === 0) return null;
+				const children = [h("span", {
+					key: "count",
+					"data-gitgraph-worktree-count": linked.length,
 					style: SIDEBAR_TAB_MUTED
-				}, t("worktree.manager.loading")));
-				else if (worktrees.phase === "error") children.push(h("span", {
-					key: "error",
-					"data-gitgraph-worktree-notice": "error",
-					style: SIDEBAR_TAB_WARN
-				}, worktrees.error !== null ? worktrees.error : t("sidebar.worktreeError")));
-				else if (worktrees.phase === "ready") {
-					const linked = worktrees.list.filter((entry) => entry.main !== true);
-					children.push(h("span", {
-						key: "count",
-						"data-gitgraph-worktree-count": worktrees.count,
-						style: SIDEBAR_TAB_MUTED
-					}, t("sidebar.worktrees", { count: worktrees.count })));
-					if (linked.length === 0) children.push(h("span", {
-						key: "none",
-						"data-gitgraph-worktree-notice": "none",
-						style: SIDEBAR_TAB_MUTED
-					}, t("sidebar.worktreeNone")));
-					for (const entry of linked.slice(0, 50)) {
-						if (typeof entry.path !== "string" || entry.path === "") continue;
-						children.push(worktreeRow(entry));
-					}
-					if (worktreeNotice !== null) children.push(h("span", {
-						key: "jump-error",
-						"data-gitgraph-worktree-notice": "jump-error",
-						style: SIDEBAR_TAB_WARN
-					}, worktreeNotice));
-					else if (linked.length > 0) children.push(h("span", {
-						key: "hint",
-						"data-gitgraph-worktree-notice": "read-only",
-						style: SIDEBAR_TAB_MUTED,
-						title: t("sidebar.worktreeJumpHint")
-					}, t("sidebar.worktreeReadOnly")));
+				}, t("sidebar.worktrees", { count: linked.length }))];
+				for (const entry of linked.slice(0, 50)) {
+					if (typeof entry.path !== "string" || entry.path === "") continue;
+					children.push(worktreeRow(entry));
 				}
+				if (worktreeNotice !== null) children.push(h("span", {
+					key: "jump-error",
+					"data-gitgraph-worktree-notice": "jump-error",
+					style: SIDEBAR_TAB_WARN
+				}, worktreeNotice));
 				return h("div", {
 					key: "wt-group:" + repoPath,
 					"data-gitgraph-worktrees": repoPath,
@@ -2734,11 +2714,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						"data-gitgraph-worktree-actions": activeWorktree.path,
 						style: SIDEBAR_TAB_WORKTREE_ACTIONS,
 						title: jumpTitle
-					}, actions), h("span", {
-						key: "wt-read-only",
-						"data-gitgraph-worktree-notice": "read-only",
-						style: SIDEBAR_TAB_MUTED
-					}, t("sidebar.worktreeReadOnly")));
+					}, actions));
 				}
 				if (selected.outside === true) statusChildren.push(h("span", {
 					key: "outside",

@@ -1,15 +1,15 @@
 /**
  * dsh-git-graph-sidebar — host half: the workspace-gated git
  * service and its /git/* HTTP routes (JSON operations + SSE change stream)
- * on the shared webserver, plus the opt-in model-facing git_worktree tool.
+ * on the shared webserver, plus the model-facing git_worktree tool.
  * The browser half (exports "./client") is served by client-modules from
  * the same package's dsh.client declaration.
  *
  * The UI-triggered git verbs (switch/create-branch/worktree operations) own
- * no model-visible surface. The git_worktree tool is the deliberate,
- * settings-gated exception (agentTool, default off): while enabled, agents
- * may create/list/remove managed worktrees of their calling session's
- * repository.
+ * no model-visible surface. The git_worktree tool is the single, deliberate
+ * exception: the sidebar renders no worktree controls, so the agent's only
+ * way to create/list/remove a managed worktree is this tool, which also
+ * registers the new worktree as a workspace.
  * @module dsh-git-graph-sidebar
  */
 
@@ -22,7 +22,7 @@ import type { GitFeatureConfig } from './core/types.ts'
 import { Config, effectiveConfig } from './host/config.ts'
 import { GitService, subprocessRunner, type WorkspaceGate } from './host/git-service.ts'
 import { registerGitRoutes } from './host/routes.ts'
-import { buildWorktreeTool } from './host/agent-tool.ts'
+import { buildWorktreeTool } from './host/agent-tool.js'
 import { worktreesHome } from './host/worktree-home.ts'
 import { mountOnce } from './mount-once.ts'
 
@@ -72,9 +72,9 @@ function createWorkspaceGate(ctx: Context): WorkspaceGate {
 }
 
 /**
- * Mount the git service, its routes, and the opt-in tool. The settings page
- * is the Host's own generation from {@link Config}: this half registers no
- * settings section.
+ * Mount the git service, its routes, and the model-facing worktree tool. The
+ * settings page is the Host's own generation from {@link Config}: this half
+ * registers no settings section.
  * @param ctx - context carrying webServer, subprocess, and workspaceRegistry.
  * @param config - the row's config as the Host resolved it (live references).
  */
@@ -94,40 +94,12 @@ function applyImpl(ctx: Context, config?: Config): void {
     }
   }
 
-  // The git_worktree tool registers only while agentTool is on. The tools
+  // The git_worktree tool is the single surface the agent may use to create
+  // or remove a worktree: the sidebar renders no worktree controls. The tools
   // service is awaited lazily so the plugin never hard-depends on it.
-  let toolFiber: ReturnType<Context['inject']> | undefined
-  const syncTool = (): void => {
-    const want = effectiveConfig(config).agentTool
-    if (want && toolFiber === undefined) {
-      toolFiber = ctx.inject(['tools'], (toolCtx: Context) => {
-        toolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), 'dsh-git-graph: git_worktree tool')
-      })
-    } else if (!want && toolFiber !== undefined) {
-      toolFiber.dispose()
-      toolFiber = undefined
-    }
-  }
+  ctx.inject(['tools'], (toolCtx: Context) => {
+    toolCtx.effect(() => toolCtx.tools.register(buildWorktreeTool(ctx, service)), 'dsh-git-graph: git_worktree tool')
+  })
 
-  // A volatile-only edit never remounts the row: the Loader commits the new
-  // value into the references and announces the paths. That notice is what
-  // re-derives the tool registration (the old settings hook's job); a change
-  // to any other field re-syncs to the same verdict, because syncTool only
-  // compares the flag with what is registered.
-  ctx.effect(() => {
-    const dispose = ctx.on('loader/volatile-update', (paths) => {
-      if (paths.some(path => path[0] === 'agentTool')) syncTool()
-    })
-    return () => { dispose() }
-  }, 'dsh-git-graph: settings-committed tool sync')
-
-  ctx.effect(() => {
-    syncTool()
-    const disposeRoutes = registerGitRoutes(ctx, service, featureConfig)
-    return () => {
-      disposeRoutes()
-      toolFiber?.dispose()
-      toolFiber = undefined
-    }
-  }, 'dsh-git-graph: /git routes + tool')
+  ctx.effect(() => registerGitRoutes(ctx, service, featureConfig), 'dsh-git-graph: /git routes')
 }

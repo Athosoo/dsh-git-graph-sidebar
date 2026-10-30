@@ -139,11 +139,9 @@ const EXTRA_KEYS = [
 			['"sidebar.noMatch"', '"没有匹配的提交"'],
 			['"sidebar.worktrees"', '"{count} 个 worktree"'],
 			['"sidebar.worktreeCurrent"', '"当前会话"'],
-			['"sidebar.worktreeNone"', '"无关联 worktree"'],
 			['"sidebar.worktreeUnregistered"', '"未注册为工作区，无法读取状态"'],
 			['"sidebar.worktreeMissing"', '"目录已不存在（可能被移动或删除）"'],
 			['"sidebar.worktreeError"', '"worktree 列表读取失败"'],
-			['"sidebar.worktreeReadOnly"', '"只读：新建或删除 worktree 请用分支 chip"'],
 			['"sidebar.worktreeOpenSession"', '"在新会话中打开"'],
 			['"sidebar.worktreeOpenWorkspace"', '"打开为工作区"'],
 			['"sidebar.worktreeCopyPath"', '"复制路径"'],
@@ -265,11 +263,9 @@ const EXTRA_KEYS = [
 			['"sidebar.noMatch"', '"No commits match the filter"'],
 			['"sidebar.worktrees"', '"{count} worktrees"'],
 			['"sidebar.worktreeCurrent"', '"this session"'],
-			['"sidebar.worktreeNone"', '"No linked worktrees"'],
 			['"sidebar.worktreeUnregistered"', '"Not a registered workspace — status unavailable"'],
 			['"sidebar.worktreeMissing"', '"Directory is gone (moved or removed)"'],
 			['"sidebar.worktreeError"', '"Could not read the worktree list"'],
-			['"sidebar.worktreeReadOnly"', '"Read-only: create or remove worktrees from the branch chip"'],
 			['"sidebar.worktreeOpenSession"', '"Open in a new session"'],
 			['"sidebar.worktreeOpenWorkspace"', '"Open as workspace"'],
 			['"sidebar.worktreeCopyPath"', '"Copy path"'],
@@ -537,6 +533,10 @@ const HOST_MODULES = [
 	{
 		file: "src/host/branches.js",
 		start: "//#region src/host/branches.ts"
+	},
+	{
+		file: "src/host/agent-tool.js",
+		start: "//#region src/host/agent-tool.ts"
 	}
 ];
 
@@ -548,6 +548,14 @@ if (hostLib.indexOf("//#region src/host/branches.ts") < 0) {
 	const at = hostLib.indexOf(anchor);
 	if (at < 0) throw new Error("registerGitRoutes anchor not found in lib/index.js");
 	hostLib = hostLib.slice(0, at) + "//#region src/host/branches.ts" + LF + "//#endregion" + LF + hostLib.slice(at);
+}
+// The `agent-tool` region sits just above `mount-once`; seed the empty pair of
+// markers the first time so the splice below only ever deals with content.
+if (hostLib.indexOf("//#region src/host/agent-tool.ts") < 0) {
+	const anchor = "//#region src/mount-once.ts";
+	const at = hostLib.indexOf(anchor);
+	if (at < 0) throw new Error("mount-once region anchor not found in lib/index.js");
+	hostLib = hostLib.slice(0, at) + "//#region src/host/agent-tool.ts" + LF + "//#endregion" + LF + hostLib.slice(at);
 }
 for (const module of HOST_MODULES) {
 	const source = (await readFile(join(root, module.file), "utf8")).replace(/\s+$/, "");
