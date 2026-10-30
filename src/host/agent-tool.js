@@ -1,12 +1,20 @@
 /**
- * The model-facing `git_worktree` tool: an agent may create, list, and remove
- * managed worktrees of its calling session's repository.
+ * The model-facing `git_worktree` tool: an agent may initialize its calling
+ * directory as a repository with a conventions document, and create, list, and
+ * remove managed worktrees of its calling session's repository.
+ *
+ * `init` exists because an agent that creates a repository on its own would
+ * otherwise start with no document at all: the prompt injection has nothing to
+ * read, and every rule the workspace agreed on is skipped. Running `init`
+ * writes the same document the tab would write (same frameworks, same
+ * front-matter switches) and, for `strict: true`, the commit-msg hook that
+ * makes `git commit` refuse messages the document rejects.
  *
  * This file is spliced into `lib/index.js` between the agent-tool region
  * markers by `scripts/build-lib.mjs`; it is not a module of its own and uses
  * the host bundle's scope (the `GitService` methods `worktrees` /
- * `addWorktree` / `removeWorktree`, and the workspace registry reachable from
- * `ctx`).
+ * `addWorktree` / `removeWorktree`, `repoInit` / `conventionBodyOf` /
+ * `repoWriteConvention`, and the workspace registry reachable from `ctx`).
  *
  * EnterWorktree-style session migration is impossible (a session's cwd is
  * immutable), and under workspace-write sandboxing the agent cannot write
@@ -36,13 +44,15 @@ function callingCwd(exec) {
  * here, business rejections return `ok: false` values so the model can react.
  * @param ctx - host context (workspace registry for create/remove linkage).
  * @param service - the workspace-gated git service.
+ * @param featureConfig - resolves the row's live config (document name).
  * @returns the tool definition to register.
  */
-function buildWorktreeTool(ctx, service) {
+function buildWorktreeTool(ctx, service, featureConfig) {
 	return {
 		name: GIT_WORKTREE_TOOL,
 		description: [
-			"Manage isolated git worktrees of the current session's repository.",
+			"Git actions of the current session's repository.",
+			"init initializes the calling directory as a repository (default branch main) and writes the workspace's conventions document into it, with the commit-msg hook for strict documents - use it instead of a bare `git init`, which leaves the repository without rules;",
 			"create makes a new worktree under the DSH-managed worktrees home on a new wt/<name> branch and registers it as a workspace;",
 			"the returned path is ready for a new session (or for direct use when the sandbox permits).",
 			"list shows every worktree; remove deletes a managed worktree (uncommitted changes reject unless force)."
@@ -53,8 +63,30 @@ function buildWorktreeTool(ctx, service) {
 			properties: {
 				action: {
 					type: "string",
-					enum: ["create", "list", "remove"],
-					description: "The worktree operation to perform."
+					enum: ["init", "create", "list", "remove"],
+					description: "The git operation to perform."
+				},
+				branch: {
+					type: "string",
+					description: "init: initial branch name; defaults to main."
+				},
+				framework: {
+					type: "string",
+					description: "init: conventions framework id (conventional-commits, github-flow, git-flow, trunk-based, monorepo-layered, none). Omit for the empty scaffold."
+				},
+				strict: {
+					type: "boolean",
+					description: "init: write strict: true into the document and install the commit-msg hook that enforces it."
+				},
+				language: {
+					type: "string",
+					enum: ["zh", "en", "mixed"],
+					description: "init: subject language written into the document."
+				},
+				ai: {
+					type: "string",
+					enum: ["required", "optional", "forbidden"],
+					description: "init: whether the document requires an AI attribution trailer."
 				},
 				name: {
 					type: "string",
@@ -99,6 +131,51 @@ function buildWorktreeTool(ctx, service) {
 				message: "git_worktree needs a calling session with a project cwd"
 			};
 			switch (input.action) {
+				case "init": {
+					const branch = typeof input.branch === "string" && input.branch.trim() !== "" ? input.branch.trim() : "main";
+					const framework = typeof input.framework === "string" && input.framework.trim() !== "" ? input.framework.trim() : "none";
+					if (framework !== "none" && conventionFrameworkOf(framework) === void 0) return {
+						ok: false,
+						code: "convention-unknown-framework",
+						message: "unknown framework: " + framework
+					};
+					const strict = input.strict === true;
+					const language = input.language === "zh" || input.language === "en" || input.language === "mixed" ? input.language : void 0;
+					const ai = input.ai === "required" || input.ai === "optional" || input.ai === "forbidden" ? input.ai : void 0;
+					const initialized = await repoInit(service, cwd, branch);
+					if (!initialized.ok) return {
+						ok: false,
+						code: initialized.error.code,
+						message: initialized.error.message
+					};
+					const body = conventionBodyOf(framework, basename(cwd), strict, language, ai);
+					if (body === void 0) return {
+						ok: false,
+						code: "convention-unknown-framework",
+						message: "unknown framework: " + framework
+					};
+					let docName = CONVENTION_DOC_DEFAULT;
+					try {
+						const active = typeof featureConfig === "function" ? featureConfig() : void 0;
+						if (active !== void 0 && active !== null && typeof active.conventionsDoc === "string" && active.conventionsDoc !== "") docName = active.conventionsDoc;
+					} catch {}
+					const written = await repoWriteConvention(cwd, docName, body, { force: false });
+					if (!written.ok) return {
+						ok: false,
+						code: written.error.code,
+						message: written.error.message
+					};
+					return {
+						ok: true,
+						root: initialized.value.root,
+						branch: initialized.value.branch,
+						docPath: written.value.docPath,
+						framework,
+						strict,
+						hook: written.value.hook,
+						note: strict ? "The commit-msg hook enforces the document; git commit --no-verify bypasses it." : "The document is in place. Set strict: true in it to also install the commit-msg hook."
+					};
+				}
 				case "list": {
 					const view = await service.worktrees(cwd, exec.signal);
 					if (view === null) return {
@@ -156,7 +233,7 @@ function buildWorktreeTool(ctx, service) {
 				default: return {
 					ok: false,
 					code: "internal",
-					message: "action must be one of 'create', 'list', 'remove'"
+					message: "action must be one of 'init', 'create', 'list', 'remove'"
 				};
 			}
 		}

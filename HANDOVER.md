@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-30（**1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
+> 最后更新：2026-10-30（**1.17.0 已就绪，待发布**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
 
 ## 0. 一句话状态
 
@@ -33,7 +33,7 @@
 5. **Git 规范体系**：选定框架（六套）→ 写 `GIT_CONVENTIONS.md`（空壳/模板）→ 状态带（已定稿/草稿/未建立）→ 通过 `systemPrompt` **每步注入模型**，且**就近继承**（仓库自己的优先，其次祖先容器仓库，最后给容器下的仓库指针清单）。
 6. **一键初始化仓库**：工作区根不是仓库时，tab 提供 `git init`（可选初始分支 main/master/trunk/develop），建完自动接规范流程。
 
-明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里，或由智能体用 `git_worktree` 工具；只读的关联 checkout 列表自 1.15.0 起已有，且自 1.16.0 起连「无关联」「读取失败」这些提示都不画——tab 是静默只读投影）、完整 diff 查看器、悬停卡（做过，按要求删了）。
+明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里，或由智能体用 `git_worktree` 工具；只读的关联 checkout 列表自 1.15.0 起已有，且自 1.16.0 起连「无关联」「读取失败」这些提示都不画——tab 是静默只读投影）、完整 diff 查看器、悬停卡（做过，按要求删了）。AI 自己 `git init` 建仓也走同一工具：`git_worktree` 的 `init` 动作（1.17.0）。
 
 ## 2. 环境与路径
 
@@ -148,6 +148,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 | 1.8.1 | 修「设置了不生效」：`conventionSettings()` + `/git/convention/settings`（工作区 `action: "settings"`）只改前置字段、`repoConventionState` 回读 `strict`/`language`/`languageStated`、点开关即刻落盘、容器 cwd 读工作区文档并注入提示块；已发布并已装 |
 | 1.8.2 | 规范条把「最近 N 个提交里有几个不符合」换成**生效规则标签**（type 词表 / 标题长度 / 小写 / 句号 / 祈使 / 主题语言 / 强约束），横向换行、不再给历史打分；选择列表的「取消」改成「关闭」；删掉 offender 渲染与 6 个 reason 键；已发布并已装 |
 | 1.12.0 | 主区域视图：`conversation.view` 插槽注册（opt-in、可关、`localStorage` 记忆）、`GitGraphMainView` 包一层侧栏本体、locale 187 键、tab 3189 行、README 重写为先讲卖点 |
+| 1.17.0 | 建仓兜底 + 提交拦截：`git_worktree` 新增 `init` 动作（校验 framework → `repoInit` → 按面板同一套框架/开关写规范文档 → 报告 hook 结果，参数 `branch` / `framework` / `strict` / `language` / `ai`）；`repoWriteConvention` 写仓库级文档后调 `repoInstallCommitMsgHook`——strict 时装 `.git/hooks/commit-msg`（sh shim）+ `graph-commit-msg.mjs`（自包含 ESM，嵌入规则），非 strict 时卸载带 marker 的自己的 hook，他人 hook 绝不覆盖，尊重 `core.hooksPath` 与 `.git` 文件（worktree）；host **318/318**、locale 189 键、`spliced 3573 / 2191 / 773 / 241` |
 | 1.16.0 | worktree 列表静默化 + 唯一兜底工具：侧栏不再渲染「{count} 个 worktree」空态、「无关联 worktree」、「只读：…chip」提示，也不在 `phase !== "ready"` 时渲染失败行；恢复 `git_worktree`（`create` / `list` / `remove`，`create` 自动注册工作区，`agentTool` 开关永久移除、改为无条件注册）；`src/host/agent-tool.js`（纯 JS，splice 进 `lib/index.js` 的 `//#region src/host/agent-tool.ts` 区域）；host **299/299**、locale 189 键、`spliced 3573 / 1936 / 773 / 164` |
 | 1.14.0 | 删掉两个面向模型的工具：`git_worktree`（`GIT_WORKTREE_TOOL` / `callingCwd` / `buildWorktreeTool` / `src/host/agent-tool.ts` 整个区域）与 `git_conventions`（`buildConventionsTool` / `conventionsReadDocuments` / `conventionsWriteMerged` / `conventionReadText` / `conventionWriteText` / `conventionPointerBody` / `conventionRelativePath` / `CONVENTION_READ_MAX_CHARS`），连同 `Config.agentTool`、`effectiveConfig().agentTool`、`toolFiber` / `syncTool()` 与 `loader/volatile-update` 监听；提示词接手——写明「工作区文档管事、每份被替换文件留 `.bak-<时间戳>`、仓库文档变三行指针」；`patch-host` 24 处（省掉 `conventions-tool`，`config-schema` / `config-effective` / `prompt-mount` 换锚点）、locale 180 键、host 215/215 |
 | 1.13.1 | 删掉机械合并：`conventionsConsolidate` / `conventionsUnionSection` / `conventionsMergedBody`、`/git/conventions/consolidate` 路由、工具 `draft` 动作、客户端合并面板与 11 个 locale 键全部移除；合并只能由智能体读完全部文档后自己写（`read` → `write`）。locale 180 键、host 232/232 |
@@ -779,7 +780,53 @@ return part.replace(/^HEAD -> /, "").trim();
 - **`src/host/agent-tool.js` 是第一个「src 里的 `.js` 源」**：改它必须跑 `build-lib`，否则 `lib/index.js` 还是旧的；`build-lib` 幂等，连跑两次输出一致。
 - **发布这台机器上的两个固定坑**：① `curl` 走 schannel 默认要查吊销列表，离线时报 `CRYPT_E_REVOCATION_OFFLINE`（`HTTP 000`）——所有 `curl` 都加 `--ssl-no-revoke`；② 带 `Authorization` 的 GitHub API 请求**必须直连 `api.github.com`**，走 `gh-proxy.com` 会返回 `403 Resource not accessible by personal access token`（代理把身份搅了），`uploads.github.com` 也是直连；`https://ghfast.top/.../releases/latest/download/...` 只用来做下载校验。
 
+### 7.20 1.17.0：建仓兜底 + 提交拦截
+
+#### 7.20.1 为什么做（用户原话在前）
+
+用户原话（m00765）：「现在我直接让AI建立GIT仓库，它不一定会按照我们插件的命名规范和各种规范来，怎么解决」。诊断出四个缺口：① 规范只靠 `conventionsPromptMount` → `conventionsPromptText` 注入磁盘上的 `GIT_CONVENTIONS.md`，AI 裸 `git init` 出来的新仓库根本没有文档，于是**零注入**；② `/git/init` 路由只跑 `git init -b`，不写文档；③ worktree 命名/托管目录只有走 `addWorktree()` 才被强制，裸 `git worktree add` 全绕过；④ 提交规范只有事后展示（`commitCompliance()` + `/git/compliance`），不拦。用户拍板只做 **L2a 工具 `init` + L2b commit-msg hook**（L1 提示词 preamble、L3 侧栏审计不做）。
+
+#### 7.20.2 `init`：同一个工具多一个动作（`src/host/agent-tool.js`）
+
+- 签名变成 `buildWorktreeTool(ctx, service, featureConfig)`；`featureConfig` 是 `lib/index.js` 里那个返回活跃配置的函数（读 `conventionsDoc` 用），注册处传第三参。
+- `action` 枚举：`init` / `create` / `list` / `remove`；新参数 `branch`（默认 `main`）、`framework`、`strict`、`language`（`zh|en|mixed`）、`ai`（`required|optional|forbidden`）。
+- `init` 顺序（**先校验再动 git**）：`framework` 不是 `none` 且 `conventionFrameworkOf()` 认不出 → `convention-unknown-framework`，目录不碰；`repoInit(service, cwd, branch || "main")`（复用路由同一个 `repoInit`，已存在仓库 → `already-repository`）；`conventionBodyOf(framework || "none", basename(cwd), strict, language, ai)` 生成正文；文档名取 `featureConfig().conventionsDoc`（缺省 `CONVENTION_DOC_DEFAULT`）；`repoWriteConvention(cwd, docName, body, {force: false})`——与面板/路由同一条写路径，备份、`convention-exists`、指针规则一处维护。
+- 返回 `{ok, root, branch, docPath, framework, strict, hook, note}`；`hook` 就是安装器的结果（`installed` / `not-a-repository` / `not-strict` / `foreign-hook` / `removed`）。`note` 提示「`git commit --no-verify` 可绕过」。
+- 仍是**唯一**的模型可见工具、仍无条件注册；创建 worktree 的交互入口仍留在分支 chip（`data-dsh-part="worktree-create"` / `worktree-manage`）。
+
+#### 7.20.3 `commit-msg` hook：strict 文档落盘时自动装（`src/host/conventions.js`）
+
+- 触发点在 `repoWriteConvention()` 写成功之后：只对**仓库级**文档（`doc` 不以 `CONVENTION_WORKSPACE_DIR` 即 `.dsh/` 开头）且目录确有 `.git` 时调 `repoInstallCommitMsgHook(root, doc, parseConventionRules(body))`；`.dsh/` 工作区文档不装（它管很多仓库，装哪都是越界）。返回值新增 `hook` 字段。
+- 落盘两个文件到 hooks 目录：`.git/hooks/commit-msg`（三行 `sh` shim：`checker="$(dirname "$0")/graph-commit-msg.mjs"`；`command -v node` 不在就打一行提示并 `exit 0`，不让坏工具链把人锁在提交之外）与 `.git/hooks/graph-commit-msg.mjs`（自包含 ESM 检查器，chmod 493）。
+- 检查器内嵌 `PAYLOAD = {doc, rules, vocab, aliases, nonImperative}`（`rules` = `parseConventionRules` 的 `maxSubject/types/lowercase/noPeriod/imperative/languageStated/language/ai/aiStated`），在纯 JS 里**复刻** `conventionSubjectReasons` 的同类检查（长度、type 词表 + 中文别名 + `type(scope)!: ` 全角冒号、小写、句号、语言、AI trailer），原因与 `--no-verify` 提示中英双语打印后 `exit 1`。
+- 安全阀：hook 带 `CONVENTION_HOOK_MARKER`；写非 strict 文档时若现有 hook 带我们的 marker 则删 hook + checker（`{removed: true}` 或 `reason: "not-strict"`）；**无 marker 的他人 hook 绝不覆盖**（`foreign-hook`，Husky 等赢）；`conventionHooksDir()` 尊重 `core.hooksPath`（`conventionGitConfigValue` 极简 INI 读，相对路径按仓库根解析）；`conventionGitDir()` 认 `.git` 文件（`gitdir: …`），所以 linked worktree / submodule 也行。写文件用 `node:fs/promises` 的 `rm`（`lib/index.js` 顶部 import 已补）。
+
+#### 7.20.4 测试与自检
+
+- `test-host.mjs` 第 [25] 段从 14 条扩成整套 init/hook 流程（临时仓库）：未知 framework 在 `git init` 前被拒；`init` 建仓 + 写 `strict: true` / `language: zh` + 两个 hook 文件都在；合规消息 exit 0；未知 type（且 stderr 提到 `GIT_CONVENTIONS.md`）、句号、超长、错语言各自 exit 1；`ai: "required"` 无 trailer exit 1 / 有 trailer exit 0；不带 strict 写文档但**不装** hook；重复 `init` 报 `already-repository`；`/git/convention {force:true, strict:false}` 之后 hook 被删。检查器用 `spawnSync(process.execPath, [checker, file])` 真跑。断言 **299 → 318**。
+- 另做过一次**真 git 冒烟**（不在测试套件里）：真的 `git commit` 被 hook 拦下并打印原因，合规消息通过，`--no-verify` 绕过。注意没有 staged 文件时 commit 在 hook 之前就失败。
+- 全链路：`build-lib`（`spliced 3573 / 2191 / 773 / 241`）→ `node --check` 两个产物 → `validate-lib`（189 键）→ `test-host`（**318/318**）→ `patch-host`（`applied 0, already present 25`）→ `preview-tab` 全段过（客户端没改，fixture 不变）。
+
+#### 7.20.5 类型面、包与文档
+
+- `package.json` → **1.17.0**；description 在「`git_worktree` fallback tool …」句后补 init + hook。
+- `lib/types/host/agent-tool.d.ts`（手写类型面）：头注释加 `init` 与 hook 的说明；`buildWorktreeTool` 第三参 `featureConfig?: () => { conventionsDoc?: string }`。
+- `README.md` / `README.zh.md`：兜底工具那条从「`create` / `list` / `remove`」扩成「`init`（写文档 + strict 装 hook，`--no-verify` 逃生）、`create` …」。
+- `DEVELOPMENT.md`：327 行注释、364 行「1.16.0 工具不碰文档」、411 行动作列表同步；新增 *Initializing a repository (1.17.0)* 一节；Known debt 补 hook 的边界（只看标题与 trailer、不读正文、无 `node` 视为放行、clone 不带 hook、他人 hook 不碰）。
+- 本次**没改** `lib/client.js` / `preview/*` / `src/index.ts` / `src/host/config.ts` / `scripts/build-lib.mjs` / `scripts/patch-host.mjs`（`HOST_MODULES` 里 agent-tool.js 与区域名 1.16.0 就位了）。
+
+#### 7.20.6 坑（1.17.0 新增）
+
+- **fake subprocess 的契约**：`GitService` 的 runner 不读 child 的流，而是 `spec` 返回 `{done: Promise<{exitCode}>, collected: {stdout: {readFrom: () => ({text})}, stderr: …}}`。冒烟脚本一开始按 `{child, done}` 写，init 直接 `Cannot read properties of undefined (reading 'stdout')`。
+- **`git commit` 报「exit 1 + 空 stderr」不一定是 hook**：没有 staged 文件时 git 在 hook 之前就失败；先 `git add` 再看。
+- **别用 `node -e` 去改 ESM 源文件**：`-e` 里是 CJS，写进去的 `require` 会让 `node` 直接语法报错；用 write/edit 工具重写，或写成 `.mjs` 再跑。
+- **write 工具会报 `file changed since it was read`**：bash 或前一版写入过该文件后必须先 `read` 再 `write`。
+- **hook 只在「写文档」这条路上自动装**：手动编辑文档里的 `strict:` 不会触发；要重新走一次面板/`/git/convention`/工具的写路径。
+- **验证钩子别只信单元测试**：客户端/宿主外的真实 `git commit` 冒烟一次，能立刻暴露 shim、PATH、hooksPath 这类环境差异。
+
 ## 8. 待办清单（按优先级）
+
+14. **待发 1.17.0**（建仓兜底 + 提交拦截，未发布、未换装）：`package.json` 已是 1.17.0；自检应得 `spliced 3573 / 2191 / 773 / 241`、`already present 25`、`189 locale keys`、host **318/318**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:`）→ `git gpush` → tag `v1.17.0`（sha 用 `git rev-parse` 现取）→ Release（资产名 `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 变了）。
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
 

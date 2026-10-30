@@ -62,7 +62,8 @@ function patch(label, anchor, replacement, guard) {
 patch(
 	"imports",
 	'import { mkdir, readdir, realpath } from "node:fs/promises";',
-	'import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";'
+	'import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";',
+	'import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";'
 );
 
 // 2. Config schema: document name + the auto-scaffold switch.

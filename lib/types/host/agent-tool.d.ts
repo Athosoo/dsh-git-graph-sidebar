@@ -1,9 +1,15 @@
 /**
- * The model-facing `git_worktree` tool: an agent may create, list, and remove
- * managed worktrees of its calling session's repository. It is the single
- * model-visible git verb of the package — the sidebar renders no worktree
- * controls, so this tool is how an agent falls back when no worktree exists
- * yet or a stale one has to go.
+ * The model-facing `git_worktree` tool: an agent may initialize a repository
+ * (writing the conventions document for it and installing the commit-msg hook
+ * a strict document asks for), and create, list, and remove managed worktrees
+ * of its calling session's repository. It is the single model-visible git verb
+ * of the package — the sidebar renders no worktree controls, so this tool is
+ * how an agent falls back when no worktree exists yet or a stale one has to go.
+ *
+ * `init` exists because an agent that runs a bare `git init` leaves the new
+ * repository without the conventions document the plugin's prompt is built
+ * from; the hook then makes the document bite on a plain `git commit`, with
+ * `git commit --no-verify` as the escape hatch.
  *
  * EnterWorktree-style session migration is impossible (a session's cwd is
  * immutable), and under workspace-write sandboxing the agent cannot write
@@ -24,6 +30,11 @@ export declare const GIT_WORKTREE_TOOL = "git_worktree";
  * here, business rejections return `ok: false` values so the model can react.
  * @param ctx - host context (workspace registry for create/remove linkage).
  * @param service - the workspace-gated git service.
+ * @param featureConfig - resolves the row's live config (document name for init).
  */
-export declare function buildWorktreeTool(ctx: Context, service: GitService): ToolDefinition;
+export declare function buildWorktreeTool(
+	ctx: Context,
+	service: GitService,
+	featureConfig?: () => { conventionsDoc?: string },
+): ToolDefinition;
 //# sourceMappingURL=agent-tool.d.ts.map

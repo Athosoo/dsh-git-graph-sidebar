@@ -624,13 +624,268 @@ async function repoWriteConvention(root, docName, body, options) {
 			}
 		};
 	}
+	// A strict document is only enforced if `git commit` itself refuses bad
+	// messages, so writing the document also maintains the commit-msg hook.
+	// Workspace documents (`.dsh/...`) govern other repositories, not this root.
+	const ownDocument = doc.startsWith(CONVENTION_WORKSPACE_DIR + "/") !== true;
+	const hook = ownDocument ? await repoInstallCommitMsgHook(root, doc, parseConventionRules(body)).catch((error) => ({
+		installed: false,
+		reason: "hook-error",
+		message: String(error)
+	})) : {
+		installed: false,
+		reason: "workspace-document"
+	};
 	return {
 		ok: true,
 		value: {
 			docPath,
 			bytes: Buffer.byteLength(body, "utf8"),
-			created: !state.exists
+			created: !state.exists,
+			hook
 		}
+	};
+}
+
+/* ---------------------------------------------------------------------- *
+ * Commit-message enforcement: the hook.
+ *
+ * Every other convention feature is advisory - the prompt asks, the sidebar
+ * reports. Only a `commit-msg` hook can stop a commit, and only the document's
+ * own `strict: true` turns it on. The rule set is parsed here (host side) and
+ * embedded into a self-contained node checker, so the hook keeps working with
+ * no plugin process and no network.
+ * ---------------------------------------------------------------------- */
+
+/** Every generated hook carries this marker; a hook without it belongs to someone else. */
+const CONVENTION_HOOK_MARKER = "dsh-git-graph commit-msg hook";
+
+/** The node checker written next to the hook shim (same directory). */
+const CONVENTION_HOOK_CHECKER = "graph-commit-msg.mjs";
+
+/**
+ * The `.git` directory behind a working tree. In a linked worktree (and a
+ * submodule) `.git` is a file carrying `gitdir: <path>`.
+ * @param root - repository root.
+ * @returns the git directory, or undefined when `root` is not a checkout.
+ */
+async function conventionGitDir(root) {
+	const dotGit = join(root, ".git");
+	const info = await stat(dotGit).catch(() => null);
+	if (info === null) return void 0;
+	if (info.isDirectory()) return dotGit;
+	if (info.isFile() !== true) return void 0;
+	try {
+		const text = await readFile(dotGit, "utf8");
+		const match = /^gitdir:[ \t]*(.+)$/m.exec(text);
+		if (match === null) return void 0;
+		const target = match[1].trim();
+		return isAbsolute(target) ? target : resolve(root, target);
+	} catch {
+		return void 0;
+	}
+}
+
+/** One value out of an INI-shaped git config, or "" when the section/key is absent. */
+function conventionGitConfigValue(text, section, key) {
+	let current = "";
+	for (const raw of String(text).split(/\r?\n/)) {
+		const line = raw.trim();
+		const header = /^\[([^\]]+)\]$/.exec(line);
+		if (header !== null) {
+			current = header[1].trim().toLowerCase();
+			continue;
+		}
+		if (current !== section) continue;
+		const equals = line.indexOf("=");
+		if (equals < 0) continue;
+		if (line.slice(0, equals).trim().toLowerCase() !== key.toLowerCase()) continue;
+		return line.slice(equals + 1).trim();
+	}
+	return "";
+}
+
+/**
+ * Where git reads hooks: `core.hooksPath` wins over `.git/hooks`. A relative
+ * value resolves against the working tree root, as git does.
+ * @param root - repository root.
+ * @param gitDir - the resolved git directory.
+ * @returns the hooks directory to write into.
+ */
+async function conventionHooksDir(root, gitDir) {
+	let config = "";
+	try {
+		config = await readFile(join(gitDir, "config"), "utf8");
+	} catch {
+		config = "";
+	}
+	const hooksPath = conventionGitConfigValue(config, "core", "hooksPath");
+	if (hooksPath !== "") return isAbsolute(hooksPath) ? hooksPath : resolve(root, hooksPath);
+	return join(gitDir, "hooks");
+}
+
+/**
+ * The `commit-msg` shim: one line of git glue, then the node checker. A
+ * missing node prints a note and lets the commit through instead of locking
+ * the repository; `--no-verify` remains the documented escape hatch.
+ * @returns the hook script.
+ */
+function conventionCommitMsgHookScript() {
+	return "#!/bin/sh\n" + "# " + CONVENTION_HOOK_MARKER + " - generated from the repository's conventions document; the plugin rewrites it.\n" + "checker=\"$(dirname \"$0\")/" + CONVENTION_HOOK_CHECKER + "\"\n" + "if [ ! -f \"$checker\" ]; then exit 0; fi\n" + "if ! command -v node >/dev/null 2>&1; then\n" + "  echo 'dsh-git-graph: node not found - commit-msg rules were not checked' >&2\n" + "  exit 0\n" + "fi\n" + "exec node \"$checker\" \"$1\"\n";
+}
+
+/**
+ * The self-contained checker: the parsed rules are embedded as a JSON literal,
+ * so the hook keeps enforcing the document that was current when it was
+ * written, without reading the plugin or the document again.
+ * @param doc - the document name the rules came from (for the message).
+ * @param rules - the parsed rule set (`parseConventionRules`).
+ * @returns the checker source.
+ */
+function conventionCommitMsgChecker(doc, rules) {
+	const payload = {
+		doc,
+		rules: {
+			maxSubject: rules.maxSubject,
+			types: rules.types,
+			lowercase: rules.lowercase,
+			noPeriod: rules.noPeriod,
+			imperative: rules.imperative,
+			languageStated: rules.languageStated,
+			language: rules.language,
+			ai: rules.ai,
+			aiStated: rules.aiStated
+		},
+		vocab: CONVENTION_TYPE_VOCAB,
+		aliases: CONVENTION_TYPE_ALIASES,
+		nonImperative: CONVENTION_NON_IMPERATIVE
+	};
+	return String.raw`#!/usr/bin/env node
+// ${CONVENTION_HOOK_MARKER} - generated from ${doc}; do not edit, the plugin rewrites it.
+import { readFileSync } from "node:fs";
+
+const PAYLOAD = ${JSON.stringify(payload, null, "\t")};
+
+function typeOf(name) {
+	const text = typeof name === "string" ? name.trim().toLowerCase() : "";
+	if (text === "") return "";
+	if (PAYLOAD.vocab.indexOf(text) >= 0) return text;
+	return typeof PAYLOAD.aliases[text] === "string" ? PAYLOAD.aliases[text] : "";
+}
+
+const file = process.argv[2];
+if (!file) process.exit(0);
+let text = "";
+try {
+	text = readFileSync(file, "utf8");
+} catch {
+	process.exit(0);
+}
+const lines = text.replace(/\r\n/g, "\n").split("\n");
+const subject = (lines.find((line) => line.trim() !== "" && line.trim().slice(0, 1) !== "#") || "").trim();
+if (subject === "") process.exit(0);
+const rules = PAYLOAD.rules;
+const reasons = [];
+if (rules.maxSubject !== null && subject.length > rules.maxSubject) reasons.push("length");
+let rest = subject;
+if (rules.types !== null) {
+	const match = subject.match(/^([\p{L}\p{N}_-]+)(?:\([^)]*\))?!?[:：]\s+/u);
+	const type = match === null ? "" : typeOf(match[1]);
+	if (type === "" || rules.types.indexOf(type) < 0) reasons.push("type");
+	else rest = subject.slice(match[0].length);
+}
+if (rules.languageStated && rules.language === "en" && /[\u4e00-\u9fff]/.test(subject)) reasons.push("lang");
+if (rules.languageStated && rules.language === "zh" && !/[\u4e00-\u9fff]/.test(subject)) reasons.push("lang");
+const first = rest.slice(0, 1);
+if (rules.lowercase && /[A-Za-z]/.test(first) && first === first.toUpperCase()) reasons.push("case");
+if (rules.noPeriod && /[.。]$/.test(subject)) reasons.push("period");
+if (rules.imperative) {
+	const head = rest.split(/\s+/)[0] || "";
+	if (!/[^\x00-\x7F]/.test(head) && PAYLOAD.nonImperative.indexOf(head.toLowerCase()) >= 0) reasons.push("mood");
+}
+const body = lines.slice(1).join("\n");
+const trailer = /^\s*(assisted-by|co-authored-by):/im.test(body);
+if (rules.aiStated && rules.ai === "required" && !trailer) reasons.push("ai");
+if (rules.aiStated && rules.ai === "forbidden" && trailer) reasons.push("ai");
+if (reasons.length === 0) process.exit(0);
+const hint = {
+	length: "长度超过上限 / subject is longer than " + rules.maxSubject + " characters",
+	type: "type 前缀不合规 / type prefix must be one of: " + (rules.types === null ? "" : rules.types.join(", ")),
+	lang: "主题语言不对 / wrong subject language: " + rules.language,
+	case: "首字母必须小写 / subject must start lowercase",
+	period: "末尾不能有句号 / no trailing period",
+	mood: "标题用祈使句 / imperative mood instead of an inflected verb",
+	ai: rules.ai === "required" ? "需要 AI 署名尾行 / AI attribution trailer required (Assisted-by:)" : "禁止 AI 署名尾行 / AI attribution trailer forbidden"
+};
+console.error("dsh-git-graph: " + PAYLOAD.doc + " 拦住了这条提交 / the conventions document rejects this message");
+for (const reason of reasons) console.error("  - " + (hint[reason] || reason));
+console.error("改写后重试；确需绕过用 git commit --no-verify / rewrite the message, or bypass with --no-verify");
+process.exit(1);
+`;
+}
+
+/**
+ * Install, refresh or retire the commit-msg hook of one repository. Only a
+ * strict document gets a hook; a document that stops being strict retires the
+ * one this plugin wrote. A `commit-msg` hook written by someone else is never
+ * overwritten (the document cannot silently swallow a team's own hook).
+ * @param root - repository root.
+ * @param doc - document name the rules came from.
+ * @param rules - the parsed rule set.
+ * @returns what happened, for the write response and the tests.
+ */
+async function repoInstallCommitMsgHook(root, doc, rules) {
+	const gitDir = await conventionGitDir(root);
+	if (gitDir === void 0) return {
+		installed: false,
+		reason: "not-a-repository"
+	};
+	const hooksDir = await conventionHooksDir(root, gitDir);
+	const hookPath = join(hooksDir, "commit-msg");
+	const checkerPath = join(hooksDir, CONVENTION_HOOK_CHECKER);
+	let current = "";
+	try {
+		current = await readFile(hookPath, "utf8");
+	} catch {
+		current = "";
+	}
+	const ours = current.includes(CONVENTION_HOOK_MARKER);
+	if (rules.strict !== true) {
+		if (ours !== true) return {
+			installed: false,
+			reason: "not-strict"
+		};
+		await rm(hookPath, { force: true }).catch(() => {});
+		await rm(checkerPath, { force: true }).catch(() => {});
+		return {
+			installed: false,
+			removed: true,
+			reason: "not-strict"
+		};
+	}
+	if (current !== "" && ours !== true) return {
+		installed: false,
+		reason: "foreign-hook",
+		hookPath
+	};
+	try {
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(checkerPath, conventionCommitMsgChecker(doc, rules), "utf8");
+		await writeFile(hookPath, conventionCommitMsgHookScript(), {
+			encoding: "utf8",
+			mode: 493
+		});
+	} catch (error) {
+		return {
+			installed: false,
+			reason: "write-failed",
+			message: String(error)
+		};
+	}
+	return {
+		installed: true,
+		hookPath,
+		checkerPath
 	};
 }
 

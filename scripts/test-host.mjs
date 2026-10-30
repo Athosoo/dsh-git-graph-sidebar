@@ -11,7 +11,7 @@
  *
  *   node scripts/test-host.mjs
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { appendFile, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1168,7 +1168,7 @@ const noRules = await call("/git/compliance", { path: docless });
 	if (toolsEntry !== void 0) toolsEntry.callback(toolScope);
 	const tool = registeredTools.find((definition) => definition.name === "git_worktree");
 	check("the git_worktree definition is registered", tool !== void 0);
-	equal("the tool declares its three actions", JSON.stringify(tool?.parameters?.properties?.action?.enum), JSON.stringify(["create", "list", "remove"]));
+	equal("the tool declares its four actions", JSON.stringify(tool?.parameters?.properties?.action?.enum), JSON.stringify(["init", "create", "list", "remove"]));
 	const execIn = (cwd) => ({ agent: { session: { header: { cwd } } } });
 	if (tool !== void 0) {
 		const missingCwd = await tool.execute({ action: "list" }, { agent: { session: { header: {} } } });
@@ -1199,6 +1199,61 @@ const noRules = await call("/git/compliance", { path: docless });
 		} finally {
 			process.env.DSH_HOME = savedToolHome;
 		}
+
+		// init: the fallback that keeps a freshly created repository from
+		// starting without a document, plus the commit-msg hook the strict
+		// document installs.
+		const initStrict = join(workspace, "repos", "agent-init");
+		const initLoose = join(workspace, "repos", "agent-init-loose");
+		const initAi = join(workspace, "repos", "agent-init-ai");
+		const initBad = join(workspace, "repos", "agent-init-bad");
+		for (const dir of [initStrict, initLoose, initAi, initBad]) await mkdir(dir, { recursive: true });
+		const unknownFramework = await tool.execute({ action: "init", framework: "bogus" }, execIn(initBad));
+		equal("init refuses an unknown framework", unknownFramework.code, "convention-unknown-framework");
+		const initialized = await tool.execute({ action: "init", framework: "conventional-commits", strict: true, language: "zh" }, execIn(initStrict));
+		check("init creates the repository and the document", initialized.ok === true && typeof initialized.docPath === "string", JSON.stringify(initialized).slice(0, 300));
+		const initDoc = await readFile(join(initStrict, "GIT_CONVENTIONS.md"), "utf8");
+		check("init writes strict: true and the language", /^strict: true$/m.test(initDoc) && /^language: zh$/m.test(initDoc));
+		check("init installs the commit-msg hook", initialized.hook?.installed === true, JSON.stringify(initialized.hook));
+		const hookPath = join(initStrict, ".git", "hooks", "commit-msg");
+		check("the hook script exists", await stat(hookPath).then((info) => info.isFile(), () => false));
+		const checkerPath = join(initStrict, ".git", "hooks", "graph-commit-msg.mjs");
+		check("the checker exists", await stat(checkerPath).then((info) => info.isFile(), () => false));
+		/** Run one generated checker against a message, like git would. */
+		const runChecker = async (checker, message) => {
+			const file = join(tmpdir(), "dsh-commit-msg-" + Math.random().toString(36).slice(2) + ".txt");
+			await writeFile(file, message, "utf8");
+			try {
+				return spawnSync(process.execPath, [checker, file], { encoding: "utf8" });
+			} finally {
+				await rm(file, { force: true });
+			}
+		};
+		const good = await runChecker(checkerPath, "feat(sidebar): 新增 worktree 分组\n\nAssisted-by: test\n");
+		equal("the checker accepts a compliant message", good.status, 0);
+		const badType = await runChecker(checkerPath, "update: 随便改点东西\n");
+		equal("the checker rejects an unknown type", badType.status, 1);
+		check("the rejection names the document", String(badType.stderr).includes("GIT_CONVENTIONS.md"), String(badType.stderr).slice(0, 200));
+		const badPeriod = await runChecker(checkerPath, "feat(sidebar): 新增 worktree 分组。\n");
+		equal("the checker rejects a trailing period", badPeriod.status, 1);
+		const longSubject = await runChecker(checkerPath, "feat(sidebar): " + "很长的主题".repeat(20) + "\n");
+		equal("the checker rejects an over-long subject", longSubject.status, 1);
+		const badLanguage = await runChecker(checkerPath, "feat(sidebar): add a worktree group\n");
+		equal("the checker rejects a subject in the wrong language", badLanguage.status, 1);
+		const aiInit = await tool.execute({ action: "init", framework: "conventional-commits", strict: true, ai: "required" }, execIn(initAi));
+		check("init can require the AI trailer", aiInit.ok === true && aiInit.hook?.installed === true, JSON.stringify(aiInit).slice(0, 300));
+		const aiChecker = join(initAi, ".git", "hooks", "graph-commit-msg.mjs");
+		const noTrailer = await runChecker(aiChecker, "feat(sidebar): 新增 worktree 分组\n");
+		equal("the checker requires the AI trailer", noTrailer.status, 1);
+		const withTrailer = await runChecker(aiChecker, "feat(sidebar): 新增 worktree 分组\n\nAssisted-by: test\n");
+		equal("the checker accepts the AI trailer", withTrailer.status, 0);
+		const loose = await tool.execute({ action: "init" }, execIn(initLoose));
+		check("init without strict writes the document but no hook", loose.ok === true && loose.hook?.installed !== true, JSON.stringify(loose).slice(0, 240));
+		check("a non-strict document leaves no commit-msg hook", await stat(join(initLoose, ".git", "hooks", "commit-msg")).then(() => false, () => true));
+		const again = await tool.execute({ action: "init" }, execIn(initStrict));
+		equal("init refuses a directory that is already a repository", again.code, "already-repository");
+		const retired = await call("/git/convention", { path: initStrict, framework: "conventional-commits", force: true, strict: false });
+		check("turning strict off retires the hook", retired.json?.ok === true && await stat(hookPath).then(() => false, () => true), retired.raw.slice(0, 200));
 	}
 
 	// Worktrees live outside the registered workspace; remove them before the
