@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-30（**1.17.0 已就绪，待发布**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
+> 最后更新：2026-10-30（**1.17.0 已发布、已推送、已装进 `desktop`**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`；commit `df524a8`、tag `v1.17.0`（sha `f91dac9`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` 947553 字节 sha256 `e7b14307…`（镜像下载校验一致）、`desktop` 已装 1.17.0。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
 
 ## 0. 一句话状态
 
@@ -826,7 +826,7 @@ return part.replace(/^HEAD -> /, "").trim();
 
 ## 8. 待办清单（按优先级）
 
-14. **待发 1.17.0**（建仓兜底 + 提交拦截，未发布、未换装）：`package.json` 已是 1.17.0；自检应得 `spliced 3573 / 2191 / 773 / 241`、`already present 25`、`189 locale keys`、host **318/318**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:`）→ `git gpush` → tag `v1.17.0`（sha 用 `git rev-parse` 现取）→ Release（资产名 `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 变了）。
+14. ~~发 1.17.0~~ **已完成**（建仓兜底 + 提交拦截；commit `df524a8`、tag `v1.17.0`（sha `f91dac9cd1f7c546b693c2bccef416998cd9d5d7`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` **947553** 字节 sha256 `e7b1430764da34849d552eefa863836d2c5e6e59d5bfe919aac6cde7626b5a61`、`desktop` 已装 1.17.0）。**用户需重启 DSH**（host 变了：init 动作与 hook 安装都在 host 侧）。原始步骤留档：`package.json` 已是 1.17.0；自检应得 `spliced 3573 / 2191 / 773 / 241`、`already present 25`、`189 locale keys`、host **318/318**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:`）→ `git gpush` → tag `v1.17.0`（sha 用 `git rev-parse` 现取）→ Release（资产名 `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 变了）。
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
 
@@ -879,7 +879,9 @@ return part.replace(/^HEAD -> /, "").trim();
 11. **`validate-lib.mjs` 是标配**：它抓「t() 用了但字典没有」和「分叉标识符没定义」——只有 `node --check` 抓不到的自由变量错误靠它。
 12. **`test-host.mjs` 的 `equal()` 第三参是 detail 不是期望值**，判断要用 `check()`；`git()` 辅助不返回 stdout。
 13. **gh-proxy.com 对认证 API 会伪装成别人**（返回代理账号身份），认证请求直连 `api.github.com`。
-14. **端口会变**：每次 DSH 重启 GUI 端口都不同，探测 `/git/repos` 前先读 runtime context，且 curl 超时要给足（冷启动 3 秒会 000）。
+14. **`git gpush main v1.17.0` 会把 tag 名当分支推**：远程多出一个 `refs/heads/v1.17.0`；推 tag 要用 `git push <url> refs/tags/v1.17.0`。删远程多余分支 `git push <url> --delete v1.17.0` 会被 CC Safety Net 拦（`git.push-delete`），只能让用户手动跑一次。
+
+15. **端口会变**：每次 DSH 重启 GUI 端口都不同，探测 `/git/repos` 前先读 runtime context，且 curl 超时要给足（冷启动 3 秒会 000）。
 15. **`lib/*.js` 的 region 内永手改**：手改会在下次 `build-lib.mjs` 被覆盖；要改就改 `src/**` 或 `scripts/patch-host.mjs`。
 16. **`build-lib.mjs` 的字典插入是按字典块判定的**（zh/en 各自），早期版本曾因为「全文件查 key」导致 en 漏插 4 个键。
 17. **长命令会被截断**：`ops_bash` 一次塞太长的 `cat > x <<'PY' … PY` 会被砍掉尾部（heredoc 未闭合，写出的脚本只剩前若干行）。长脚本要分块 `python - <<'PY'` 追加写。
