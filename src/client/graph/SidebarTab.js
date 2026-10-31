@@ -1565,6 +1565,8 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [templateBusy, setTemplateBusy] = react.useState(false);
 			/** The last failed template action, shown on the page. */
 			const [templateError, setTemplateError] = react.useState(null);
+			/** The built-in frameworks with their show/hide preference; null while loading. */
+			const [builtinTemplates, setBuiltinTemplates] = react.useState(null);
 			/** The last successful save or delete, shown until the next action. */
 			const [templateNotice, setTemplateNotice] = react.useState(null);
 			/** The picker's strict switch: rules become enforced policy, not advice. */
@@ -2066,8 +2068,9 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				});
 			}, [upgrade, writeConvention]);
 			/**
-			 * The template settings page. Everything below only manages the user's
-			 * own templates: the six built-ins are never editable or deletable.
+			 * The template settings page. Everything below manages the user's own
+			 * templates, plus a show/hide switch per built-in: the built-ins are never
+			 * editable or deletable, only hidden from the picker.
 			 */
 			/** Read the user's own convention templates from the host. */
 			const loadTemplates = react.useCallback(() => {
@@ -2078,6 +2081,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					}
 					const value = result.value !== null && result.value !== void 0 ? result.value : {};
 					setTemplates(Array.isArray(value.templates) ? value.templates : []);
+					setBuiltinTemplates(Array.isArray(value.builtins) ? value.builtins : []);
 					setTemplateStore(typeof value.path === "string" ? value.path : null);
 					setTemplateError(value.error !== void 0 && value.error !== null && typeof value.error.message === "string" ? value.error.message : null);
 				}).catch(() => setTemplateError(t("sidebar.templateError")));
@@ -2210,6 +2214,29 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setTemplateError(t("sidebar.templateError"));
 				});
 			}, [templateDeleteId, templateBusy, loadTemplates, refreshCatalog, t]);
+			/** Hide or show one built-in framework in the picker (never edits its body). */
+			const toggleBuiltin = react.useCallback((id, hidden) => {
+				if (templateBusy === true) return;
+				setTemplateBusy(true);
+				setTemplateError(null);
+				setTemplateNotice(null);
+				sidebarTabGit().conventionTemplates("toggle", {
+					id,
+					hidden
+				}).then((result) => {
+					setTemplateBusy(false);
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					setTemplateNotice(hidden === true ? t("sidebar.builtinHidden") : t("sidebar.builtinShown"));
+					loadTemplates();
+					refreshCatalog();
+				}).catch(() => {
+					setTemplateBusy(false);
+					setTemplateError(t("sidebar.templateError"));
+				});
+			}, [templateBusy, loadTemplates, refreshCatalog, t]);
 			/**
 			 * Hand the merge to the model. The agent reads every document itself and judges
 			 * the duplicates, so the request is copied for the conversation.
@@ -4000,10 +4027,52 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						disabled: templateBusy,
 						onClick: startTemplateCreate
 					}, t("sidebar.templateNew"))]);
+					const builtinRows = (builtinTemplates !== null ? builtinTemplates : []).map((framework) => {
+						const id = typeof framework.id === "string" ? framework.id : "";
+						const hidden = framework.hidden === true;
+						const name = zh && typeof framework.nameZh === "string" && framework.nameZh !== "" ? framework.nameZh : framework.name;
+						return h("div", {
+							key: "builtin-" + id,
+							"data-gitgraph-builtin": id,
+							"data-gitgraph-builtin-hidden": hidden ? "1" : void 0,
+							style: SIDEBAR_TAB_SETTINGS_ROW
+						}, [h("span", {
+							key: "name",
+							style: SIDEBAR_TAB_FRAMEWORK_NAME
+						}, typeof name === "string" && name !== "" ? name : id), h("span", {
+							key: "badge",
+							style: SIDEBAR_TAB_CONVENTIONS_CHIP
+						}, t("sidebar.templateBuiltin")), h("span", {
+							key: "state",
+							style: SIDEBAR_TAB_FRAMEWORK_META
+						}, hidden ? t("sidebar.builtinHidden") : t("sidebar.builtinShown")), h("button", {
+							key: "toggle",
+							type: "button",
+							"data-gitgraph-action": "builtin-toggle",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: templateBusy,
+							onClick: () => toggleBuiltin(id, hidden === false)
+						}, hidden ? t("sidebar.builtinShow") : t("sidebar.builtinHide"))]);
+					});
+					const builtinGroup = h("div", {
+						key: "builtins",
+						"data-gitgraph-builtin-group": true,
+						style: SIDEBAR_TAB_SETTINGS_CARD
+					}, [h("div", {
+						key: "head",
+						style: SIDEBAR_TAB_SETTINGS_ROW
+					}, [h("span", {
+						key: "title",
+						style: SIDEBAR_TAB_CONVENTIONS_TITLE
+					}, t("sidebar.builtinGroup")), h("span", {
+						key: "hint",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.builtinHint"))])].concat(builtinRows));
 					const listBody = rows.length === 0 ? h("span", {
 						key: "empty",
 						style: SIDEBAR_TAB_CONVENTIONS_NOTE
 					}, t("sidebar.templatesEmpty")) : rows;
+					parts.push(builtinGroup);
 					parts.push(h("div", {
 						key: "list",
 						"data-gitgraph-template-list": true,

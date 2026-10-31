@@ -338,6 +338,30 @@ async function main() {
 	await rm(templateStore, { force: true });
 	equal("removing the corrupt store heals the list", (await call(templatesRoute, {})).json?.value?.templates?.length, 0);
 
+	console.log("\n[2c] built-ins can be hidden from the picker, never edited");
+	const viewWithBuiltins = await call(templatesRoute, {});
+	equal("settings view lists seven built-ins", (viewWithBuiltins.json?.value?.builtins ?? null)?.length, 7);
+	check("built-ins are not custom", (viewWithBuiltins.json?.value?.builtins ?? []).every((item) => item.custom === false), JSON.stringify(viewWithBuiltins.json?.value?.builtins?.[0] ?? null));
+	check("built-ins start visible", (viewWithBuiltins.json?.value?.builtins ?? []).every((item) => item.hidden === false), JSON.stringify(viewWithBuiltins.json?.value?.builtins?.map((item) => item.hidden) ?? null));
+	const hidden = await call(templatesRoute, { action: "toggle", id: "git-flow", hidden: true });
+	check("toggle ok", hidden.json?.ok === true, hidden.raw.slice(0, 220));
+	equal("toggle reports the id", hidden.json?.value?.id, "git-flow");
+	equal("toggle reports hidden", hidden.json?.value?.hidden, true);
+	const hiddenCatalog = await call("/git/conventions", { path: emptyRepo });
+	equal("hiding drops one card from the picker", hiddenCatalog.json?.value?.catalog?.length, 6);
+	check("the hidden framework leaves the picker", (hiddenCatalog.json?.value?.catalog ?? []).every((item) => item.id !== "git-flow"), JSON.stringify((hiddenCatalog.json?.value?.catalog ?? []).map((item) => item.id)));
+	const hiddenView = await call(templatesRoute, {});
+	check("the view remembers the hidden flag", (hiddenView.json?.value?.builtins ?? []).some((item) => item.id === "git-flow" && item.hidden === true), JSON.stringify(hiddenView.json?.value?.builtins ?? null));
+	check("the store carries hiddenBuiltins", /"hiddenBuiltins"/.test(await readFile(templateStore, "utf8")));
+	const hiddenPreview = await call("/git/convention/preview", { path: commitRepo, framework: "git-flow" });
+	check("a hidden built-in can still be previewed", hiddenPreview.json?.ok === true, hiddenPreview.raw.slice(0, 240));
+	equal("an unknown framework cannot be toggled", (await call(templatesRoute, { action: "toggle", id: "ghost", hidden: true })).json?.error?.code, "convention-template-unknown");
+	equal("a non-boolean flag is refused", (await call(templatesRoute, { action: "toggle", id: "git-flow", hidden: "yes" })).json?.error?.code, "convention-template-invalid");
+	const shown = await call(templatesRoute, { action: "toggle", id: "git-flow", hidden: false });
+	check("show ok", shown.json?.ok === true, shown.raw.slice(0, 220));
+	equal("showing restores the card", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 7);
+	check("a shown built-in is visible again", (await call(templatesRoute, {})).json?.value?.builtins?.some((item) => item.id === "git-flow" && item.hidden === false), JSON.stringify((await call(templatesRoute, {})).json?.value?.builtins ?? null));
+
 	console.log("\n[3] /git/convention writes a framework template");
 	const applied = await call("/git/convention", { path: emptyRepo, framework: "conventional-commits" });
 	check("write ok", applied.json?.ok === true, applied.raw.slice(0, 300));

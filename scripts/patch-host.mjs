@@ -501,7 +501,7 @@ patch(
 
 // 21. User convention templates: a path-less JSON store under `$DSH_HOME`, so
 //     the request is dispatched before the `path` requirement (same place as
-//     `/git/config`). The actions are list / starter / get / save / delete; the
+//     `/git/config`). The actions are list / starter / get / save / delete / toggle;
 //     store itself is validated and written by the conventions module, and no
 //     workspace gate is needed because no repository path is touched.
 patch(
@@ -552,6 +552,16 @@ patch(
 \t\t\t\twriteJson(res, 200, OK(deleted.value));
 \t\t\t\treturn;
 \t\t\t}
+\t\t\tif (action === "toggle") {
+\t\t\t\tconst toggled = await conventionTemplateBuiltinVisibility(input.id, input.hidden);
+\t\t\t\tif (toggled.ok !== true) {
+\t\t\t\t\twriteJson(res, 200, FAIL(toggled.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tctx.logger.info("dsh-git-graph: " + (toggled.value.hidden === true ? "hid" : "showed") + " built-in framework " + toggled.value.id);
+\t\t\t\twriteJson(res, 200, OK(toggled.value));
+\t\t\t\treturn;
+\t\t\t}
 \t\t\twriteJson(res, 200, FAIL({
 \t\t\t\tcode: "convention-template-action",
 \t\t\t\tmessage: "unknown action"
@@ -559,6 +569,27 @@ patch(
 \t\t\treturn;
 \t\t}`,
 	'\t\tif (pathname === "/git/convention/templates") {'
+);
+
+// 22. A bundle that already carries the templates route without the visibility
+//     action gets only that branch, instead of a second copy of the route.
+patch(
+	"convention-template-toggle",
+	`\t\t\twriteJson(res, 200, FAIL({
+\t\t\t\tcode: "convention-template-action",`,
+	`\t\t\tif (action === "toggle") {
+\t\t\t\tconst toggled = await conventionTemplateBuiltinVisibility(input.id, input.hidden);
+\t\t\t\tif (toggled.ok !== true) {
+\t\t\t\t\twriteJson(res, 200, FAIL(toggled.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tctx.logger.info("dsh-git-graph: " + (toggled.value.hidden === true ? "hid" : "showed") + " built-in framework " + toggled.value.id);
+\t\t\t\twriteJson(res, 200, OK(toggled.value));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\twriteJson(res, 200, FAIL({
+\t\t\t\tcode: "convention-template-action",`,
+	'\t\t\tif (action === "toggle") {'
 );
 
 // A route case may appear exactly once: two copies mean an earlier run

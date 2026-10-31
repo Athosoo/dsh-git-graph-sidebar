@@ -178,6 +178,13 @@ const EXTRA_KEYS = [
 			['"sidebar.templateMine"', '"我的模板"'],
 			['"sidebar.templateManage"', '"管理模板"'],
 			['"sidebar.templateLoading"', '"读取中…"'],
+			['"sidebar.templateBuiltin"', '"内置"'],
+			['"sidebar.builtinGroup"', '"内置模板"'],
+			['"sidebar.builtinHint"', '"内置模板不可编辑或删除，只控制是否出现在选择列表"'],
+			['"sidebar.builtinShown"', '"显示中"'],
+			['"sidebar.builtinHidden"', '"已隐藏"'],
+			['"sidebar.builtinShow"', '"显示"'],
+			['"sidebar.builtinHide"', '"隐藏"'],
 		]
 	},
 	{
@@ -334,6 +341,13 @@ const EXTRA_KEYS = [
 			['"sidebar.templateMine"', '"My templates"'],
 			['"sidebar.templateManage"', '"Manage templates"'],
 			['"sidebar.templateLoading"', '"Loading…"'],
+			['"sidebar.templateBuiltin"', '"Built-in"'],
+			['"sidebar.builtinGroup"', '"Built-in templates"'],
+			['"sidebar.builtinHint"', '"Built-ins cannot be edited or deleted; the switch only controls whether they appear in the picker."'],
+			['"sidebar.builtinShown"', '"Shown"'],
+			['"sidebar.builtinHidden"', '"Hidden"'],
+			['"sidebar.builtinShow"', '"Show"'],
+			['"sidebar.builtinHide"', '"Hide"'],
 		]
 	}
 ];
@@ -461,12 +475,13 @@ const API_METHODS = [{
 }, {
 	guard: "git/convention/templates",
 	code: `
-			/** Read and write the user's own convention templates (list/starter/get/save/delete). */
+			/** Read and write the user's own convention templates (list/starter/get/save/delete/toggle). */
 			conventionTemplates(action, payload) {
 				const body = payload !== null && typeof payload === "object" ? payload : {};
 				const request = { action };
 				if (typeof body.id === "string") request.id = body.id;
 				if (body.template !== null && typeof body.template === "object") request.template = body.template;
+				if (typeof body.hidden === "boolean") request.hidden = body.hidden;
 				return post("git/convention/templates", request);
 			}`
 }];

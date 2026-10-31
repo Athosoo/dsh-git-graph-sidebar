@@ -429,6 +429,7 @@ const CONVENTION_CATALOG = [
 // starts with none so the create, pick and delete round trip is exercised by
 // the real handlers rather than by a canned list.
 let TEMPLATES = [];
+let HIDDEN_BUILTINS = [];
 const TEMPLATE_CALLS = [];
 const templateMetaOf = (template) => {
 	const meta = Object.assign({}, template);
@@ -679,7 +680,7 @@ const fakeFetch = async (path, init) => {
 		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null
 			? entry.conventions
 			: { doc: "GIT_CONVENTIONS.md", docPath: String(payload.path) + "/GIT_CONVENTIONS.md", exists: false, size: 0, draft: false };
-		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG.concat(TEMPLATES.map((template) => Object.assign(templateMetaOf(template), { custom: true }))) }, state);
+		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG.filter((framework) => HIDDEN_BUILTINS.indexOf(framework.id) < 0).concat(TEMPLATES.map((template) => Object.assign(templateMetaOf(template), { custom: true }))) }, state);
 	} else if (path === "git/convention/settings") {
 		// A switch-only update keeps the body, so the stub keeps the entry and only
 		// moves the two front fields.
@@ -778,7 +779,10 @@ const fakeFetch = async (path, init) => {
 		const storePath = WORKSPACE + "/.dsh/git-graph/conventions-templates.json";
 		const now = new Date().toISOString();
 		const unknown = failEnvelope("convention-template-unknown", "unknown template");
-		if (action === "list") value = { path: storePath, templates: TEMPLATES.map(templateMetaOf) };
+		if (action === "list") value = { path: storePath, builtins: CONVENTION_CATALOG.map((framework) => Object.assign({}, framework, {
+			custom: false,
+			hidden: HIDDEN_BUILTINS.indexOf(framework.id) >= 0
+		})), templates: TEMPLATES.map(templateMetaOf) };
 		else if (action === "starter") value = { id: "", name: "", body: "# 团队规范\n\n```yaml\nstatus: draft\nframework: none\n```\n\n## 提交信息\n\n- 说明占位\n" };
 		else if (action === "get") {
 			const template = TEMPLATES.find((item) => item.id === payload.id);
@@ -808,6 +812,13 @@ const fakeFetch = async (path, init) => {
 			if (existing !== undefined) TEMPLATES = TEMPLATES.map((item) => item.id === id ? saved : item);
 			else TEMPLATES = TEMPLATES.concat([saved]);
 			value = { template: saved, templates: TEMPLATES.map(templateMetaOf) };
+		} else if (action === "toggle") {
+			if (CONVENTION_CATALOG.every((framework) => framework.id !== payload.id)) return unknown;
+			if (typeof payload.hidden !== "boolean") return failEnvelope("convention-template-invalid", "hidden must be a boolean", "hidden");
+			HIDDEN_BUILTINS = payload.hidden === true
+				? HIDDEN_BUILTINS.concat([payload.id]).filter((id, index, all) => all.indexOf(id) === index)
+				: HIDDEN_BUILTINS.filter((id) => id !== payload.id);
+			value = { id: payload.id, hidden: payload.hidden === true };
 		} else if (action === "delete") {
 			const template = TEMPLATES.find((item) => item.id === payload.id);
 			if (template === undefined) return unknown;
@@ -1353,6 +1364,52 @@ if (!usingRealData) {
 	if (templateHtml.indexOf("data-gitgraph-template=") >= 0) throw new Error("the deleted template is still listed");
 	if (templateHtml.indexOf('data-gitgraph-settings="open"') < 0) throw new Error("the delete closed the settings page");
 	console.log("preview-tab: template settings page, custom picker card and two-step delete ok");
+	// Built-ins are read-only rows with a visibility switch: hiding one only drops
+	// its picker card, and switching it back restores it.
+	const ensurePicker = async () => {
+		templateHtml = (await templateMount.render()).html;
+		if (templateHtml.indexOf("data-gitgraph-conventions-picker") < 0) {
+			click(actionNode("switch-conventions"), "open the picker");
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			templateHtml = (await templateMount.render()).html;
+		}
+	};
+	const builtinRows = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-builtin"] === "string");
+	if (builtinRows.length !== 7) throw new Error("expected seven built-in rows, got " + builtinRows.length);
+	const gitFlowRow = builtinRows.find((node) => node.props["data-gitgraph-builtin"] === "git-flow");
+	if (gitFlowRow === undefined) throw new Error("the built-ins list has no git-flow row");
+	if (gitFlowRow.props["data-gitgraph-builtin-hidden"] !== undefined) throw new Error("a built-in starts hidden");
+	if (findAll(gitFlowRow, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "template-delete").length > 0) throw new Error("a built-in row offers delete");
+	const hideButton = findAll(gitFlowRow, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "builtin-toggle")[0];
+	if (hideButton === undefined) throw new Error("the built-in row has no visibility switch");
+	click(hideButton, "hide git-flow");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	templateHtml = (await templateMount.render()).html;
+	if (HIDDEN_BUILTINS.indexOf("git-flow") < 0) throw new Error("hiding a built-in did not reach the store");
+	const hiddenRow = findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-builtin"] === "git-flow")[0];
+	if (hiddenRow === undefined || hiddenRow.props["data-gitgraph-builtin-hidden"] !== "1") throw new Error("the hidden built-in row is not marked hidden");
+	click(actionNode("settings-close"), "close settings after hiding");
+	await templateMount.render();
+	await ensurePicker();
+	const visibleCards = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
+	if (visibleCards.length !== 6) throw new Error("hiding a built-in should leave six cards, got " + visibleCards.length);
+	if (visibleCards.some((node) => node.props["data-gitgraph-framework"] === "git-flow")) throw new Error("the hidden built-in still has a picker card");
+	click(actionNode("conventions-settings"), "manage templates again");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	await templateMount.render();
+	const showRow = findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-builtin"] === "git-flow")[0];
+	const showButton = showRow === undefined ? undefined : findAll(showRow, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "builtin-toggle")[0];
+	if (showButton === undefined) throw new Error("the hidden built-in has no switch to show it again");
+	click(showButton, "show git-flow");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	await templateMount.render();
+	if (HIDDEN_BUILTINS.length !== 0) throw new Error("showing a built-in did not clear the hidden list");
+	click(actionNode("settings-close"), "close settings after showing");
+	await templateMount.render();
+	await ensurePicker();
+	const restoredCards = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
+	if (restoredCards.length !== 7) throw new Error("restoring a built-in should bring back seven cards, got " + restoredCards.length);
+	console.log("preview-tab: built-in visibility switch ok");
 }
 
 // Ref chips are per branch, not per ref: a local branch and its remote twin

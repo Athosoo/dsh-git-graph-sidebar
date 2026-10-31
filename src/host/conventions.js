@@ -657,6 +657,7 @@ function conventionTemplatesReadSync() {
 	if (cached !== undefined && cached.key === key) {
 		return {
 			templates: cached.templates,
+			hiddenBuiltins: cached.hiddenBuiltins,
 			path,
 			error: cached.error
 		};
@@ -665,10 +666,12 @@ function conventionTemplatesReadSync() {
 		conventionTemplatesCache = {
 			key,
 			templates: [],
+			hiddenBuiltins: [],
 			error: null
 		};
 		return {
 			templates: [],
+			hiddenBuiltins: [],
 			path,
 			error: null
 		};
@@ -681,6 +684,7 @@ function conventionTemplatesReadSync() {
 		const view = {
 			key,
 			templates: [],
+			hiddenBuiltins: [],
 			error: {
 				code: "convention-template-store",
 				message: "cannot read " + path + ": " + message
@@ -689,6 +693,7 @@ function conventionTemplatesReadSync() {
 		conventionTemplatesCache = view;
 		return {
 			templates: view.templates,
+			hiddenBuiltins: view.hiddenBuiltins,
 			path,
 			error: view.error
 		};
@@ -697,6 +702,7 @@ function conventionTemplatesReadSync() {
 		const view = {
 			key,
 			templates: [],
+			hiddenBuiltins: [],
 			error: {
 				code: "convention-template-store",
 				message: "unsupported template store format: " + path
@@ -705,6 +711,7 @@ function conventionTemplatesReadSync() {
 		conventionTemplatesCache = view;
 		return {
 			templates: view.templates,
+			hiddenBuiltins: view.hiddenBuiltins,
 			path,
 			error: view.error
 		};
@@ -715,13 +722,25 @@ function conventionTemplatesReadSync() {
 		if (record !== undefined) templates.push(record);
 	}
 	templates.sort((left, right) => left.createdAt - right.createdAt);
+	const hiddenBuiltins = [];
+	if (Array.isArray(parsed.hiddenBuiltins)) {
+		const seenHidden = new Set();
+		for (const rawId of parsed.hiddenBuiltins) {
+			if (typeof rawId !== "string" || seenHidden.has(rawId) === true) continue;
+			if (conventionFrameworkOf(rawId) === undefined) continue;
+			seenHidden.add(rawId);
+			hiddenBuiltins.push(rawId);
+		}
+	}
 	conventionTemplatesCache = {
 		key,
 		templates,
+		hiddenBuiltins,
 		error: null
 	};
 	return {
 		templates,
+		hiddenBuiltins,
 		path,
 		error: null
 	};
@@ -730,6 +749,11 @@ function conventionTemplatesReadSync() {
 /** All user templates, in creation order (empty when the store is missing or corrupt). */
 function conventionUserTemplates() {
 	return conventionTemplatesReadSync().templates;
+}
+
+/** Built-in framework ids the user hid from the picker (a UI preference, not a rule). */
+function conventionHiddenBuiltins() {
+	return conventionTemplatesReadSync().hiddenBuiltins;
 }
 
 /** One user template by id; undefined when the id is unknown. */
@@ -771,8 +795,9 @@ function conventionFrameworkOf(id) {
  * by the user's own templates (`custom: true`). No document bodies here.
  */
 function conventionCatalog() {
+	const hiddenBuiltins = new Set(conventionHiddenBuiltins());
 	return [
-		...CONVENTION_FRAMEWORKS.map((framework) => ({
+		...CONVENTION_FRAMEWORKS.filter((framework) => hiddenBuiltins.has(framework.id) === false).map((framework) => ({
 			id: framework.id,
 			name: framework.name,
 			nameZh: framework.nameZh,
@@ -825,8 +850,21 @@ function conventionTemplateStarter() {
 /** The settings view: where the store lives, plus metadata for each user template. */
 function conventionTemplatesView() {
 	const read = conventionTemplatesReadSync();
+	const hiddenBuiltins = new Set(read.hiddenBuiltins);
 	const view = {
 		path: read.path,
+		builtins: CONVENTION_FRAMEWORKS.map((framework) => ({
+			id: framework.id,
+			name: framework.name,
+			nameZh: framework.nameZh,
+			tagline: framework.tagline,
+			taglineZh: framework.taglineZh,
+			bestFor: framework.bestFor,
+			bestForZh: framework.bestForZh,
+			url: framework.url,
+			custom: false,
+			hidden: hiddenBuiltins.has(framework.id)
+		})),
 		templates: read.templates.map((template) => Object.assign(conventionTemplateMeta(template), {
 			bodyBytes: Buffer.byteLength(template.body, "utf8")
 		}))
@@ -900,7 +938,7 @@ function conventionTemplateValidate(input) {
 }
 
 /** Write the whole store atomically; returns an error object or null. */
-async function conventionTemplatesWrite(templates) {
+async function conventionTemplatesWrite(templates, hiddenBuiltins) {
 	const path = conventionTemplatesFile();
 	const temporary = path + ".tmp-" + String(process.pid) + "-" + String(Date.now());
 	try {
@@ -909,7 +947,8 @@ async function conventionTemplatesWrite(templates) {
 		});
 		await writeFile(temporary, JSON.stringify({
 			version: CONVENTION_TEMPLATE_STORE_VERSION,
-			templates
+			templates,
+			hiddenBuiltins
 		}, null, "\t") + "\n", "utf8");
 		await rename(temporary, path);
 	} catch (error) {
@@ -961,7 +1000,7 @@ async function conventionTemplateSave(input) {
 		});
 		if (index < 0) templates.push(record);
 		else templates[index] = record;
-		const failure = await conventionTemplatesWrite(templates);
+		const failure = await conventionTemplatesWrite(templates, read.hiddenBuiltins);
 		if (failure !== null) return {
 			ok: false,
 			error: failure
@@ -994,7 +1033,7 @@ async function conventionTemplateDelete(id) {
 		if (index < 0) return conventionTemplateFailure("convention-template-unknown", "no such user template: " + String(id), "id");
 		const templates = read.templates.slice();
 		templates.splice(index, 1);
-		const failure = await conventionTemplatesWrite(templates);
+		const failure = await conventionTemplatesWrite(templates, read.hiddenBuiltins);
 		if (failure !== null) return {
 			ok: false,
 			error: failure
@@ -1003,6 +1042,38 @@ async function conventionTemplateDelete(id) {
 			ok: true,
 			value: {
 				deleted: templateId
+			}
+		};
+	});
+}
+
+/**
+ * Show or hide one built-in framework in the picker. The body and the built-in
+ * entry stay untouched, and hiding is never a rule: documents that already
+ * copied the framework keep working.
+ */
+async function conventionTemplateBuiltinVisibility(id, hidden) {
+	const frameworkId = typeof id === "string" ? id.trim() : "";
+	if (frameworkId === "" || conventionFrameworkOf(frameworkId) === undefined) return conventionTemplateFailure("convention-template-unknown", "not a built-in framework: " + String(id), "id");
+	if (typeof hidden !== "boolean") return conventionTemplateFailure("convention-template-invalid", "hidden must be true or false", "hidden");
+	return conventionTemplateSerialize(async () => {
+		const read = conventionTemplatesReadSync();
+		if (read.error !== null) return {
+			ok: false,
+			error: read.error
+		};
+		const next = read.hiddenBuiltins.filter((current) => current !== frameworkId);
+		if (hidden === true) next.push(frameworkId);
+		const failure = await conventionTemplatesWrite(read.templates, next);
+		if (failure !== null) return {
+			ok: false,
+			error: failure
+		};
+		return {
+			ok: true,
+			value: {
+				id: frameworkId,
+				hidden
 			}
 		};
 	});
