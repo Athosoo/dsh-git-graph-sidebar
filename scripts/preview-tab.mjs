@@ -1306,7 +1306,14 @@ if (!usingRealData) {
 	click(gear, "template settings gear");
 	templateHtml = (await templateMount.render()).html;
 	if (templateHtml.indexOf('data-gitgraph-settings="open"') < 0) throw new Error("the gear did not open the settings page");
-	if (templateHtml.indexOf("data-gitgraph-template-list") < 0) throw new Error("the settings page has no template list");
+	if (templateHtml.indexOf("data-gitgraph-settings-menu") < 0) throw new Error("the settings page has no entry list");
+	if (templateHtml.indexOf("data-gitgraph-template-list") >= 0) throw new Error("the settings entry list already shows the template manager");
+	const templatesEntry = findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-settings-entry"] === "templates")[0];
+	if (templatesEntry === undefined) throw new Error("the settings menu has no template management entry");
+	click(templatesEntry, "open template management");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf('data-gitgraph-settings-section="templates"') < 0) throw new Error("the template entry did not open the template manager");
+	if (templateHtml.indexOf("data-gitgraph-template-list") < 0) throw new Error("the template manager has no template list");
 	if (templateHtml.indexOf("data-gitgraph-template=") >= 0) throw new Error("the template list does not start empty");
 	settingsHtml = templateHtml;
 	const newButton = actionNode("template-new");
@@ -1327,6 +1334,16 @@ if (!usingRealData) {
 	templateHtml = (await templateMount.render()).html;
 	if (TEMPLATES.length !== 1) throw new Error("saving did not store the template");
 	if (templateHtml.indexOf('data-gitgraph-template="team-strict"') < 0) throw new Error("the saved template is missing from the list");
+	// The manager has a back button to the settings entry list.
+	const backButton = actionNode("settings-back");
+	if (backButton === undefined) throw new Error("the template manager has no back button");
+	click(backButton, "back to the settings menu");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf("data-gitgraph-settings-menu") < 0) throw new Error("the back button did not return to the settings menu");
+	if (templateHtml.indexOf("data-gitgraph-template-list") >= 0) throw new Error("the back button left the template list open");
+	click(findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-settings-entry"] === "templates")[0], "open template management again");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf("data-gitgraph-template-list") < 0) throw new Error("reopening the manager lost the template list");
 	// Close the page and open the framework picker: the custom template has to
 	// appear as an extra card with the custom badge.
 	const closeButton = actionNode("settings-close");
@@ -1345,10 +1362,13 @@ if (!usingRealData) {
 	if (allCards.length !== 8) throw new Error("expected seven built-in cards plus one custom card, got " + allCards.length);
 	// Reopen the settings page, delete the template in two steps and confirm the
 	// list is empty again.
-	const manageButton = actionNode("conventions-settings");
+	const manageButton = actionNode("conventions-manage");
 	if (manageButton === undefined) throw new Error("the picker has no manage button");
 	click(manageButton, "manage templates");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	await templateMount.render();
 	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf('data-gitgraph-settings-section="templates"') < 0) throw new Error("the manage button did not open the template manager");
 	const deleteButton = actionNode("template-delete");
 	if (deleteButton === undefined) throw new Error("the template row has no delete button");
 	click(deleteButton, "ask to delete the template");
@@ -1394,7 +1414,7 @@ if (!usingRealData) {
 	const visibleCards = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
 	if (visibleCards.length !== 6) throw new Error("hiding a built-in should leave six cards, got " + visibleCards.length);
 	if (visibleCards.some((node) => node.props["data-gitgraph-framework"] === "git-flow")) throw new Error("the hidden built-in still has a picker card");
-	click(actionNode("conventions-settings"), "manage templates again");
+	click(actionNode("conventions-manage"), "manage templates again");
 	await new Promise((resolve) => setTimeout(resolve, 40));
 	await templateMount.render();
 	const showRow = findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-builtin"] === "git-flow")[0];

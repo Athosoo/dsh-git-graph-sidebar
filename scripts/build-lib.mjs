@@ -185,6 +185,9 @@ const EXTRA_KEYS = [
 			['"sidebar.builtinHidden"', '"已隐藏"'],
 			['"sidebar.builtinShow"', '"显示"'],
 			['"sidebar.builtinHide"', '"隐藏"'],
+			['"sidebar.settingsTemplates"', '"模板管理"'],
+			['"sidebar.settingsTemplatesDesc"', '"管理自定义模板，以及内置模板的显示与隐藏"'],
+			['"sidebar.settingsBack"', '"返回"'],
 		]
 	},
 	{
@@ -348,6 +351,9 @@ const EXTRA_KEYS = [
 			['"sidebar.builtinHidden"', '"Hidden"'],
 			['"sidebar.builtinShow"', '"Show"'],
 			['"sidebar.builtinHide"', '"Hide"'],
+			['"sidebar.settingsTemplates"', '"Template management"'],
+			['"sidebar.settingsTemplatesDesc"', '"Manage your own templates and which built-in frameworks show up in the picker."'],
+			['"sidebar.settingsBack"', '"Back"'],
 		]
 	}
 ];

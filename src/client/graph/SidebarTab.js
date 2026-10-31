@@ -1549,8 +1549,10 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [catalog, setCatalog] = react.useState(null);
 			/** Whether the framework picker is open under the conventions strip. */
 			const [pickerOpen, setPickerOpen] = react.useState(false);
-			/** Whether the template settings page replaces the tab content. */
+			/** Whether the settings page replaces the tab content. */
 			const [settingsOpen, setSettingsOpen] = react.useState(false);
+			/** Which settings section is showing: "menu" (the entry list) or "templates". */
+			const [settingsSection, setSettingsSection] = react.useState("menu");
 			/** The user's own templates as read from the host; null while loading. */
 			const [templates, setTemplates] = react.useState(null);
 			/** Where the template store lives, for the page footer. */
@@ -2086,9 +2088,10 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					setTemplateError(value.error !== void 0 && value.error !== null && typeof value.error.message === "string" ? value.error.message : null);
 				}).catch(() => setTemplateError(t("sidebar.templateError")));
 			}, [t]);
-			/** Open the settings page and read the store on the way in. */
+			/** Open the settings menu and read the store on the way in. */
 			const openSettings = react.useCallback(() => {
 				setSettingsOpen(true);
+				setSettingsSection("menu");
 				setTemplateDraft(null);
 				setTemplateCreating(false);
 				setTemplateDeleteId(void 0);
@@ -2096,6 +2099,24 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				setTemplateNotice(null);
 				loadTemplates();
 			}, [loadTemplates]);
+			/** Open the settings page straight on the template manager (from the picker). */
+			const openTemplateSettings = react.useCallback(() => {
+				setSettingsOpen(true);
+				setSettingsSection("templates");
+				setTemplateDraft(null);
+				setTemplateCreating(false);
+				setTemplateDeleteId(void 0);
+				setTemplateError(null);
+				setTemplateNotice(null);
+				loadTemplates();
+			}, [loadTemplates]);
+			/** Go back from a section to the settings entry list. */
+			const showSettingsMenu = react.useCallback(() => {
+				setSettingsSection("menu");
+				setTemplateDraft(null);
+				setTemplateCreating(false);
+				setTemplateDeleteId(void 0);
+			}, []);
 			const closeSettings = react.useCallback(() => {
 				setSettingsOpen(false);
 				setTemplateDraft(null);
@@ -3606,10 +3627,10 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						groups.push(h("button", {
 							key: "manage",
 							type: "button",
-							"data-gitgraph-action": "conventions-settings",
+							"data-gitgraph-action": "conventions-manage",
 							style: SIDEBAR_TAB_DETAIL_BUTTON,
 							disabled: conventionBusy,
-							onClick: openSettings
+							onClick: openTemplateSettings
 						}, t("sidebar.templateManage")));
 						groups.push(h("button", {
 							key: "scaffold",
@@ -3860,19 +3881,28 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				"data-gitgraph-sidebar-body": true
 			}, body);
 			/**
-			 * The template settings page. It replaces the whole tab content while
-			 * open: the user's own templates and the editor for one of them. The
-			 * six built-in frameworks stay read-only, and never appear here.
+			 * The settings page. It replaces the whole tab content while open and has
+			 * two levels: the entry list (currently one entry, *Template manager*) and
+			 * the template manager itself — the user's own templates, the editor for
+			 * one of them, and the read-only rows of every built-in framework.
 			 */
 			const settingsPage = (() => {
 				const zh = sidebarTabIsZh();
-				const head = h("div", {
-					key: "settings-head",
-					style: SIDEBAR_TAB_SETTINGS_HEAD
-				}, [h("span", {
+				const headItems = [];
+				if (settingsSection === "templates") headItems.push(h("button", {
+					key: "back",
+					type: "button",
+					"data-gitgraph-action": "settings-back",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: showSettingsMenu,
+					title: t("sidebar.settingsBack"),
+					"aria-label": t("sidebar.settingsBack")
+				}, "\u2190"));
+				headItems.push(h("span", {
 					key: "title",
 					style: SIDEBAR_TAB_CONVENTIONS_TITLE
-				}, t("sidebar.settingsTitle")), h("button", {
+				}, settingsSection === "templates" ? t("sidebar.settingsTitle") : t("sidebar.settings")));
+				headItems.push(h("button", {
 					key: "close",
 					type: "button",
 					"data-gitgraph-action": "settings-close",
@@ -3880,7 +3910,42 @@ const SIDEBAR_TAB_COMPLIANCE = {
 					onClick: closeSettings,
 					title: t("sidebar.close"),
 					"aria-label": t("sidebar.close")
-				}, "\u00d7")]);
+				}, "\u00d7"));
+				const head = h("div", {
+					key: "settings-head",
+					style: SIDEBAR_TAB_SETTINGS_HEAD
+				}, headItems);
+				if (settingsSection === "menu") return h("div", {
+					key: "settings",
+					"data-gitgraph-settings": "open",
+					"data-gitgraph-settings-section": "menu",
+					style: SIDEBAR_TAB_SETTINGS_PAGE
+				}, [head, h("span", {
+					key: "menu-hint",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.settingsHint")), h("div", {
+					key: "menu",
+					"data-gitgraph-settings-menu": true,
+					style: SIDEBAR_TAB_SETTINGS_CARD
+				}, [h("button", {
+					key: "templates",
+					type: "button",
+					"data-gitgraph-settings-entry": "templates",
+					style: Object.assign({}, SIDEBAR_TAB_SETTINGS_ROW, {
+						background: "transparent",
+						border: "none",
+						cursor: "pointer",
+						padding: 0,
+						textAlign: "left"
+					}),
+					onClick: () => setSettingsSection("templates")
+				}, [h("span", {
+					key: "label",
+					style: SIDEBAR_TAB_FRAMEWORK_NAME
+				}, t("sidebar.settingsTemplates")), h("span", {
+					key: "desc",
+					style: SIDEBAR_TAB_FRAMEWORK_TAG
+				}, t("sidebar.settingsTemplatesDesc"))])])]);
 				const parts = [head];
 				if (templateError !== null) parts.push(h("span", {
 					key: "error",
@@ -4086,6 +4151,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				return h("div", {
 					key: "settings",
 					"data-gitgraph-settings": "open",
+					"data-gitgraph-settings-section": "templates",
 					style: SIDEBAR_TAB_SETTINGS_PAGE
 				}, parts);
 			})();
