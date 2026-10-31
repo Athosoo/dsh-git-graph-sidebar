@@ -757,6 +757,7 @@ const SIDEBAR_TAB_COMPLIANCE = {
 		/** The corner button that turns the opt-in off again. */
 		const SIDEBAR_TAB_MAIN_VIEW_CLOSE = {
 			position: "absolute",
+			zIndex: 2,
 			top: 6,
 			right: 8,
 			width: 22,
@@ -2736,7 +2737,9 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				"aria-pressed": settingsOpen ? "true" : "false",
 				style: Object.assign({}, SIDEBAR_TAB_BUTTON, {
 					marginLeft: "auto"
-				}),
+				}, inMainView ? {
+					marginRight: 28
+				} : {}),
 				onClick: () => {
 					if (settingsOpen) closeSettings();
 					else openSettings();
