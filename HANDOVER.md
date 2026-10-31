@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-31（**1.18.0 已发布、已推送、已装进 `desktop`**：用户自建规范模板——host 侧 `$DSH_HOME/git-graph/conventions-templates.json` + `POST /git/convention/templates`（list/starter/get/save/delete）、`conventionCatalog()` 合并 `custom: false/true`、`conventionBodyOf()` 对用户模板强制 `framework: <id>`；客户端工具栏右端齿轮打开 tab 内设置页（列表/新建/编辑/两段删除），picker 末尾「我的模板」分组带自定义徽章；host **360/360**、locale **221 键**、`spliced 4053 / 2618 / 773 / 241`、`patch-host applied 0 / already present 26`；commit `6321560`、tag `v1.18.0`（sha `63215607…`）、release id **429663056**、资产 `dsh-git-graph-sidebar.tgz` 971973 字节 sha256 `9645b70c…`（镜像下载校验一致）、`desktop` 已装 1.18.0；**用户需重启 DSH**（host 与客户端都变了））。上一版 2026-10-30（**1.17.0 已发布、已推送、已装进 `desktop`**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`；commit `df524a8`、tag `v1.17.0`（sha `f91dac9`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` 947553 字节 sha256 `e7b14307…`（镜像下载校验一致）、`desktop` 已装 1.17.0。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
+> 最后更新：2026-10-31（**1.19.0 已构建、待发布**：内置框架扩到七套，新增 `worktree-flow`（Git Worktree 工作流）——一分支一 checkout 的提交、合并与回收规则；catalogue、测试与文档同步 6→7，其余同 1.18.0。上一版 **1.18.0 已发布、已推送、已装进 `desktop`**：用户自建规范模板——host 侧 `$DSH_HOME/git-graph/conventions-templates.json` + `POST /git/convention/templates`（list/starter/get/save/delete）、`conventionCatalog()` 合并 `custom: false/true`、`conventionBodyOf()` 对用户模板强制 `framework: <id>`；客户端工具栏右端齿轮打开 tab 内设置页（列表/新建/编辑/两段删除），picker 末尾「我的模板」分组带自定义徽章；host **360/360**、locale **221 键**、`spliced 4053 / 2618 / 773 / 241`、`patch-host applied 0 / already present 26`；commit `6321560`、tag `v1.18.0`（sha `63215607…`）、release id **429663056**、资产 `dsh-git-graph-sidebar.tgz` 971973 字节 sha256 `9645b70c…`（镜像下载校验一致）、`desktop` 已装 1.18.0；**用户需重启 DSH**（host 与客户端都变了））。上一版 2026-10-30（**1.17.0 已发布、已推送、已装进 `desktop`**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`；commit `df524a8`、tag `v1.17.0`（sha `f91dac9`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` 947553 字节 sha256 `e7b14307…`（镜像下载校验一致）、`desktop` 已装 1.17.0。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
 
 ## 0. 一句话状态
 
@@ -30,7 +30,7 @@
 2. **better-sidebar 里的「仓库图谱」tab**：仓库树（层级关系）+ 真 SVG 泳道图谱 + 提交详情卡 + 全屏视图 + 缩放。
 3. **静默热重载**：SSE（`git/events`）+ 20 秒轮询 + 窗口聚焦刷新，刷新不清空、不闪；关闭再打开走模块级缓存直接出图。
 4. **给 AI 的交接**：复制提交信息 / 复制 SHA / **复制回滚提示**（三种命令 + 风险）。
-5. **Git 规范体系**：选定框架（六套）→ 写 `GIT_CONVENTIONS.md`（空壳/模板）→ 状态带（已定稿/草稿/未建立）→ 通过 `systemPrompt` **每步注入模型**，且**就近继承**（仓库自己的优先，其次祖先容器仓库，最后给容器下的仓库指针清单）。
+5. **Git 规范体系**：选定框架（七套）→ 写 `GIT_CONVENTIONS.md`（空壳/模板）→ 状态带（已定稿/草稿/未建立）→ 通过 `systemPrompt` **每步注入模型**，且**就近继承**（仓库自己的优先，其次祖先容器仓库，最后给容器下的仓库指针清单）。
 6. **一键初始化仓库**：工作区根不是仓库时，tab 提供 `git init`（可选初始分支 main/master/trunk/develop），建完自动接规范流程。
 
 明确**不做**：tab 内新建/删除/切换 worktree（在 chip 的对话框里，或由智能体用 `git_worktree` 工具；只读的关联 checkout 列表自 1.15.0 起已有，且自 1.16.0 起连「无关联」「读取失败」这些提示都不画——tab 是静默只读投影）、完整 diff 查看器、悬停卡（做过，按要求删了）。AI 自己 `git init` 建仓也走同一工具：`git_worktree` 的 `init` 动作（1.17.0）。
@@ -240,7 +240,7 @@ node scripts/preview-tab.mjs    # fixture mode; add --repos/--graph for a real w
 
 ### 7.3.2 强约束模式
 
-- 文档里写 `strict: true`（`conventionStrictOf` 认 true / yes / on / 是 / 开 / 强制）。`conventionWithStrict(body, strict)` 负责改写：先删掉所有 `strict:` 行，再插到 `status:` 行之后；`conventionBodyOf(frameworkId, repoName, strict)` 对六套框架都过一遍。
+- 文档里写 `strict: true`（`conventionStrictOf` 认 true / yes / on / 是 / 开 / 强制）。`conventionWithStrict(body, strict)` 负责改写：先删掉所有 `strict:` 行，再插到 `status:` 行之后；`conventionBodyOf(frameworkId, repoName, strict)` 对七套框架都过一遍。
 - `conventionPreview(root, docName, frameworkId, strict)` 与 `workspaceConvention(root, docName, action, frameworkId, force, strictMode)` 都透传；`scripts/patch-host.mjs` 的第 14 段（`convention-strict-write`、`workspace-strict-write`）把 `payload.strict` 从 `/git/convention` 与 `/git/workspace-convention` 接到 `conventionBodyOf` / `workspaceConvention`。
 - 注入提示：strict 文档追加「This document is strict … never commit a message that breaks them … Subjects may be Chinese, English or a mix of both - only the rules below decide.」，并附上 `conventionRuleSummary` 那一行。
 - 客户端 `GitApi.conventionOptions(path, framework, force, strict)`（`scripts/build-lib.mjs` 的 `API_METHODS`，**guard 必须选只出现在注入代码里的子串** `conventionOptions(path, framework, force, strict)`，否则会被 tab 源码里的调用点误判成「已存在」）。
@@ -876,11 +876,41 @@ return part.replace(/^HEAD -> /, "").trim();
 - `ROADMAP.md`：Conventions 现状行与 1.18.0 交付行（**built, waiting for release**）。
 - 本版动了 host + client + 构建脚本 + 预览产物，**装进 desktop 后必须重启 DSH**。
 
+### 7.22 1.19.0：第七套内置框架 `worktree-flow`
+
+#### 7.22.1 为什么做
+
+用户（m00760）：「在官方提供的模板里面加一个工作树模板可以吗」。插件自己已经有 worktree 相关能力（`git_worktree` 工具、图谱的「关联 checkout」、worktree 组的只读投影），但**规范文档层面**没有一套讲「一分支一 checkout 怎么管」的框架——用 git-flow 或 github-flow 起步的团队会得到一份完全不提 worktree 的文档。做成第 7 套内置（而不是用户模板）的理由：它是通用工程实践，当归档在官方目录里，所有仓库的 picker 默认就能选；用户模板是「团队私货」，两者不混。
+
+#### 7.22.2 改了什么
+
+- `src/host/conventions.js`：`CONVENTION_FRAMEWORKS` 在 `gitlab-flow` 之后新增第 7 项，`id: "worktree-flow"`，正文与其它六套同构（H1 + ```yaml `status: settled` / `framework: worktree-flow` + 六节 + 参考）：提交信息（与主仓库同一套格式，scope 不写目录名）、分支模型（一分支一 worktree、`git worktree add ../<repo>-<slug> -b <type>/<slug> origin/main`、目录放仓库外或进 `.gitignore`）、评审与合并（worktree 内提交/推送、合并后 `git worktree remove` + `git branch -d` + `git worktree prune`、`git config` 默认写共享 `.git/config` 需 `--worktree`、子模块/hook/依赖不自动共享）、版本与发布（tag 只在主 checkout、`rebase origin/main`、产物与 `node_modules` 各 checkout 独立）、变更日志（单一写入者）、检查清单。元数据 `nameZh` 用「Git Worktree 工作流」，`bestForZh` 用「同时维护多个版本、并行开发或热修的项目」，`url` 指 `https://git-scm.com/docs/git-worktree`。
+- `src/host/agent-tool.js`：`framework` 参数的描述补 `worktree-flow`（这里以前漏过 `conventional-branch`/`gitlab-flow`，已一并校对）。
+- `scripts/test-host.mjs`：`six` → `seven` 的期望值（内置 catalogue 数量、ids 串、与用户模板合并后的数量与顺序、删除后回到的数量、坏 store 时的数量、容器路线的 catalogue 数量），共 7 处。
+- `scripts/preview-tab.mjs`：`CONVENTION_CATALOG` fixture 补第 7 项（卡片文案与其它框架同一形状）、picker 卡片数断言 6→7、带一个用户模板时 7→8。
+- `README.md` / `README.zh.md`：六套→七套，表格加「Worktree 工作流」行。
+- `ROADMAP.md`：Conventions 现状行 six→seven；交付表加 1.19.0 行（built, waiting for release）。
+- `DEVELOPMENT.md`：布局表「the six framework templates」→ seven；preview 段「六张卡」→ 七张；设置页段「六张卡 picker」→ 七张。
+- `HANDOVER.md`：本条 + 顶部「最后更新」+ §8 第 16 条；§0 的「六套」历史行（1.1.0）不动。
+- `package.json`：**1.19.0**；description 里「six built-in frameworks」→ seven。
+
+#### 7.22.3 自检
+
+`build-lib`（客户端 spliced 行数不变 4053；conventions 2680、branches 773、agent-tool 241）→ `patch-host`（`applied 0 / already present 26`，1.19.0 没有新路由）→ `node --check` ×2 → `validate-lib`（**221 键**，没加新 key）→ `test-host`（**360/360**，只改期望值不改断言数量）→ `preview-tab`（picker 7 卡、设置页流程不变）。
+
+#### 7.22.4 坑
+
+- 「六套」散落在 host 描述、测试期望、预览 fixture、两份 README、ROADMAP、DEVELOPMENT、HANDOVER 七八处；只改 `conventions.js` 会让 `test-host` 立刻红（catalogue 数量、ids 串）。grep `six|六套|six-card|six frameworks` 一次清干净，历史发布记录行（1.1.0、1.18.0）保留原数字。
+- 正文是模板字符串，正文里的反引号要写成 `` \` ``（单个反斜杠）；写错会让 `node --check` 报未闭合字符串。
+- 这一版**没有**改 host 路由、客户端组件或 locale，所以 desktop 换装后仍要重启 DSH 才看得到新框架（catalogue 是 host 侧常量）。
+
 ## 8. 待办清单（按优先级）
 
 14. ~~发 1.17.0~~ **已完成**（建仓兜底 + 提交拦截；commit `df524a8`、tag `v1.17.0`（sha `f91dac9cd1f7c546b693c2bccef416998cd9d5d7`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` **947553** 字节 sha256 `e7b1430764da34849d552eefa863836d2c5e6e59d5bfe919aac6cde7626b5a61`、`desktop` 已装 1.17.0）。**用户需重启 DSH**（host 变了：init 动作与 hook 安装都在 host 侧）。原始步骤留档：`package.json` 已是 1.17.0；自检应得 `spliced 3573 / 2191 / 773 / 241`、`already present 25`、`189 locale keys`、host **318/318**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:`）→ `git gpush` → tag `v1.17.0`（sha 用 `git rev-parse` 现取）→ Release（资产名 `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 变了）。
 
 15. ~~发 1.18.0~~ **已完成**（用户自建规范模板 + 设置页；commit `6321560`、tag `v1.18.0`（sha `63215607ae306a80ed1eb8f6ae887a9179da9aed`）、release id **429663056**、资产 `dsh-git-graph-sidebar.tgz` **971973** 字节 sha256 `9645b70c7bb3fb1cb0288b338a29558167e29c605a186dc68670a69b9a36dd29`（镜像 `releases/latest/download` 下载校验一致）、asset id **694090067**、`desktop` 已装 1.18.0）。自检：`spliced 4053 / 2618 / 773 / 241`、`already present 26`、`221 locale keys`、host **360/360**、`preview-tab` 全段过。**用户需重启 DSH**（host 与客户端都变了）。换装实录：把 tgz 拷进 `~/.dsh/artifacts/`，改 profile `package.json` 依赖行到 1.18.0，再 `node C:/Users/18316/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.mjs install --no-frozen-lockfile`（本次只换 1 个包，`billion-context` 仍是 0.1.209，未再被顺手升级）。本版原始记录见 §7.21。
+
+16. **发 1.19.0（待办）**：第七套内置框架 `worktree-flow`。`package.json` 已是 1.19.0；自检应得 `spliced 4053 / 2680 / 773 / 241`、`patch-host applied 0 / already present 26`、`221 locale keys`、host **360/360**、`preview-tab` 全段过（picker 7 卡、带模板时 8 卡）。步骤照 §5/§10：commit（中文 conventional + `Assisted-by:`，subject 建议 `feat(conventions): 内置 worktree-flow 第七套模板`）→ `git gpush` → tag `v1.19.0`（sha 用 `git rev-parse` 现取）→ GitHub Release（资产名 `dsh-git-graph-sidebar.tgz`，无版本号，sha256 记录进本条）→ 换装 `desktop`（profile `package.json` 依赖行改 1.19.0 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（catalogue 是 host 侧常量）。
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
 

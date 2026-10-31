@@ -234,8 +234,8 @@ async function main() {
 	const state = await call("/git/conventions", { path: emptyRepo });
 	check("/git/conventions ok", state.json?.ok === true, state.raw.slice(0, 200));
 	equal("document does not exist yet", state.json?.value?.exists, false);
-	equal("catalogue ships six frameworks", state.json?.value?.catalog?.length, 6);
-	equal("catalogue ids are stable", state.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow");
+	equal("catalogue ships seven frameworks", state.json?.value?.catalog?.length, 7);
+	equal("catalogue ids are stable", state.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow,worktree-flow");
 	check("built-in cards are marked built-in", (state.json?.value?.catalog ?? []).every((item) => item.custom === false), JSON.stringify(state.json?.value?.catalog?.[0]));
 
 	console.log("\n[2b] user templates: add, use, then delete");
@@ -294,8 +294,8 @@ async function main() {
 	check("list reports the body size", (listedTemplates.json?.value?.templates?.[0]?.bodyBytes ?? 0) === Buffer.byteLength(templateBody, "utf8"), String(listedTemplates.json?.value?.templates?.[0]?.bodyBytes));
 
 	const stateWithTemplate = await call("/git/conventions", { path: emptyRepo });
-	equal("catalogue merges the user template", stateWithTemplate.json?.value?.catalog?.length, 7);
-	equal("the user template is appended after the built-ins", stateWithTemplate.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow,team-strict");
+	equal("catalogue merges the user template", stateWithTemplate.json?.value?.catalog?.length, 8);
+	equal("the user template is appended after the built-ins", stateWithTemplate.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow,worktree-flow,team-strict");
 	equal("only one card is custom", (stateWithTemplate.json?.value?.catalog ?? []).filter((item) => item.custom === true).length, 1);
 
 	const gotTemplate = await call(templatesRoute, { action: "get", id: "team-strict" });
@@ -322,7 +322,7 @@ async function main() {
 	const deletedTemplate = await call(templatesRoute, { action: "delete", id: "team-strict" });
 	check("delete ok", deletedTemplate.json?.ok === true && deletedTemplate.json?.value?.deleted === "team-strict", deletedTemplate.raw.slice(0, 200));
 	equal("list is empty again", (await call(templatesRoute, {})).json?.value?.templates?.length, 0);
-	equal("catalogue is back to six", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 6);
+	equal("catalogue is back to seven", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 7);
 	equal("built-in templates cannot be deleted", (await call(templatesRoute, { action: "delete", id: "git-flow" })).json?.error?.code, "convention-template-reserved");
 	equal("unknown templates cannot be deleted", (await call(templatesRoute, { action: "delete", id: "ghost" })).json?.error?.code, "convention-template-unknown");
 	equal("a deleted template is unknown to preview", (await call("/git/convention/preview", { path: commitRepo, framework: "team-strict" })).json?.error?.code, "convention-unknown-framework");
@@ -334,7 +334,7 @@ async function main() {
 	const brokenStore = await call(templatesRoute, {});
 	equal("a corrupt store degrades to empty", (brokenStore.json?.value?.templates ?? null)?.length, 0);
 	equal("a corrupt store reports its code", brokenStore.json?.value?.error?.code, "convention-template-store");
-	equal("a corrupt store still leaves the catalogue at six", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 6);
+	equal("a corrupt store still leaves the catalogue at seven", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 7);
 	await rm(templateStore, { force: true });
 	equal("removing the corrupt store heals the list", (await call(templatesRoute, {})).json?.value?.templates?.length, 0);
 
@@ -763,7 +763,7 @@ const noRules = await call("/git/compliance", { path: docless });
 	check("/git/workspace-convention ok", wsState.json?.ok === true, wsState.raw.slice(0, 200));
 	equal("the workspace document lives in .dsh", wsState.json?.value?.doc, ".dsh/GIT_CONVENTIONS.md");
 	equal("the container has no workspace document yet", wsState.json?.value?.exists, false);
-	equal("the container gets the whole catalogue", (wsState.json?.value?.catalog ?? []).length, 6);
+	equal("the container gets the whole catalogue", (wsState.json?.value?.catalog ?? []).length, 7);
 	const wsPreview = await call("/git/workspace-convention", { path: wsContainer, action: "preview", framework: "conventional-commits" });
 	check("workspace preview ok", wsPreview.json?.ok === true, wsPreview.raw.slice(0, 200));
 	check("workspace preview lists additions", (wsPreview.json?.value?.added ?? 0) >= 5, JSON.stringify(wsPreview.json?.value?.added));

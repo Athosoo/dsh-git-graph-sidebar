@@ -112,9 +112,10 @@ updated: 待定           # 最近一次定稿日期
 `;
 
 /**
- * Frameworks that are proven in the field rather than invented here. Each body
- * is a ready-to-commit document; every one keeps the same six sections so a
- * team can swap frameworks without losing the structure.
+ * Frameworks and recipes that are proven in the field rather than invented
+ * here (worktree-flow is a named recipe kept in the same shape). Each body is
+ * a ready-to-commit document; every one keeps the same six sections so a team
+ * can swap frameworks without losing the structure.
  */
 const CONVENTION_FRAMEWORKS = [
 	{
@@ -485,13 +486,74 @@ framework: gitlab-flow
 
 - GitLab Flow — https://docs.gitlab.com/ee/topics/gitlab_flow.html
 `
+	},
+	{
+		id: "worktree-flow",
+		name: "Git Worktree Flow",
+		nameZh: "Git Worktree 工作流",
+		tagline: "One branch per checkout: how to create worktrees, where they live and when to reclaim them.",
+		taglineZh: "一条分支一个工作树：怎么建、放哪里、什么时候回收都写清楚。",
+		bestFor: "Projects that keep several versions or hotfixes checked out at once.",
+		bestForZh: "同时维护多个版本、并行开发或热修的项目。",
+		url: "https://git-scm.com/docs/git-worktree",
+		body: `# Git 规范 · Git Worktree 工作流 / Git Worktree Flow
+
+\`\`\`yaml
+status: settled
+framework: worktree-flow
+\`\`\`
+
+## 1. 提交信息 / Commit messages
+
+- 与主仓库同一套格式：\`type(scope): subject\`，祈使句，≤ 72 字符。
+- 工作树不改变提交格式；\`scope\` 写模块名，不写 worktree 目录名。
+- 提交前确认 hook 已生效：\`.git/hooks\` 由主仓库共享，\`commit-msg\` 只需装一次。
+
+## 2. 分支模型 / Branching
+
+- 一个工作树只检出一条分支，一条分支只允许一个 checkout（Git 自带约束，不要用 \`--force\` 绕过）。
+- 创建：\`git worktree add ../<repo>-<slug> -b <type>/<slug> origin/main\`；目录放仓库外，或放在 \`.gitignore\` 里的 \`.worktrees/\`，绝不提交进仓库。
+- 命名 \`<repo>-<slug>\`，slug 与分支同名；一个工作树只服务一个任务，任务结束即回收。
+- 基线统一取 \`origin/main\`；长期并存的热修工作树从发布 tag 切出。
+
+## 3. 评审与合并 / Review & merge
+
+- 在工作树内提交、推送、开 PR；评审与合并规则跟主仓库一致。
+- 合并后立刻 \`git worktree remove <path>\`，再 \`git branch -d <branch>\`；手工删目录后用 \`git worktree prune\` 清掉记录。
+- 不要在默认 worktree 里改主 checkout 的配置：\`git config\` 默认写共享的 \`.git/config\`，要改就用 \`git config --worktree\` 或先确认作用范围。
+- 子模块、hook、依赖目录不会自动共享：新工作树先 \`git submodule update --init\`，再按需安装依赖。
+
+## 4. 版本与发布 / Versioning & release
+
+- tag 只在主 checkout 打；工作树里不发布。
+- 同步用 \`git fetch && git rebase origin/main\`，不要从别的工作树 \`pull\`。
+- 每个工作树的构建产物、\`node_modules\`、缓存目录相互独立，不软链共享，避免并行构建互相踩。
+
+## 5. 变更日志 / Changelog
+
+- \`CHANGELOG.md\` 只有一个写入者（合并者或主 checkout 上的提交）；并行工作树不要各自改同一段。
+- 条目随 PR 合并补，不随工作树的创建/删除补。
+
+## 6. 检查清单 / Checklist
+
+- [ ] \`git worktree list\` 里没有孤儿记录（已删目录的条目已 \`prune\`）
+- [ ] 分支已合并的工作树已 \`remove\`，分支已删除
+- [ ] 工作树目录不在版本控制里
+- [ ] hook 生效、子模块与依赖已就位
+- [ ] 提交格式与主仓库一致
+
+## 参考 / References
+
+- git worktree — https://git-scm.com/docs/git-worktree
+- 本插件的工作树视图 — \`git_worktree\` 工具与侧栏「关联 checkout」
+`
 	}
 ];
 
 /* ------------------------------------------------------------------------- *
  * User-defined templates.
  *
- * The six frameworks above ship with the plugin and stay read-only. A user can
+ * The seven frameworks above ship with the plugin and stay read-only. A user can
  * also keep their own templates in one small JSON store under
  * `$DSH_HOME/git-graph/conventions-templates.json`: read synchronously (the
  * document writers this module feeds are sync), cached by file signature, and

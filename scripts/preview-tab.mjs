@@ -413,7 +413,7 @@ let REPOS = {
 	]
 };
 
-// The six proven frameworks the host serves on /git/conventions. The harness
+// The seven proven frameworks the host serves on /git/conventions. The harness
 // only needs the card fields; the document bodies live on the host.
 const CONVENTION_CATALOG = [
 	{ id: "conventional-commits", name: "Conventional Commits", nameZh: "约定式提交", tagline: "type(scope): subject, with a machine-readable body and footer", taglineZh: "type(scope): 描述，正文与脚注机器可读", bestFor: "projects that generate changelogs", bestForZh: "需要自动生成变更日志的项目", url: "https://www.conventionalcommits.org/" },
@@ -421,7 +421,8 @@ const CONVENTION_CATALOG = [
 	{ id: "git-flow", name: "Git Flow", nameZh: "Git Flow", tagline: "main, develop, release, hotfix and feature branches", taglineZh: "main/develop/release/hotfix/feature 五类分支", bestFor: "versioned releases with several supported versions", bestForZh: "多版本并行维护的发布节奏", url: "https://nvie.com/posts/a-successful-git-branching-model/" },
 	{ id: "trunk-based", name: "Trunk-Based Development", nameZh: "主干开发", tagline: "tiny commits straight to trunk behind flags", taglineZh: "小步提交直接进主干，用特性开关隔离", bestFor: "high-trust teams with strong CI", bestForZh: "CI 完善、协作紧密的团队", url: "https://trunkbaseddevelopment.com/" },
 	{ id: "conventional-branch", name: "Conventional Branch", nameZh: "约定式分支名", tagline: "feature/, bugfix/, hotfix/, release/ with ticket ids", taglineZh: "feature/、bugfix/、hotfix/、release/ 加需求编号", bestFor: "repositories that mine branch names in tooling", bestForZh: "用工具依赖分支名做自动化的仓库", url: "https://conventional-branch.github.io/" },
-	{ id: "gitlab-flow", name: "GitLab Flow", nameZh: "GitLab Flow", tagline: "environment branches plus feature branches", taglineZh: "环境分支加特性分支", bestFor: "staged deployments (staging before production)", bestForZh: "分阶段发布（预发再上线）", url: "https://docs.gitlab.com/ee/topics/gitlab_flow.html" }
+	{ id: "gitlab-flow", name: "GitLab Flow", nameZh: "GitLab Flow", tagline: "environment branches plus feature branches", taglineZh: "环境分支加特性分支", bestFor: "staged deployments (staging before production)", bestForZh: "分阶段发布（预发再上线）", url: "https://docs.gitlab.com/ee/topics/gitlab_flow.html" },
+	{ id: "worktree-flow", name: "Git Worktree Flow", nameZh: "Git Worktree 工作流", tagline: "one branch per checkout, with a place and a clean-up rule", taglineZh: "一条分支一个工作树，位置与回收都有规矩", bestFor: "several versions or hotfixes checked out at once", bestForZh: "多版本并行或热修同时开着的项目", url: "https://git-scm.com/docs/git-worktree" }
 ];
 
 // The user's own templates, served by /git/convention/templates. The harness
@@ -1254,7 +1255,7 @@ if (!usingRealData) {
 	if (scaffolded.conventions.draft !== true) throw new Error("auto scaffold must leave the document as a draft");
 	if (blankHtml.indexOf("data-gitgraph-conventions-picker") < 0) throw new Error("auto scaffold did not open the framework picker");
 	const cards = findAll(blankMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
-	if (cards.length !== 6) throw new Error("expected six framework cards, got " + cards.length);
+	if (cards.length !== 7) throw new Error("expected seven framework cards, got " + cards.length);
 	const draftHtml = blankHtml;
 	conventionsHtml = blankHtml;
 	click(cards[0], "framework card");
@@ -1330,7 +1331,7 @@ if (!usingRealData) {
 	if (customCard === undefined) throw new Error("the picker does not offer the custom template");
 	if (customCard.props["data-gitgraph-framework-custom"] !== "1") throw new Error("the custom template card is not marked as custom");
 	const allCards = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
-	if (allCards.length !== 7) throw new Error("expected six built-in cards plus one custom card, got " + allCards.length);
+	if (allCards.length !== 8) throw new Error("expected seven built-in cards plus one custom card, got " + allCards.length);
 	// Reopen the settings page, delete the template in two steps and confirm the
 	// list is empty again.
 	const manageButton = actionNode("conventions-settings");

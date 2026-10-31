@@ -72,7 +72,7 @@ function buildWorktreeTool(ctx, service, featureConfig) {
 				},
 				framework: {
 					type: "string",
-					description: "init: conventions framework id (conventional-commits, github-flow, git-flow, trunk-based, conventional-branch, gitlab-flow, none), or the id of a user template saved from the sidebar. Omit for the empty scaffold."
+					description: "init: conventions framework id (conventional-commits, github-flow, git-flow, trunk-based, conventional-branch, gitlab-flow, worktree-flow, none), or the id of a user template saved from the sidebar. Omit for the empty scaffold."
 				},
 				strict: {
 					type: "boolean",
