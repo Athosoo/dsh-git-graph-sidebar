@@ -1043,6 +1043,17 @@ if (canvasHosts.length === 0) throw new Error("graph canvas host missing");
 if (findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-tooltip"] === true).length > 0) {
     throw new Error("the hover card was removed but a tooltip is still rendered");
 }
+// Orphan roots and tips end with a short dash. The root panel carries the
+// twelve-commit fixture: one orphan root at the bottom and one tip at the top,
+// and every marker must be a short horizontal dash.
+const terminals = findAll(rootMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-terminal"] !== undefined);
+const rootTerminals = terminals.filter((node) => node.props["data-gitgraph-terminal"] === "root");
+const tipTerminals = terminals.filter((node) => node.props["data-gitgraph-terminal"] === "tip");
+if (rootTerminals.length !== 1) throw new Error("expected one root terminal marker, got " + rootTerminals.length);
+if (tipTerminals.length !== 1) throw new Error("expected one tip terminal marker, got " + tipTerminals.length);
+for (const terminal of terminals) {
+	if (terminal.props.y1 !== terminal.props.y2 || terminal.props.x1 >= terminal.props.x2) throw new Error("terminal marker is not a short horizontal dash");
+}
 const copyButton = findAll(detailMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === "copy-info")[0];
 if (copyButton === undefined) throw new Error("commit card has no copy action");
 click(copyButton, "copy commit info");
