@@ -2,7 +2,7 @@
 
 > 交接文档。目标读者：接手这个项目的下一个会话（人或 AI）。
 > 读这一份就够了：现状、改哪里、怎么发、坑在哪、下一步做什么。
-> 最后更新：2026-10-30（**1.17.0 已发布、已推送、已装进 `desktop`**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`；commit `df524a8`、tag `v1.17.0`（sha `f91dac9`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` 947553 字节 sha256 `e7b14307…`（镜像下载校验一致）、`desktop` 已装 1.17.0。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
+> 最后更新：2026-10-31（**1.18.0 已构建、待发布**：用户自建规范模板——host 侧 `$DSH_HOME/git-graph/conventions-templates.json` + `POST /git/convention/templates`（list/starter/get/save/delete）、`conventionCatalog()` 合并 `custom: false/true`、`conventionBodyOf()` 对用户模板强制 `framework: <id>`；客户端工具栏右端齿轮打开 tab 内设置页（列表/新建/编辑/两段删除），picker 末尾「我的模板」分组带自定义徽章；host **360/360**、locale **221 键**、`spliced 4053 / 2618 / 773 / 241`、`patch-host applied 0 / already present 26`；未 commit/push）。上一版 2026-10-30（**1.17.0 已发布、已推送、已装进 `desktop`**：`git_worktree` 工具新增 `init` 动作——AI 自己建仓时按插件的方式写规范文档；strict 文档落盘时自动装 `commit-msg` hook（`.git/hooks/commit-msg` 三行 `sh` shim + `graph-commit-msg.mjs` 自包含检查器），裸 `git commit` 也会被拦，`--no-verify` 是逃生门；host **318/318**、locale **189 键**、`spliced 3573 / 2191 / 773 / 241`；commit `df524a8`、tag `v1.17.0`（sha `f91dac9`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` 947553 字节 sha256 `e7b14307…`（镜像下载校验一致）、`desktop` 已装 1.17.0。上一版 2026-10-30 **1.16.0 已发布、已推送、已装进 `desktop`**：侧栏 worktree 组从「计数 + 空态 + 只读提示」改成静默只读投影——没有关联 checkout 就整组不渲染、列表读取失败也不再显示一行错误；并恢复唯一的模型可见工具 `git_worktree`（`create` / `list` / `remove`，`create` 顺带把新 worktree 注册成工作区），`git_conventions` 不恢复；host **299/299**、locale **189 键**、`spliced 3573 / 1936 / 773 / 164`；commit `446eff0`、tag `v1.16.0`（sha `57294d5`）、release id `428674569`、资产 `dsh-git-graph-sidebar.tgz` 936138 字节 sha256 `f91deee9…`。上一版 2026-10-29 **1.15.0 已发布、已推送、已装进 `desktop`**：图谱 tab 增加只读的「关联 checkout」维度——仓库行展开 `git worktree list`，选中后状态行切到该 checkout，图谱里标出它的 HEAD 行，并提供「在新会话中打开 / 作为工作区打开 / 复制路径」三个跳转；宿主新增 4 条只读 `/git/worktree/*` 路由，`createWorkspaceGate` 与 `GitService` 一行未改。commit `490eb95`、tag `v1.15.0`、release id `427888690`；**用户需重启 DSH**（两版都是））。
 
 ## 0. 一句话状态
 
@@ -824,9 +824,63 @@ return part.replace(/^HEAD -> /, "").trim();
 - **hook 只在「写文档」这条路上自动装**：手动编辑文档里的 `strict:` 不会触发；要重新走一次面板/`/git/convention`/工具的写路径。
 - **验证钩子别只信单元测试**：客户端/宿主外的真实 `git commit` 冒烟一次，能立刻暴露 shim、PATH、hooksPath 这类环境差异。
 
+### 7.21 1.18.0：用户自建规范模板 + 设置页
+
+#### 7.21.1 为什么做（用户原话在前）
+
+用户原话（m00001）：「允许用户自己添加和删除GIT规范模板，并为此添加一个设置按钮和设置页面（通过侧边栏页面的右上角访问），请你评估该需求」；评估交付后用户只回了「开始」，按评估的推荐默认值实现：模板全局（不是每仓库）、设置页只管模板、内置六套只读、删除两段确认、导入导出留到下一批。
+
+#### 7.21.2 宿主 store（`src/host/conventions.js` 490-947）
+
+- 存储 `$DSH_HOME/git-graph/conventions-templates.json`，`{version: 1, templates: [...]}`；记录 `{id,name,nameZh?,tagline?,taglineZh?,bestFor?,bestForZh?,url?,body,createdAt,updatedAt}`。`conventionTemplatesFile()` 走 `dshHome()`，mtime 签名缓存（key = `path|mtimeMs|size`），原子写（`mkdir` + tmp + `rename`），单写者 promise 链，坏 JSON / 外来 version → `templates: []` + `error.code = "convention-template-store"`（list 照常返回，picker 不炸）。
+- 校验 `conventionTemplateValidate()`：id `^[a-z0-9][a-z0-9-]{1,47}$` 且不等于内置 id / `none` → `convention-template-reserved`；name 1–80；nameZh/tagline/taglineZh/bestFor/bestForZh ≤200；url 空或 `^https?://`；body 20B–64KB 且必须 `/(^|\n)\s*status\s*:/i`；上限 50 → `convention-template-limit`；错误形状统一 `{code,message,field}`。错误码再加 `-invalid` / `-unknown` / `-action`。
+- `conventionCatalog()` = 内置 `custom: false` + 用户 `custom: true`（后者只投影元数据，不回 body）；`conventionBodyOf()` 对用户模板走 `conventionTemplateBodyOf()`：先跑内置管线（`%REPO%`、language/strict/ai），再**强制**把 front-matter `framework:` 改成模板真实 id，`status:` 保留。`conventionTemplateStarter()` 直接给 `CONVENTION_SCAFFOLD`；save 是 upsert（保留 `createdAt`）且拒绝在坏 store 上写；delete 只删 store，不动任何已写文档。
+- 路径无关，所以**不需要** `createWorkspaceGate`：请求里没有仓库路径。
+
+#### 7.21.3 路由与客户端接线
+
+- `patch-host.mjs` 新增第 21 处补丁 `convention-template-routes`：在 `/git/config` 特判块之后（`pathOf` 之前）插入 `if (pathname === "/git/convention/templates") { … }`，`{action, id?, template?}` 派发 list / starter / get / save / delete，缺省 list，未知 action → `convention-template-action`，成功写 `ctx.logger.info`。
+- 第 1 处补丁的 anchor 从「上游 3 项 import」改成「已打补丁的 6 项 import」，replacement / guard 是含 `rename` 的 7 项；并在所有 patch 之前加了一步归一化：遇到上游 3 项 import 先换成 6 项。这样无论 `lib/index.js` 是上游原件还是已打补丁的版本都能跑（这是本次真实踩到的坑，见 7.21.6）。
+- 客户端 `GitApi.conventionTemplates(action, payload)` 由 `build-lib.mjs` 的 `API_METHODS` 注入（`post("git/convention/templates", request)`），没改 `src/client/api.ts`。
+- 33 个新 locale key 进 `EXTRA_KEYS` 的 zh / en 两份（现共 221 键），全部字面量 `t("…")`，`validate-lib` 能查。
+
+#### 7.21.4 客户端 UI（`src/client/graph/SidebarTab.js`）
+
+- 工具栏齿轮：`toolbarChildren` 末尾 `push` 一个按钮，`style: Object.assign({}, SIDEBAR_TAB_BUTTON, { marginLeft: "auto" })`，`data-gitgraph-action="conventions-settings"`，内容 `⚙`，`title`/`aria-label` = `t("sidebar.settings")`，点开 / 关闭设置页。它靠 `marginLeft: auto` 贴到工具栏右端——这就是「通过侧边栏页面的右上角访问」。
+- 设置页不是遮罩层，而是 tab 内整页替换：`settingsOpen` 为真时最终 `return` 换成 `[toolbar, settingsPage]`，根节点带 `data-gitgraph-settings="open"`。页面 = 标题 + `×` 关闭（`settings-close`）+ 错误/提示行 + store 路径 + 说明 + 列表或编辑器：
+  - 列表 `data-gitgraph-template-list`：计数 + 「新建模板」（`template-new`）；每行 `data-gitgraph-template="<id>"`（名称、自定义徽章、字节数、tagline、编辑 `template-edit`、删除 `template-delete` → 第二次点 `template-delete-confirm` 才真删）；空态一行提示。
+  - 编辑器 `data-gitgraph-template-editor`：字段 id/name/nameZh/tagline/taglineZh/bestFor/bestForZh/url/body，每个 `data-gitgraph-template-field="<name>"`；id 只在新建时可编辑；body 用等宽 textarea；保存 `template-save` / 取消 `template-cancel`。
+- 数据流：开页 → `list`；新建 → `starter`；编辑 → `get`；保存 → `save` 成功后清 draft、刷新列表并重新拉 `/git/conventions`（新卡片立刻出现在 picker）；删除 → `delete` 成功后同样刷新；所有失败把 `error.message` 显示在页面顶部。
+- picker 改造：卡片工厂 `frameworkCard(framework, custom)`，自定义卡带 `data-gitgraph-framework-custom="1"` 与「自定义」徽章；`catalogue` 拆 `builtinCards` / `customCards`，后者非空时先插一行「我的模板」标题，再逐张卡；末尾固定一个「管理模板」（`conventions-settings`）直接开设置页。没有用户模板时 picker 与 1.17.0 完全一样（6 张卡）。
+
+#### 7.21.5 测试与自检
+
+- `test-host.mjs` 新段 `[2b]`：`main()` 开头把 `process.env.DSH_HOME` 指到临时目录（结束恢复），约 60 条断言覆盖空 list、starter、save、落盘、catalog 7 张 `custom: true`、get、reserved id、非法 id、无 `status:` 的 body、未知 action、用 `team-strict` 写文档后 front-matter 是 `framework: team-strict`、preview、delete 回 6、删内置、删未知、删后 preview `convention-unknown-framework`、文档不变、坏 JSON（空 list + `convention-template-store`，catalog 仍 6）与删除坏文件后恢复。总计 **360/360**。
+- `preview-tab.mjs`：stateful 的 `git/convention/templates` fetch stub（list/starter/get/save/delete，校验 id 与 `status:`），以及一段设置页交互：齿轮 → 列表空 → 新建 → 编辑器 → 填 id/name/body → 保存 → 列表出现 → 关闭 → 切到 picker 出现第 7 张自定义卡（`data-gitgraph-framework-custom="1"`）→ 「管理模板」回设置页 → 删除第一次不删、第二次删掉 → 列表空、picker 回到 6 张。
+- 全链路：`build-lib`（`spliced 4053 / 2618 / 773 / 241`）→ `patch-host`（`applied 2, already present 24`，再跑 `applied 0 / already present 26`）→ `node --check` 两个产物 → `validate-lib`（221 键）→ `test-host`（**360/360**）→ `preview-tab` 全段过。
+
+#### 7.21.6 坑（1.18.0 新增）
+
+- **`patch-host` 的 anchor 是「当前 lib 形态」，不是「上游形态」**：本次 host 侧把 #1 的 anchor 写成上游 `import { mkdir, readdir, realpath }`，而仓库里的 `lib/index.js` 早已是 6 项 import，于是 `patch-host` 在第一个 patch 就 `anchor not found`，`build-lib` 已经改了 `lib/index.js` 区域、补丁却没打上。修法：anchor 用仓库当前形态，并在补丁前用一步归一化兼容上游 3 项；改完先跑 `patch-host` 看 `applied 0 / already present 26` 再继续。
+- **preview 的伪 React 不自动重渲染**：`onChange` / `onClick` 只改 hook 状态，`mount.tree` 要等下一次 `render()` 才更新，而且旧节点上的 handler 闭包仍指着旧 state——所以「填字段 → 立刻找保存按钮」「点删除 → 立刻找确认按钮」都会拿到上一帧的闭包。修法：每次状态变更后先 `await templateMount.render()`，再从新的 `tree` 取节点。
+- **布尔属性在序列化/树里不是 `true`**：`data-gitgraph-framework-custom` 写成字符串 `"1"`，断言要按 `"1"` 比较。
+- **preview 的 `/git/conventions` stub 要合并用户模板**：catalog 只回 `CONVENTION_CATALOG` 时，picker 永远只有 6 张卡；stub 改成 `CONVENTION_CATALOG.concat(TEMPLATES.map(meta + custom: true))`。
+- **仓库写在沙箱里被 ACL 挡**：仓库 DACL 是保护型、不继承工作区 ACE，shell/node 写 `lib/*.js` 全 EPERM（文件工具能写）。本次由用户把会话文件策略改成 `danger-full-access` 后解决；不要试图用 icacls 给「沙箱 SID」授权，SID 在现代 Windows 上映射不了。
+- 删模板只影响「以后选不到 / 预览解析不到」，已写文档正文与 `status:` 都不变；文档里的 `framework:` 会变成悬空值并出现在冲突报告里——UI 的删除提示已说明。
+
+#### 7.21.7 类型面、包与文档（1.18.0）
+
+- `package.json` → **1.18.0**（唯一版本号）。
+- `README.md` / `README.zh.md`：Git 规范条目补「工具栏齿轮保存/编辑/删除自己的模板」；新增 *My templates / 我的模板* bullet；路由表补 `/git/convention/templates`。
+- `DEVELOPMENT.md`：布局表 count（26 处 patch、360 断言、用户模板 store）、新增 *User-defined convention templates (1.18.0)* 一节、Known debt 补「模板全局、id 不能改名、无导入导出/归档、内置只读」。
+- `ROADMAP.md`：Conventions 现状行与 1.18.0 交付行（**built, waiting for release**）。
+- 本版动了 host + client + 构建脚本 + 预览产物，**装进 desktop 后必须重启 DSH**。
+
 ## 8. 待办清单（按优先级）
 
 14. ~~发 1.17.0~~ **已完成**（建仓兜底 + 提交拦截；commit `df524a8`、tag `v1.17.0`（sha `f91dac9cd1f7c546b693c2bccef416998cd9d5d7`）、release id **429077930**、资产 `dsh-git-graph-sidebar.tgz` **947553** 字节 sha256 `e7b1430764da34849d552eefa863836d2c5e6e59d5bfe919aac6cde7626b5a61`、`desktop` 已装 1.17.0）。**用户需重启 DSH**（host 变了：init 动作与 hook 安装都在 host 侧）。原始步骤留档：`package.json` 已是 1.17.0；自检应得 `spliced 3573 / 2191 / 773 / 241`、`already present 25`、`189 locale keys`、host **318/318**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:`）→ `git gpush` → tag `v1.17.0`（sha 用 `git rev-parse` 现取）→ Release（资产名 `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 变了）。
+
+15. **发 1.18.0**（待办）：`package.json` → 1.18.0；全链路自检应得 `spliced 4053 / 2618 / 773 / 241`、`already present 26`、`221 locale keys`、host **360/360**、`preview-tab` 全段过。发版照 §5/§10：commit（中文 conventional + `Assisted-by:` trailer）→ `git gpush` → tag `v1.18.0`（sha 用 `git rev-parse` 现取，别手写）→ GitHub Release（资产名**无版本号** `dsh-git-graph-sidebar.tgz`）→ 换装 `desktop`（改 profile `package.json` 依赖行 + `pnpm install --no-frozen-lockfile`）→ 让用户**重启 DSH**（host 与客户端都变了）。本版原始记录见 §7.21。
 
 0. ~~发 1.12.0~~ **已完成**（commit `4e1a38e`、tag `v1.12.0`、release id `425494454`、资产 910380 字节、`desktop` 已装 1.12.0）。**用户需重启 DSH**：客户端新增的 `conversation.view` 注册只在启动时读取，`Ctrl+R` 不够。重启后侧栏规范条上应出现「在主区域打开」按钮。
 

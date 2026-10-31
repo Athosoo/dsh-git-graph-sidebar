@@ -58,12 +58,19 @@ function patch(label, anchor, replacement, guard) {
 	applied.push(label);
 }
 
+// The bundle arrives either as shipped upstream (three fs helpers) or with the
+// earlier patches already applied (six, then seven with `rename`). Normalise
+// the upstream form first so patch 1 has exactly one anchor to match.
+const UPSTREAM_FS_IMPORT = 'import { mkdir, readdir, realpath } from "node:fs/promises";';
+const PATCHED_FS_IMPORT = 'import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";';
+if (source.includes(UPSTREAM_FS_IMPORT)) source = source.replace(UPSTREAM_FS_IMPORT, PATCHED_FS_IMPORT);
+
 // 1. fs helpers used by the conventions module.
 patch(
 	"imports",
-	'import { mkdir, readdir, realpath } from "node:fs/promises";',
 	'import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";',
-	'import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";'
+	'import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";',
+	'import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";'
 );
 
 // 2. Config schema: document name + the auto-scaffold switch.
@@ -490,6 +497,68 @@ patch(
 \t\t\t}
 \t\t\tcase "/git/repos": {`,
 	'case "/git/worktree/list": {'
+);
+
+// 21. User convention templates: a path-less JSON store under `$DSH_HOME`, so
+//     the request is dispatched before the `path` requirement (same place as
+//     `/git/config`). The actions are list / starter / get / save / delete; the
+//     store itself is validated and written by the conventions module, and no
+//     workspace gate is needed because no repository path is touched.
+patch(
+	"convention-template-routes",
+	`\t\tif (pathname === "/git/config") {
+\t\t\tconst view = config();
+\t\t\twriteJson(res, 200, isGitFeatureConfig(view) ? OK(view) : FAIL(MALFORMED_VIEW));
+\t\t\treturn;
+\t\t}`,
+	`\t\tif (pathname === "/git/config") {
+\t\t\tconst view = config();
+\t\t\twriteJson(res, 200, isGitFeatureConfig(view) ? OK(view) : FAIL(MALFORMED_VIEW));
+\t\t\treturn;
+\t\t}
+\t\tif (pathname === "/git/convention/templates") {
+\t\t\tconst input = payload !== null && typeof payload === "object" ? payload : {};
+\t\t\tconst action = typeof input.action === "string" && input.action !== "" ? input.action : "list";
+\t\t\tif (action === "list") {
+\t\t\t\twriteJson(res, 200, OK(conventionTemplatesView()));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tif (action === "starter") {
+\t\t\t\twriteJson(res, 200, OK(conventionTemplateStarter()));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tif (action === "get") {
+\t\t\t\tconst read = conventionTemplateRead(input.id);
+\t\t\t\twriteJson(res, 200, read.ok === true ? OK(read.value) : FAIL(read.error));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tif (action === "save") {
+\t\t\t\tconst saved = await conventionTemplateSave(input.template);
+\t\t\t\tif (saved.ok !== true) {
+\t\t\t\t\twriteJson(res, 200, FAIL(saved.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tctx.logger.info("dsh-git-graph: saved convention template " + saved.value.template.id);
+\t\t\t\twriteJson(res, 200, OK(saved.value));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\tif (action === "delete") {
+\t\t\t\tconst deleted = await conventionTemplateDelete(input.id);
+\t\t\t\tif (deleted.ok !== true) {
+\t\t\t\t\twriteJson(res, 200, FAIL(deleted.error));
+\t\t\t\t\treturn;
+\t\t\t\t}
+\t\t\t\tctx.logger.info("dsh-git-graph: deleted convention template " + deleted.value.deleted);
+\t\t\t\twriteJson(res, 200, OK(deleted.value));
+\t\t\t\treturn;
+\t\t\t}
+\t\t\twriteJson(res, 200, FAIL({
+\t\t\t\tcode: "convention-template-action",
+\t\t\t\tmessage: "unknown action"
+\t\t\t}));
+\t\t\treturn;
+\t\t}`,
+	'\t\tif (pathname === "/git/convention/templates") {'
 );
 
 // A route case may appear exactly once: two copies mean an earlier run

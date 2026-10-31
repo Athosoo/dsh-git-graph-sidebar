@@ -146,6 +146,38 @@ const EXTRA_KEYS = [
 			['"sidebar.worktreeOpenWorkspace"', '"打开为工作区"'],
 			['"sidebar.worktreeCopyPath"', '"复制路径"'],
 			['"sidebar.worktreeJumpHint"', '"点击切换视图；按钮可在会话中打开"'],
+			['"sidebar.settings"', '"设置"'],
+			['"sidebar.settingsTitle"', '"Git 规范模板"'],
+			['"sidebar.settingsHint"', '"这里管理「我的模板」：保存后会出现在选择框架的列表末尾，可以写进任意仓库的规范文档；内置的六套框架保持只读，不能在这里修改或删除。"'],
+			['"sidebar.templatesEmpty"', '"还没有自定义模板。点「新建模板」写一份。"'],
+			['"sidebar.templatesCount"', '"{count} 个自定义模板"'],
+			['"sidebar.templatesStore"', '"存放位置：{path}"'],
+			['"sidebar.templateNew"', '"新建模板"'],
+			['"sidebar.templateEdit"', '"编辑"'],
+			['"sidebar.templateDelete"', '"删除"'],
+			['"sidebar.templateDeleteConfirm"', '"确认删除"'],
+			['"sidebar.templateSave"', '"保存"'],
+			['"sidebar.templateCancel"', '"取消"'],
+			['"sidebar.templateSaving"', '"保存中…"'],
+			['"sidebar.templateSaved"', '"模板已保存。"'],
+			['"sidebar.templateDeleted"', '"模板已删除。已写进仓库的文档不受影响，但其中记录的 framework 值会变成悬空值。"'],
+			['"sidebar.templateError"', '"模板操作失败"'],
+			['"sidebar.templateId"', '"模板 ID"'],
+			['"sidebar.templateIdHint"', '"小写字母、数字和连字符，1–48 个字符；不能与内置模板或 none 重名。"'],
+			['"sidebar.templateName"', '"名称"'],
+			['"sidebar.templateNameZh"', '"中文名称（可选）"'],
+			['"sidebar.templateTagline"', '"一句话说明（可选）"'],
+			['"sidebar.templateTaglineZh"', '"中文说明（可选）"'],
+			['"sidebar.templateBestFor"', '"适合什么项目（可选）"'],
+			['"sidebar.templateBestForZh"', '"中文适用场景（可选）"'],
+			['"sidebar.templateUrl"', '"参考链接（可选，http/https）"'],
+			['"sidebar.templateBody"', '"模板正文（Markdown，≤64KB，必须含 status: 行）"'],
+			['"sidebar.templateEditorHint"', '"正文会强制写入 framework: <模板 ID> 与 status: 行；保存前用同一套规则自检。"'],
+			['"sidebar.templateBytes"', '"{count} 字节"'],
+			['"sidebar.templateCustom"', '"自定义"'],
+			['"sidebar.templateMine"', '"我的模板"'],
+			['"sidebar.templateManage"', '"管理模板"'],
+			['"sidebar.templateLoading"', '"读取中…"'],
 		]
 	},
 	{
@@ -270,6 +302,38 @@ const EXTRA_KEYS = [
 			['"sidebar.worktreeOpenWorkspace"', '"Open as workspace"'],
 			['"sidebar.worktreeCopyPath"', '"Copy path"'],
 			['"sidebar.worktreeJumpHint"', '"Click to switch the view; the button opens it in a session"'],
+			['"sidebar.settings"', '"Settings"'],
+			['"sidebar.settingsTitle"', '"Git convention templates"'],
+			['"sidebar.settingsHint"', '"Manage your own templates here: a saved template appears at the end of the framework picker and can be written into any repository\'s convention document. The six built-in frameworks stay read-only."'],
+			['"sidebar.templatesEmpty"', '"No templates yet. Press New template to write one."'],
+			['"sidebar.templatesCount"', '"{count} templates"'],
+			['"sidebar.templatesStore"', '"Stored at {path}"'],
+			['"sidebar.templateNew"', '"New template"'],
+			['"sidebar.templateEdit"', '"Edit"'],
+			['"sidebar.templateDelete"', '"Delete"'],
+			['"sidebar.templateDeleteConfirm"', '"Confirm delete"'],
+			['"sidebar.templateSave"', '"Save"'],
+			['"sidebar.templateCancel"', '"Cancel"'],
+			['"sidebar.templateSaving"', '"Saving…"'],
+			['"sidebar.templateSaved"', '"Template saved."'],
+			['"sidebar.templateDeleted"', '"Template deleted. Documents already written are untouched, but their framework value becomes dangling."'],
+			['"sidebar.templateError"', '"Template operation failed"'],
+			['"sidebar.templateId"', '"Template ID"'],
+			['"sidebar.templateIdHint"', '"Lowercase letters, digits and hyphens, 1-48 characters; must not reuse a built-in id or none."'],
+			['"sidebar.templateName"', '"Name"'],
+			['"sidebar.templateNameZh"', '"Chinese name (optional)"'],
+			['"sidebar.templateTagline"', '"Tagline (optional)"'],
+			['"sidebar.templateTaglineZh"', '"Chinese tagline (optional)"'],
+			['"sidebar.templateBestFor"', '"Best for (optional)"'],
+			['"sidebar.templateBestForZh"', '"Chinese best-for (optional)"'],
+			['"sidebar.templateUrl"', '"Reference URL (optional, http/https)"'],
+			['"sidebar.templateBody"', '"Template body (Markdown, at most 64KB, must contain a status: line)"'],
+			['"sidebar.templateEditorHint"', '"The body gets framework: <template id> and a status: line enforced on save, and is checked against the same rules first."'],
+			['"sidebar.templateBytes"', '"{count} bytes"'],
+			['"sidebar.templateCustom"', '"Custom"'],
+			['"sidebar.templateMine"', '"My templates"'],
+			['"sidebar.templateManage"', '"Manage templates"'],
+			['"sidebar.templateLoading"', '"Loading…"'],
 		]
 	}
 ];
@@ -393,6 +457,17 @@ const API_METHODS = [{
 				const payload = { path, worktree };
 				if (typeof limit === "number" && limit > 0) payload.limit = limit;
 				return post("git/worktree/graph", payload);
+			}`
+}, {
+	guard: "git/convention/templates",
+	code: `
+			/** Read and write the user's own convention templates (list/starter/get/save/delete). */
+			conventionTemplates(action, payload) {
+				const body = payload !== null && typeof payload === "object" ? payload : {};
+				const request = { action };
+				if (typeof body.id === "string") request.id = body.id;
+				if (body.template !== null && typeof body.template === "object") request.template = body.template;
+				return post("git/convention/templates", request);
 			}`
 }];
 const API_ANCHOR = "\t\t\trepos(path, refresh) {\n\t\t\t\treturn post(\"git/repos\", refresh === true ? { path, refresh: true } : { path });\n\t\t\t}";

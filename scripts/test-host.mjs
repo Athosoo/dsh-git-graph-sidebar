@@ -138,6 +138,11 @@ async function gitText(cwd, ...args) {
 
 async function main() {
 	const workspace = await mkdtemp(join(tmpdir(), "gitgraph-conventions-"));
+	// User templates live under $DSH_HOME; point the whole run at a scratch home
+	// so the assertions never touch the real one and stay deterministic.
+	const savedHome = process.env.DSH_HOME;
+	const dshHomeDir = join(workspace, "dsh-home");
+	process.env.DSH_HOME = dshHomeDir;
 	const emptyRepo = join(workspace, "repos", "empty");
 	const commitRepo = join(workspace, "repos", "with-commits");
 	const plainDir = join(workspace, "repos", "plain");
@@ -231,6 +236,107 @@ async function main() {
 	equal("document does not exist yet", state.json?.value?.exists, false);
 	equal("catalogue ships six frameworks", state.json?.value?.catalog?.length, 6);
 	equal("catalogue ids are stable", state.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow");
+	check("built-in cards are marked built-in", (state.json?.value?.catalog ?? []).every((item) => item.custom === false), JSON.stringify(state.json?.value?.catalog?.[0]));
+
+	console.log("\n[2b] user templates: add, use, then delete");
+	const templatesRoute = "/git/convention/templates";
+	const templateStore = join(dshHomeDir, "git-graph", "conventions-templates.json");
+	const emptyTemplates = await call(templatesRoute, {});
+	check("template list ok", emptyTemplates.json?.ok === true, emptyTemplates.raw.slice(0, 200));
+	equal("template list starts empty", (emptyTemplates.json?.value?.templates ?? null)?.length, 0);
+	check("template list reports the store path", String(emptyTemplates.json?.value?.path ?? "").replace(/\\/g, "/").endsWith("/git-graph/conventions-templates.json"), emptyTemplates.json?.value?.path);
+	check("an empty store carries no error", emptyTemplates.json?.value?.error === undefined, JSON.stringify(emptyTemplates.json?.value?.error ?? null));
+
+	const starter = await call(templatesRoute, { action: "starter" });
+	check("starter returns a blank template", starter.json?.ok === true && starter.json?.value?.id === "" && starter.json?.value?.name === "", starter.raw.slice(0, 200));
+	check("starter body is the empty scaffold", /status:\s*draft/.test(String(starter.json?.value?.body ?? "")), String(starter.json?.value?.body ?? "").slice(0, 120));
+
+	const templateBody = [
+		"# Git 规范 · 团队严格版 / Team strict",
+		"",
+		"```yaml",
+		"status: settled",
+		"framework: none",
+		"owner: team",
+		"```",
+		"",
+		"## 1. 提交信息 / Commit messages",
+		"",
+		"- type 只用 `feat` / `fix` / `docs` 三种",
+		"- 一行不超过 60 个字符，祈使句，不加句号，小写开头",
+		"- 语言用中文",
+		"- AI 署名必带 Assisted-by",
+		""
+	].join("\n");
+	const savedTemplate = await call(templatesRoute, {
+		action: "save",
+		template: {
+			id: "team-strict",
+			name: "团队严格版",
+			nameZh: "团队严格版",
+			tagline: "Small teams, one strict house rule.",
+			taglineZh: "小团队的严格规范。",
+			bestFor: "Repositories that enforce commit style.",
+			bestForZh: "需要强制提交风格的仓库。",
+			url: "https://example.com/conventions",
+			body: templateBody
+		}
+	});
+	check("save ok", savedTemplate.json?.ok === true, savedTemplate.raw.slice(0, 300));
+	equal("save reports created", savedTemplate.json?.value?.created, true);
+	equal("save reports the id", savedTemplate.json?.value?.template?.id, "team-strict");
+	equal("save marks the template custom", savedTemplate.json?.value?.template?.custom, true);
+	check("the store lands in $DSH_HOME", await stat(templateStore).then((info) => info.isFile(), () => false), templateStore);
+
+	const listedTemplates = await call(templatesRoute, {});
+	equal("list shows the saved template", (listedTemplates.json?.value?.templates ?? null)?.length, 1);
+	equal("list marks the template custom", listedTemplates.json?.value?.templates?.[0]?.custom, true);
+	check("list reports the body size", (listedTemplates.json?.value?.templates?.[0]?.bodyBytes ?? 0) === Buffer.byteLength(templateBody, "utf8"), String(listedTemplates.json?.value?.templates?.[0]?.bodyBytes));
+
+	const stateWithTemplate = await call("/git/conventions", { path: emptyRepo });
+	equal("catalogue merges the user template", stateWithTemplate.json?.value?.catalog?.length, 7);
+	equal("the user template is appended after the built-ins", stateWithTemplate.json?.value?.catalog?.map((item) => item.id).join(","), "conventional-commits,github-flow,git-flow,trunk-based,conventional-branch,gitlab-flow,team-strict");
+	equal("only one card is custom", (stateWithTemplate.json?.value?.catalog ?? []).filter((item) => item.custom === true).length, 1);
+
+	const gotTemplate = await call(templatesRoute, { action: "get", id: "team-strict" });
+	check("get returns the body", gotTemplate.json?.ok === true && gotTemplate.json?.value?.template?.body === templateBody, gotTemplate.raw.slice(0, 240));
+	equal("get on an unknown id reports unknown", (await call(templatesRoute, { action: "get", id: "ghost" })).json?.error?.code, "convention-template-unknown");
+
+	equal("built-in ids are reserved", (await call(templatesRoute, { action: "save", template: { id: "git-flow", name: "collision", body: templateBody } })).json?.error?.code, "convention-template-reserved");
+	equal("invalid ids are rejected", (await call(templatesRoute, { action: "save", template: { id: "Bad Id", name: "bad", body: templateBody } })).json?.error?.code, "convention-template-invalid");
+	equal("bodies without status: are rejected", (await call(templatesRoute, { action: "save", template: { id: "no-status", name: "no status", body: "just a long line of prose without any front matter." } })).json?.error?.code, "convention-template-invalid");
+	equal("unknown actions are refused", (await call(templatesRoute, { action: "bogus" })).json?.error?.code, "convention-template-action");
+
+	const userWrite = await call("/git/convention", { path: commitRepo, framework: "team-strict" });
+	check("a user template writes a document", userWrite.json?.ok === true, userWrite.raw.slice(0, 300));
+	const userDoc = await readFile(join(commitRepo, "GIT_CONVENTIONS.md"), "utf8");
+	check("the document carries the template id as framework", /^framework: team-strict$/m.test(userDoc), userDoc.slice(0, 240));
+	check("the document keeps its status line", /^status: settled$/m.test(userDoc), userDoc.slice(0, 240));
+	check("the document keeps the template body", userDoc.includes("团队严格版"), userDoc.slice(0, 120));
+
+	const previewUser = await call("/git/convention/preview", { path: commitRepo, framework: "team-strict" });
+	check("preview accepts the user template", previewUser.json?.ok === true, previewUser.raw.slice(0, 300));
+	equal("preview reports the template id", previewUser.json?.value?.framework, "team-strict");
+	check("preview has a next body size", (previewUser.json?.value?.nextBytes ?? 0) === Buffer.byteLength(userDoc, "utf8"), String(previewUser.json?.value?.nextBytes));
+
+	const deletedTemplate = await call(templatesRoute, { action: "delete", id: "team-strict" });
+	check("delete ok", deletedTemplate.json?.ok === true && deletedTemplate.json?.value?.deleted === "team-strict", deletedTemplate.raw.slice(0, 200));
+	equal("list is empty again", (await call(templatesRoute, {})).json?.value?.templates?.length, 0);
+	equal("catalogue is back to six", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 6);
+	equal("built-in templates cannot be deleted", (await call(templatesRoute, { action: "delete", id: "git-flow" })).json?.error?.code, "convention-template-reserved");
+	equal("unknown templates cannot be deleted", (await call(templatesRoute, { action: "delete", id: "ghost" })).json?.error?.code, "convention-template-unknown");
+	equal("a deleted template is unknown to preview", (await call("/git/convention/preview", { path: commitRepo, framework: "team-strict" })).json?.error?.code, "convention-unknown-framework");
+	const keptDoc = await readFile(join(commitRepo, "GIT_CONVENTIONS.md"), "utf8");
+	check("deleting a template leaves written documents alone", keptDoc === userDoc);
+
+	await mkdir(join(dshHomeDir, "git-graph"), { recursive: true });
+	await writeFile(templateStore, "{not json", "utf8");
+	const brokenStore = await call(templatesRoute, {});
+	equal("a corrupt store degrades to empty", (brokenStore.json?.value?.templates ?? null)?.length, 0);
+	equal("a corrupt store reports its code", brokenStore.json?.value?.error?.code, "convention-template-store");
+	equal("a corrupt store still leaves the catalogue at six", (await call("/git/conventions", { path: emptyRepo })).json?.value?.catalog?.length, 6);
+	await rm(templateStore, { force: true });
+	equal("removing the corrupt store heals the list", (await call(templatesRoute, {})).json?.value?.templates?.length, 0);
 
 	console.log("\n[3] /git/convention writes a framework template");
 	const applied = await call("/git/convention", { path: emptyRepo, framework: "conventional-commits" });
@@ -1263,6 +1369,8 @@ const noRules = await call("/git/compliance", { path: docless });
 	await rm(wtRoot, { recursive: true, force: true });
 
 	await rm(workspace, { recursive: true, force: true });
+	if (savedHome === undefined) delete process.env.DSH_HOME;
+	else process.env.DSH_HOME = savedHome;
 
 	const failed = checks.filter((entry) => !entry.ok);
 	console.log("\n" + (checks.length - failed.length) + "/" + checks.length + " checks passed");

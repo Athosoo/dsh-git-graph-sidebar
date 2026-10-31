@@ -904,6 +904,68 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			lineHeight: "15px",
 			color: "var(--dsw-alias-label-tertiary)"
 		};
+		/** The template settings page: it replaces the tab body, it is not an overlay. */
+		const SIDEBAR_TAB_SETTINGS_PAGE = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 8,
+			flex: "1 1 auto",
+			minHeight: 0,
+			overflowY: "auto",
+			paddingRight: 2
+		};
+		const SIDEBAR_TAB_SETTINGS_HEAD = {
+			display: "flex",
+			alignItems: "center",
+			gap: 6,
+			flex: "none"
+		};
+		const SIDEBAR_TAB_SETTINGS_ROW = {
+			display: "flex",
+			alignItems: "center",
+			gap: 6,
+			flexWrap: "wrap"
+		};
+		const SIDEBAR_TAB_SETTINGS_CARD = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 4,
+			padding: "7px 9px",
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-1))",
+			borderRadius: 8,
+			background: "var(--dsw-alias-bg-layer-2)"
+		};
+		const SIDEBAR_TAB_SETTINGS_FIELD = {
+			display: "flex",
+			flexDirection: "column",
+			gap: 3
+		};
+		const SIDEBAR_TAB_SETTINGS_LABEL = {
+			fontSize: 11,
+			lineHeight: "14px",
+			color: "var(--dsw-alias-label-tertiary)"
+		};
+		const SIDEBAR_TAB_INPUT = {
+			boxSizing: "border-box",
+			width: "100%",
+			height: 26,
+			borderRadius: 8,
+			border: "1px solid var(--dsh-gg-ctl-bd, var(--dsw-alias-border-l2))",
+			background: "var(--dsw-alias-bg-base)",
+			color: "var(--dsw-alias-label-primary)",
+			fontSize: 13,
+			padding: "0 6px"
+		};
+		const SIDEBAR_TAB_TEXTAREA = Object.assign({}, SIDEBAR_TAB_INPUT, {
+			height: 220,
+			minHeight: 120,
+			padding: "6px",
+			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+			fontSize: 12,
+			lineHeight: "16px",
+			resize: "vertical",
+			whiteSpace: "pre"
+		});
 		/**
 		* Row hover / pinned surfaces and smooth lane transitions. Inline styles
 		* cannot express `:hover`, so the tab ships one tiny stylesheet, injected
@@ -1487,6 +1549,24 @@ const SIDEBAR_TAB_COMPLIANCE = {
 			const [catalog, setCatalog] = react.useState(null);
 			/** Whether the framework picker is open under the conventions strip. */
 			const [pickerOpen, setPickerOpen] = react.useState(false);
+			/** Whether the template settings page replaces the tab content. */
+			const [settingsOpen, setSettingsOpen] = react.useState(false);
+			/** The user's own templates as read from the host; null while loading. */
+			const [templates, setTemplates] = react.useState(null);
+			/** Where the template store lives, for the page footer. */
+			const [templateStore, setTemplateStore] = react.useState(null);
+			/** The template being edited; null shows the list instead. */
+			const [templateDraft, setTemplateDraft] = react.useState(null);
+			/** True while the draft is new, so its id stays editable. */
+			const [templateCreating, setTemplateCreating] = react.useState(false);
+			/** A delete waiting for its second click, by template id. */
+			const [templateDeleteId, setTemplateDeleteId] = react.useState(void 0);
+			/** A template read or write in flight. */
+			const [templateBusy, setTemplateBusy] = react.useState(false);
+			/** The last failed template action, shown on the page. */
+			const [templateError, setTemplateError] = react.useState(null);
+			/** The last successful save or delete, shown until the next action. */
+			const [templateNotice, setTemplateNotice] = react.useState(null);
 			/** The picker's strict switch: rules become enforced policy, not advice. */
 			const [strictMode, setStrictMode] = react.useState(false);
 			/** The subject language the document asks for: zh, en or mixed. */
@@ -1986,6 +2066,151 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				});
 			}, [upgrade, writeConvention]);
 			/**
+			 * The template settings page. Everything below only manages the user's
+			 * own templates: the six built-ins are never editable or deletable.
+			 */
+			/** Read the user's own convention templates from the host. */
+			const loadTemplates = react.useCallback(() => {
+				sidebarTabGit().conventionTemplates("list").then((result) => {
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					const value = result.value !== null && result.value !== void 0 ? result.value : {};
+					setTemplates(Array.isArray(value.templates) ? value.templates : []);
+					setTemplateStore(typeof value.path === "string" ? value.path : null);
+					setTemplateError(value.error !== void 0 && value.error !== null && typeof value.error.message === "string" ? value.error.message : null);
+				}).catch(() => setTemplateError(t("sidebar.templateError")));
+			}, [t]);
+			/** Open the settings page and read the store on the way in. */
+			const openSettings = react.useCallback(() => {
+				setSettingsOpen(true);
+				setTemplateDraft(null);
+				setTemplateCreating(false);
+				setTemplateDeleteId(void 0);
+				setTemplateError(null);
+				setTemplateNotice(null);
+				loadTemplates();
+			}, [loadTemplates]);
+			const closeSettings = react.useCallback(() => {
+				setSettingsOpen(false);
+				setTemplateDraft(null);
+				setTemplateCreating(false);
+				setTemplateDeleteId(void 0);
+			}, []);
+			/** Re-read the catalogue so the picker shows a saved or deleted template. */
+			const refreshCatalog = react.useCallback(() => {
+				if (selectedKey === void 0) return;
+				sidebarTabGit().conventions(selectedKey).then((result) => {
+					if (!result.ok || result.value === null || result.value === void 0) return;
+					setCatalog(Array.isArray(result.value.catalog) ? result.value.catalog : []);
+				}).catch(() => void 0);
+			}, [selectedKey]);
+			const startTemplateCreate = react.useCallback(() => {
+				setTemplateError(null);
+				setTemplateNotice(null);
+				setTemplateDeleteId(void 0);
+				sidebarTabGit().conventionTemplates("starter").then((result) => {
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					const value = result.value !== null && result.value !== void 0 ? result.value : {};
+					setTemplateDraft({
+						id: "",
+						name: "",
+						nameZh: "",
+						tagline: "",
+						taglineZh: "",
+						bestFor: "",
+						bestForZh: "",
+						url: "",
+						body: typeof value.body === "string" ? value.body : ""
+					});
+					setTemplateCreating(true);
+				}).catch(() => setTemplateError(t("sidebar.templateError")));
+			}, [t]);
+			const startTemplateEdit = react.useCallback((id) => {
+				setTemplateError(null);
+				setTemplateNotice(null);
+				setTemplateDeleteId(void 0);
+				sidebarTabGit().conventionTemplates("get", { id }).then((result) => {
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					const value = result.value !== null && result.value !== void 0 ? result.value : {};
+					const text = (field) => typeof value[field] === "string" ? value[field] : "";
+					setTemplateDraft({
+						id: text("id") !== "" ? text("id") : id,
+						name: text("name"),
+						nameZh: text("nameZh"),
+						tagline: text("tagline"),
+						taglineZh: text("taglineZh"),
+						bestFor: text("bestFor"),
+						bestForZh: text("bestForZh"),
+						url: text("url"),
+						body: text("body")
+					});
+					setTemplateCreating(false);
+				}).catch(() => setTemplateError(t("sidebar.templateError")));
+			}, [t]);
+			const updateTemplateDraft = react.useCallback((field, value) => {
+				setTemplateDraft((current) => current === null ? current : Object.assign({}, current, { [field]: value }));
+			}, []);
+			const saveTemplate = react.useCallback(() => {
+				const draft = templateDraft;
+				if (draft === null || templateBusy === true) return;
+				const trimmed = (field) => typeof draft[field] === "string" ? draft[field].trim() : "";
+				const template = {};
+				["id", "name", "nameZh", "tagline", "taglineZh", "bestFor", "bestForZh", "url"].forEach((field) => {
+					const value = trimmed(field);
+					if (value !== "") template[field] = value;
+				});
+				template.body = typeof draft.body === "string" ? draft.body : "";
+				setTemplateBusy(true);
+				setTemplateError(null);
+				setTemplateNotice(null);
+				sidebarTabGit().conventionTemplates("save", { template }).then((result) => {
+					setTemplateBusy(false);
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					setTemplateDraft(null);
+					setTemplateCreating(false);
+					setTemplateNotice(t("sidebar.templateSaved"));
+					loadTemplates();
+					refreshCatalog();
+				}).catch(() => {
+					setTemplateBusy(false);
+					setTemplateError(t("sidebar.templateError"));
+				});
+			}, [templateDraft, templateBusy, loadTemplates, refreshCatalog, t]);
+			const deleteTemplate = react.useCallback((id) => {
+				if (templateDeleteId !== id) {
+					setTemplateDeleteId(id);
+					return;
+				}
+				setTemplateDeleteId(void 0);
+				setTemplateBusy(true);
+				setTemplateError(null);
+				setTemplateNotice(null);
+				sidebarTabGit().conventionTemplates("delete", { id }).then((result) => {
+					setTemplateBusy(false);
+					if (!result.ok) {
+						setTemplateError(result.error !== void 0 && result.error !== null && typeof result.error.message === "string" ? result.error.message : t("sidebar.templateError"));
+						return;
+					}
+					setTemplateNotice(t("sidebar.templateDeleted"));
+					loadTemplates();
+					refreshCatalog();
+				}).catch(() => {
+					setTemplateBusy(false);
+					setTemplateError(t("sidebar.templateError"));
+				});
+			}, [templateDeleteId, templateBusy, loadTemplates, refreshCatalog, t]);
+			/**
 			 * Hand the merge to the model. The agent reads every document itself and judges
 			 * the duplicates, so the request is copied for the conversation.
 			 */
@@ -2452,6 +2677,25 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				title: t("sidebar.initRepo"),
 				"aria-label": t("sidebar.initRepo")
 			}, t("sidebar.initRepo")));
+			/**
+			 * The convention-template settings live behind a gear pinned to the
+			 * right end of the toolbar, so they are reachable from the tab itself.
+			 */
+			toolbarChildren.push(h("button", {
+				key: "conventions-settings",
+				type: "button",
+				"data-gitgraph-action": "conventions-settings",
+				"aria-pressed": settingsOpen ? "true" : "false",
+				style: Object.assign({}, SIDEBAR_TAB_BUTTON, {
+					marginLeft: "auto"
+				}),
+				onClick: () => {
+					if (settingsOpen) closeSettings();
+					else openSettings();
+				},
+				title: t("sidebar.settings"),
+				"aria-label": t("sidebar.settings")
+			}, "\u2699"));
 			/** Where the selected repository sits: roots get "workspace", nested ones a ↑ when above. */
 			const repoIndexOf = new Map();
 			if (scan.phase === "ready") scan.repos.forEach((entry, index) => repoIndexOf.set(entry.path, index));
@@ -3210,24 +3454,43 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				})();
 				if (upgradePanel !== null) children.push(upgradePanel);
 				if (pickerOpen) {
-					const cards = (catalog !== null ? catalog : []).map((framework) => h("button", {
-						key: "framework-" + framework.id,
-						type: "button",
-						"data-gitgraph-framework": framework.id,
-						style: SIDEBAR_TAB_FRAMEWORK,
-						disabled: conventionBusy,
-						onClick: () => pickFramework(selected.path, framework.id, exists),
-						title: framework.url
-					}, [h("span", {
-						key: "name",
-						style: SIDEBAR_TAB_FRAMEWORK_NAME
-					}, zh && typeof framework.nameZh === "string" ? framework.nameZh : framework.name), h("span", {
-						key: "tag",
-						style: SIDEBAR_TAB_FRAMEWORK_TAG
-					}, zh && typeof framework.taglineZh === "string" ? framework.taglineZh : framework.tagline), h("span", {
-						key: "meta",
-						style: SIDEBAR_TAB_FRAMEWORK_META
-					}, t("sidebar.conventionsBestFor") + (zh && typeof framework.bestForZh === "string" ? framework.bestForZh : framework.bestFor))]));
+					/** One card: a built-in framework, or one of the user's own templates. */
+					const frameworkCard = (framework, custom) => {
+						const name = zh && typeof framework.nameZh === "string" && framework.nameZh !== "" ? framework.nameZh : framework.name;
+						const tagline = zh && typeof framework.taglineZh === "string" && framework.taglineZh !== "" ? framework.taglineZh : framework.tagline;
+						const bestFor = zh && typeof framework.bestForZh === "string" && framework.bestForZh !== "" ? framework.bestForZh : framework.bestFor;
+						const parts = [h("span", {
+							key: "name",
+							style: SIDEBAR_TAB_SETTINGS_ROW
+						}, [h("span", {
+							key: "text",
+							style: SIDEBAR_TAB_FRAMEWORK_NAME
+						}, typeof name === "string" && name !== "" ? name : framework.id), custom === true ? h("span", {
+							key: "badge",
+							style: SIDEBAR_TAB_CONVENTIONS_CHIP
+						}, t("sidebar.templateCustom")) : null])];
+						if (typeof tagline === "string" && tagline !== "") parts.push(h("span", {
+							key: "tag",
+							style: SIDEBAR_TAB_FRAMEWORK_TAG
+						}, tagline));
+						if (typeof bestFor === "string" && bestFor !== "") parts.push(h("span", {
+							key: "meta",
+							style: SIDEBAR_TAB_FRAMEWORK_META
+						}, t("sidebar.conventionsBestFor") + bestFor));
+						return h("button", {
+							key: (custom === true ? "custom-" : "framework-") + framework.id,
+							type: "button",
+							"data-gitgraph-framework": framework.id,
+							"data-gitgraph-framework-custom": custom === true ? "1" : void 0,
+							style: SIDEBAR_TAB_FRAMEWORK,
+							disabled: conventionBusy,
+							onClick: () => pickFramework(selected.path, framework.id, exists),
+							title: typeof framework.url === "string" ? framework.url : void 0
+						}, parts);
+					};
+					const catalogue = catalog !== null ? catalog : [];
+					const builtinCards = catalogue.filter((framework) => framework.custom !== true).map((framework) => frameworkCard(framework, false));
+					const customCards = catalogue.filter((framework) => framework.custom === true).map((framework) => frameworkCard(framework, true));
 					/** The strict switch: it turns the document into policy, not advice. */
 					const strictRow = h("div", {
 						key: "strict-row",
@@ -3301,27 +3564,47 @@ const SIDEBAR_TAB_COMPLIANCE = {
 						key: "picker",
 						"data-gitgraph-conventions-picker": true,
 						style: SIDEBAR_TAB_PICKER
-					}, [h("span", {
-						key: "hint",
-						style: SIDEBAR_TAB_CONVENTIONS_NOTE
-					}, conventionBusy ? t("sidebar.conventionsWriting") : t("sidebar.conventionsPick")), strictRow].concat(cards).concat([h("button", {
-						key: "scaffold",
-						type: "button",
-						"data-gitgraph-action": "conventions-scaffold",
-						style: SIDEBAR_TAB_DETAIL_BUTTON,
-						disabled: conventionBusy,
-						onClick: () => writeConvention(selected.path, null)
-					}, t("sidebar.conventionsScaffold")), h("button", {
-						key: "cancel",
-						type: "button",
-						"data-gitgraph-action": "conventions-cancel",
-						style: SIDEBAR_TAB_DETAIL_BUTTON,
-						disabled: conventionBusy,
-						onClick: () => {
-							setPickerOpen(false);
-							setConventionError(null);
+					}, (() => {
+						const groups = [h("span", {
+							key: "hint",
+							style: SIDEBAR_TAB_CONVENTIONS_NOTE
+						}, conventionBusy ? t("sidebar.conventionsWriting") : t("sidebar.conventionsPick")), strictRow].concat(builtinCards);
+						if (customCards.length > 0) {
+							groups.push(h("span", {
+								key: "mine",
+								style: SIDEBAR_TAB_CONVENTIONS_TITLE
+							}, t("sidebar.templateMine")));
+							customCards.forEach((card) => groups.push(card));
 						}
-					}, t("sidebar.conventionsClose"))])));
+						groups.push(h("button", {
+							key: "manage",
+							type: "button",
+							"data-gitgraph-action": "conventions-settings",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: conventionBusy,
+							onClick: openSettings
+						}, t("sidebar.templateManage")));
+						groups.push(h("button", {
+							key: "scaffold",
+							type: "button",
+							"data-gitgraph-action": "conventions-scaffold",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: conventionBusy,
+							onClick: () => writeConvention(selected.path, null)
+						}, t("sidebar.conventionsScaffold")));
+						groups.push(h("button", {
+							key: "cancel",
+							type: "button",
+							"data-gitgraph-action": "conventions-cancel",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: conventionBusy,
+							onClick: () => {
+								setPickerOpen(false);
+								setConventionError(null);
+							}
+						}, t("sidebar.conventionsClose")));
+						return groups;
+					})()));
 				}
 				return h("div", {
 					key: "conventions",
@@ -3549,6 +3832,203 @@ const SIDEBAR_TAB_COMPLIANCE = {
 				style: SIDEBAR_TAB_BODY,
 				"data-gitgraph-sidebar-body": true
 			}, body);
+			/**
+			 * The template settings page. It replaces the whole tab content while
+			 * open: the user's own templates and the editor for one of them. The
+			 * six built-in frameworks stay read-only, and never appear here.
+			 */
+			const settingsPage = (() => {
+				const zh = sidebarTabIsZh();
+				const head = h("div", {
+					key: "settings-head",
+					style: SIDEBAR_TAB_SETTINGS_HEAD
+				}, [h("span", {
+					key: "title",
+					style: SIDEBAR_TAB_CONVENTIONS_TITLE
+				}, t("sidebar.settingsTitle")), h("button", {
+					key: "close",
+					type: "button",
+					"data-gitgraph-action": "settings-close",
+					style: SIDEBAR_TAB_DETAIL_BUTTON,
+					onClick: closeSettings,
+					title: t("sidebar.close"),
+					"aria-label": t("sidebar.close")
+				}, "\u00d7")]);
+				const parts = [head];
+				if (templateError !== null) parts.push(h("span", {
+					key: "error",
+					"data-gitgraph-settings-error": true,
+					style: SIDEBAR_TAB_ERROR
+				}, templateError));
+				else if (templateNotice !== null) parts.push(h("span", {
+					key: "notice",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, templateNotice));
+				if (templateStore !== null) parts.push(h("span", {
+					key: "store",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE,
+					title: templateStore
+				}, t("sidebar.templatesStore", { path: templateStore })));
+				parts.push(h("span", {
+					key: "hint",
+					style: SIDEBAR_TAB_CONVENTIONS_NOTE
+				}, t("sidebar.settingsHint")));
+				if (templateDraft !== null) {
+					const draft = templateDraft;
+					/** One labelled control of the editor; the id is fixed on an existing template. */
+					const field = (name, label, placeholder, multiline) => {
+						const value = typeof draft[name] === "string" ? draft[name] : "";
+						const onChange = (event) => updateTemplateDraft(name, String(event.target.value));
+						return h("label", {
+							key: "field-" + name,
+							style: SIDEBAR_TAB_SETTINGS_FIELD
+						}, [h("span", {
+							key: "label",
+							style: SIDEBAR_TAB_SETTINGS_LABEL
+						}, label), multiline === true ? h("textarea", {
+							key: "control",
+							"data-gitgraph-template-field": name,
+							style: SIDEBAR_TAB_TEXTAREA,
+							value,
+							placeholder,
+							spellCheck: false,
+							onChange
+						}) : h("input", {
+							key: "control",
+							type: "text",
+							"data-gitgraph-template-field": name,
+							style: SIDEBAR_TAB_INPUT,
+							value,
+							placeholder,
+							disabled: name === "id" && templateCreating !== true,
+							onChange
+						})]);
+					};
+					parts.push(h("div", {
+						key: "editor",
+						"data-gitgraph-template-editor": true,
+						style: {
+							display: "flex",
+							flexDirection: "column",
+							gap: 8
+						}
+					}, [h("span", {
+						key: "editor-hint",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.templateEditorHint")), field("id", t("sidebar.templateId"), t("sidebar.templateIdHint"), false), field("name", t("sidebar.templateName"), "", false), field("nameZh", t("sidebar.templateNameZh"), "", false), field("tagline", t("sidebar.templateTagline"), "", false), field("taglineZh", t("sidebar.templateTaglineZh"), "", false), field("bestFor", t("sidebar.templateBestFor"), "", false), field("bestForZh", t("sidebar.templateBestForZh"), "", false), field("url", t("sidebar.templateUrl"), "", false), field("body", t("sidebar.templateBody"), "", true), h("div", {
+						key: "actions",
+						style: SIDEBAR_TAB_SETTINGS_ROW
+					}, [h("button", {
+						key: "save",
+						type: "button",
+						"data-gitgraph-action": "template-save",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						disabled: templateBusy,
+						onClick: saveTemplate
+					}, templateBusy ? t("sidebar.templateSaving") : t("sidebar.templateSave")), h("button", {
+						key: "cancel",
+						type: "button",
+						"data-gitgraph-action": "template-cancel",
+						style: SIDEBAR_TAB_DETAIL_BUTTON,
+						disabled: templateBusy,
+						onClick: () => {
+							setTemplateDraft(null);
+							setTemplateCreating(false);
+						}
+					}, t("sidebar.templateCancel"))])]));
+				} else {
+					const rows = (templates !== null ? templates : []).map((template) => {
+						const id = typeof template.id === "string" ? template.id : "";
+						const name = zh && typeof template.nameZh === "string" && template.nameZh !== "" ? template.nameZh : template.name;
+						const tagline = zh && typeof template.taglineZh === "string" && template.taglineZh !== "" ? template.taglineZh : template.tagline;
+						const row = [h("div", {
+							key: "head",
+							style: SIDEBAR_TAB_SETTINGS_ROW
+						}, [h("span", {
+							key: "name",
+							style: SIDEBAR_TAB_FRAMEWORK_NAME
+						}, typeof name === "string" && name !== "" ? name : id), h("span", {
+							key: "badge",
+							style: SIDEBAR_TAB_CONVENTIONS_CHIP
+						}, t("sidebar.templateCustom")), h("span", {
+							key: "bytes",
+							style: SIDEBAR_TAB_FRAMEWORK_META
+						}, t("sidebar.templateBytes", {
+							count: typeof template.bodyBytes === "number" ? template.bodyBytes : 0
+						}))])];
+						if (typeof tagline === "string" && tagline !== "") row.push(h("span", {
+							key: "tagline",
+							style: SIDEBAR_TAB_FRAMEWORK_TAG
+						}, tagline));
+						row.push(h("div", {
+							key: "actions",
+							style: SIDEBAR_TAB_SETTINGS_ROW
+						}, [h("button", {
+							key: "edit",
+							type: "button",
+							"data-gitgraph-action": "template-edit",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: templateBusy,
+							onClick: () => startTemplateEdit(id)
+						}, t("sidebar.templateEdit")), h("button", {
+							key: "delete",
+							type: "button",
+							"data-gitgraph-action": templateDeleteId === id ? "template-delete-confirm" : "template-delete",
+							style: SIDEBAR_TAB_DETAIL_BUTTON,
+							disabled: templateBusy,
+							onClick: () => deleteTemplate(id)
+						}, templateDeleteId === id ? t("sidebar.templateDeleteConfirm") : t("sidebar.templateDelete"))]));
+						return h("div", {
+							key: "template-" + id,
+							"data-gitgraph-template": id,
+							style: SIDEBAR_TAB_SETTINGS_CARD
+						}, row);
+					});
+					const listHead = h("div", {
+						key: "list-head",
+						style: SIDEBAR_TAB_SETTINGS_ROW
+					}, [h("span", {
+						key: "count",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, templates === null ? t("sidebar.templateLoading") : t("sidebar.templatesCount", { count: rows.length })), h("button", {
+						key: "new",
+						type: "button",
+						"data-gitgraph-action": "template-new",
+						style: Object.assign({}, SIDEBAR_TAB_DETAIL_BUTTON, {
+							marginLeft: "auto"
+						}),
+						disabled: templateBusy,
+						onClick: startTemplateCreate
+					}, t("sidebar.templateNew"))]);
+					const listBody = rows.length === 0 ? h("span", {
+						key: "empty",
+						style: SIDEBAR_TAB_CONVENTIONS_NOTE
+					}, t("sidebar.templatesEmpty")) : rows;
+					parts.push(h("div", {
+						key: "list",
+						"data-gitgraph-template-list": true,
+						style: {
+							display: "flex",
+							flexDirection: "column",
+							gap: 6
+						}
+					}, [listHead].concat(listBody)));
+				}
+				return h("div", {
+					key: "settings",
+					"data-gitgraph-settings": "open",
+					style: SIDEBAR_TAB_SETTINGS_PAGE
+				}, parts);
+			})();
+			/** The settings page owns the whole tab while it is open. */
+			if (settingsOpen) return h("div", {
+				style: inMainView ? SIDEBAR_TAB_MAIN_VIEW_ROOT : SIDEBAR_TAB_ROOT,
+				"data-gitgraph-sidebar-tab": true,
+				"data-gitgraph-settings": "open"
+			}, [h("div", {
+				key: "toolbar",
+				style: SIDEBAR_TAB_TOOLBAR
+			}, toolbarChildren), settingsPage]);
 			return h("div", {
 				style: inMainView ? SIDEBAR_TAB_MAIN_VIEW_ROOT : SIDEBAR_TAB_ROOT,
 				"data-gitgraph-sidebar-tab": true

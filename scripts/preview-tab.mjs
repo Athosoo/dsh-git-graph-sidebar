@@ -424,6 +424,17 @@ const CONVENTION_CATALOG = [
 	{ id: "gitlab-flow", name: "GitLab Flow", nameZh: "GitLab Flow", tagline: "environment branches plus feature branches", taglineZh: "环境分支加特性分支", bestFor: "staged deployments (staging before production)", bestForZh: "分阶段发布（预发再上线）", url: "https://docs.gitlab.com/ee/topics/gitlab_flow.html" }
 ];
 
+// The user's own templates, served by /git/convention/templates. The harness
+// starts with none so the create, pick and delete round trip is exercised by
+// the real handlers rather than by a canned list.
+let TEMPLATES = [];
+const TEMPLATE_CALLS = [];
+const templateMetaOf = (template) => {
+	const meta = Object.assign({}, template);
+	delete meta.body;
+	return meta;
+};
+
 // --------------------------------------------------- optional real workspace
 // `--repos` / `--graph` replace the canned samples with live host responses, so
 // the same harness can render a real repository (used for the branch/merge
@@ -667,7 +678,7 @@ const fakeFetch = async (path, init) => {
 		const state = entry !== undefined && entry.conventions !== undefined && entry.conventions !== null
 			? entry.conventions
 			: { doc: "GIT_CONVENTIONS.md", docPath: String(payload.path) + "/GIT_CONVENTIONS.md", exists: false, size: 0, draft: false };
-		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG }, state);
+		value = Object.assign({ root: payload.path, autoScaffold: REPOS.conventions === undefined || REPOS.conventions.autoScaffold !== false, catalog: CONVENTION_CATALOG.concat(TEMPLATES.map((template) => Object.assign(templateMetaOf(template), { custom: true }))) }, state);
 	} else if (path === "git/convention/settings") {
 		// A switch-only update keeps the body, so the stub keeps the entry and only
 		// moves the two front fields.
@@ -758,6 +769,50 @@ const fakeFetch = async (path, init) => {
 			WORKSPACE_CALLS.push(Object.assign({}, payload));
 			value = { root: WORKSPACE, doc: ".dsh/GIT_CONVENTIONS.md", docPath, bytes: 900, created: true, framework: "none" };
 		} else value = Object.assign({ root: WORKSPACE, doc: ".dsh/GIT_CONVENTIONS.md", docPath, catalog: CONVENTION_CATALOG }, WORKSPACE_DOC);
+	} else if (path === "git/convention/templates") {
+		// The template store: list/get/starter/save/delete over an in-memory
+		// copy, shaped like the host view (metadata + bodyBytes, body only for get).
+		TEMPLATE_CALLS.push(Object.assign({}, payload));
+		const action = typeof payload.action === "string" ? payload.action : "";
+		const storePath = WORKSPACE + "/.dsh/git-graph/conventions-templates.json";
+		const now = new Date().toISOString();
+		const unknown = failEnvelope("convention-template-unknown", "unknown template");
+		if (action === "list") value = { path: storePath, templates: TEMPLATES.map(templateMetaOf) };
+		else if (action === "starter") value = { id: "", name: "", body: "# 团队规范\n\n```yaml\nstatus: draft\nframework: none\n```\n\n## 提交信息\n\n- 说明占位\n" };
+		else if (action === "get") {
+			const template = TEMPLATES.find((item) => item.id === payload.id);
+			if (template === undefined) return unknown;
+			value = template;
+		} else if (action === "save") {
+			const input = payload.template !== null && typeof payload.template === "object" ? payload.template : {};
+			const id = typeof input.id === "string" ? input.id : "";
+			const body = typeof input.body === "string" ? input.body : "";
+			if (!/^[a-z0-9][a-z0-9-]{1,47}$/.test(id)) return failEnvelope("convention-template-invalid", "bad id", "id");
+			if (body.indexOf("status:") < 0) return failEnvelope("convention-template-invalid", "body needs a status: line", "body");
+			const existing = TEMPLATES.find((item) => item.id === id);
+			const saved = Object.assign({}, existing !== undefined ? existing : {}, {
+				id,
+				name: typeof input.name === "string" && input.name !== "" ? input.name : id,
+				body,
+				bodyBytes: Buffer.byteLength(body, "utf8"),
+				createdAt: existing !== undefined ? existing.createdAt : now,
+				updatedAt: now
+			});
+			if (typeof input.nameZh === "string" && input.nameZh !== "") saved.nameZh = input.nameZh;
+			if (typeof input.tagline === "string" && input.tagline !== "") saved.tagline = input.tagline;
+			if (typeof input.taglineZh === "string" && input.taglineZh !== "") saved.taglineZh = input.taglineZh;
+			if (typeof input.bestFor === "string" && input.bestFor !== "") saved.bestFor = input.bestFor;
+			if (typeof input.bestForZh === "string" && input.bestForZh !== "") saved.bestForZh = input.bestForZh;
+			if (typeof input.url === "string" && input.url !== "") saved.url = input.url;
+			if (existing !== undefined) TEMPLATES = TEMPLATES.map((item) => item.id === id ? saved : item);
+			else TEMPLATES = TEMPLATES.concat([saved]);
+			value = { template: saved, templates: TEMPLATES.map(templateMetaOf) };
+		} else if (action === "delete") {
+			const template = TEMPLATES.find((item) => item.id === payload.id);
+			if (template === undefined) return unknown;
+			TEMPLATES = TEMPLATES.filter((item) => item.id !== payload.id);
+			value = { deleted: template.id, templates: TEMPLATES.map(templateMetaOf) };
+		} else return failEnvelope("convention-template-action", "unknown action");
 	} else value = { ok: false, error: { code: "not-found", message: "stub" } };
 	return { ok: true, json: async () => ({ ok: true, value }) };
 };
@@ -1220,6 +1275,83 @@ if (!usingRealData) {
 	if (draftHtml.indexOf('data-gitgraph-conventions-state="draft"') < 0) throw new Error("conventions strip did not report the draft after the auto scaffold");
 	if (blankHtml.indexOf("data-gitgraph-conventions-picker") >= 0) throw new Error("the framework list stayed open after the write");
 	console.log("preview-tab: conventions strip, auto scaffold and framework picker ok");
+}
+
+// The template settings page: the toolbar gear opens it, a template can be
+// written from the form, the picker lists it under "My templates", and the
+// two-step delete removes it again.
+let settingsHtml = "";
+if (!usingRealData) {
+	const blankEntry = REPOS.repos.find((entry) => entry.relPath === "sandbox/blank");
+	if (blankEntry === undefined) throw new Error("preview data lost the blank repository");
+	const templateMount = await mountComponent(descriptor.component, tabProps(blankEntry.path));
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	const actionNode = (action) => findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-action"] === action)[0];
+	const fieldNode = (name) => findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-template-field"] === name)[0];
+	let templateHtml = (await templateMount.render()).html;
+	const gear = actionNode("conventions-settings");
+	if (gear === undefined) throw new Error("the toolbar has no template settings button");
+	click(gear, "template settings gear");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf('data-gitgraph-settings="open"') < 0) throw new Error("the gear did not open the settings page");
+	if (templateHtml.indexOf("data-gitgraph-template-list") < 0) throw new Error("the settings page has no template list");
+	if (templateHtml.indexOf("data-gitgraph-template=") >= 0) throw new Error("the template list does not start empty");
+	settingsHtml = templateHtml;
+	const newButton = actionNode("template-new");
+	if (newButton === undefined) throw new Error("the template list has no new button");
+	click(newButton, "new template");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf("data-gitgraph-template-editor") < 0) throw new Error("the new button did not open the editor");
+	const idField = fieldNode("id");
+	if (idField === undefined) throw new Error("the editor has no id field");
+	idField.props.onChange({ target: { value: "team-strict" } });
+	fieldNode("name").props.onChange({ target: { value: "Team strict" } });
+	fieldNode("body").props.onChange({ target: { value: "# Team strict\n\n```yaml\nstatus: settled\n```\n\n## 提交信息\n\n- 只允许 feat/fix/docs\n" } });
+	templateHtml = (await templateMount.render()).html;
+	const saveButton = actionNode("template-save");
+	if (saveButton === undefined) throw new Error("the editor has no save button");
+	click(saveButton, "save template");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	templateHtml = (await templateMount.render()).html;
+	if (TEMPLATES.length !== 1) throw new Error("saving did not store the template");
+	if (templateHtml.indexOf('data-gitgraph-template="team-strict"') < 0) throw new Error("the saved template is missing from the list");
+	// Close the page and open the framework picker: the custom template has to
+	// appear as an extra card with the custom badge.
+	const closeButton = actionNode("settings-close");
+	if (closeButton === undefined) throw new Error("the settings page has no close button");
+	click(closeButton, "close settings");
+	templateHtml = (await templateMount.render()).html;
+	if (templateHtml.indexOf('data-gitgraph-settings="open"') >= 0) throw new Error("the close button did not leave the settings page");
+	const switchButton = actionNode("switch-conventions");
+	if (switchButton === undefined) throw new Error("the conventions strip has no switch button");
+	click(switchButton, "open the framework picker");
+	templateHtml = (await templateMount.render()).html;
+	const customCard = findAll(templateMount.tree, (node) => node.props !== undefined && node.props["data-gitgraph-framework"] === "team-strict")[0];
+	if (customCard === undefined) throw new Error("the picker does not offer the custom template");
+	if (customCard.props["data-gitgraph-framework-custom"] !== "1") throw new Error("the custom template card is not marked as custom");
+	const allCards = findAll(templateMount.tree, (node) => node.props !== undefined && typeof node.props["data-gitgraph-framework"] === "string");
+	if (allCards.length !== 7) throw new Error("expected six built-in cards plus one custom card, got " + allCards.length);
+	// Reopen the settings page, delete the template in two steps and confirm the
+	// list is empty again.
+	const manageButton = actionNode("conventions-settings");
+	if (manageButton === undefined) throw new Error("the picker has no manage button");
+	click(manageButton, "manage templates");
+	templateHtml = (await templateMount.render()).html;
+	const deleteButton = actionNode("template-delete");
+	if (deleteButton === undefined) throw new Error("the template row has no delete button");
+	click(deleteButton, "ask to delete the template");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	templateHtml = (await templateMount.render()).html;
+	const confirmButton = actionNode("template-delete-confirm");
+	if (confirmButton === undefined) throw new Error("the first delete click did not ask for confirmation");
+	if (TEMPLATES.length !== 1) throw new Error("the first delete click removed the template");
+	click(confirmButton, "confirm the delete");
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	templateHtml = (await templateMount.render()).html;
+	if (TEMPLATES.length !== 0) throw new Error("confirming the delete did not remove the template");
+	if (templateHtml.indexOf("data-gitgraph-template=") >= 0) throw new Error("the deleted template is still listed");
+	if (templateHtml.indexOf('data-gitgraph-settings="open"') < 0) throw new Error("the delete closed the settings page");
+	console.log("preview-tab: template settings page, custom picker card and two-step delete ok");
 }
 
 // Ref chips are per branch, not per ref: a local branch and its remote twin
@@ -1990,6 +2122,10 @@ const conventionsSection = conventionsHtml === ""
 	? ""
 	: "<h2>Git conventions — empty scaffold written, framework picker open</h2>" +
 		'<div class="panel">' + conventionsHtml + "</div>";
+const settingsSection = settingsHtml === ""
+	? ""
+	: "<h2>Template settings — the user's own templates and the editor</h2>" +
+		'<div class="panel">' + settingsHtml + "</div>";
 const statesHtml = `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -2021,7 +2157,7 @@ const statesHtml = `<!doctype html>
 <body>
 <h2>Pinned commit card</h2>
 <div class="panel">${detailHtml}</div>
-${conventionsSection}${tier3Section}</body>
+${conventionsSection}${settingsSection}${tier3Section}</body>
 </html>`;
 await writeFile(statesFile, statesHtml, "utf8");
 console.log("preview-tab: wrote " + statesFile);

@@ -72,7 +72,7 @@ function buildWorktreeTool(ctx, service, featureConfig) {
 				},
 				framework: {
 					type: "string",
-					description: "init: conventions framework id (conventional-commits, github-flow, git-flow, trunk-based, monorepo-layered, none). Omit for the empty scaffold."
+					description: "init: conventions framework id (conventional-commits, github-flow, git-flow, trunk-based, conventional-branch, gitlab-flow, none), or the id of a user template saved from the sidebar. Omit for the empty scaffold."
 				},
 				strict: {
 					type: "boolean",
@@ -134,7 +134,7 @@ function buildWorktreeTool(ctx, service, featureConfig) {
 				case "init": {
 					const branch = typeof input.branch === "string" && input.branch.trim() !== "" ? input.branch.trim() : "main";
 					const framework = typeof input.framework === "string" && input.framework.trim() !== "" ? input.framework.trim() : "none";
-					if (framework !== "none" && conventionFrameworkOf(framework) === void 0) return {
+					if (framework !== "none" && conventionFrameworkOf(framework) === void 0 && conventionTemplateOf(framework) === void 0) return {
 						ok: false,
 						code: "convention-unknown-framework",
 						message: "unknown framework: " + framework
